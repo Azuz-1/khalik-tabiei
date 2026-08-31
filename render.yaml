@@ -1,0 +1,16 @@
+# One-click deploy to Render (https://render.com). Push this repo to GitHub,
+# then "New +" → "Blueprint" and point it at the repo. Render builds and runs
+# it, and gives you a public https URL (with WebSocket support) to test on
+# phones anywhere.
+services:
+  - type: web
+    name: khalik-tabiei
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: NODE_VERSION
+        value: "22"

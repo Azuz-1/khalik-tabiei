@@ -1,0 +1,25 @@
+{
+  "name": "khalik-tabiei",
+  "version": "1.0.0",
+  "private": true,
+  "description": "خلك طبيعي — a real-time Arabic social deception party game (self-contained Node + WebSocket server).",
+  "type": "module",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "build": "npm run build --workspace client",
+    "start": "npm run start --workspace server",
+    "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev --workspace server\" \"npm:dev --workspace client\"",
+    "test": "npm run test --workspace server",
+    "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
