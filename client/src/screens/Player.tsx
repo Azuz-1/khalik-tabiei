@@ -231,11 +231,17 @@ function PlayerResult({ view }: { view: ClientView }) {
 function PlayerGameOver({ view }: { view: ClientView }) {
   const go = view.gameOver;
   const mine = go?.ranking.find((r) => r.uid === view.self.uid);
+  const tied = (go?.winners.length ?? 0) > 1;
   return (
     <div className="screen">
       <div className="center stack">
         <h1 className="brand" style={{ fontSize: "clamp(34px,11vw,56px)" }}>خلصت اللعبة 🎉</h1>
-        {go ? <div className="impostor-name" style={{ fontSize: "clamp(28px,8vw,44px)" }}>الفائز: {go.winnerName} 🏆</div> : null}
+        {go ? (
+          <div className="impostor-name" style={{ fontSize: "clamp(28px,8vw,44px)" }}>
+            {tied ? "تعادل! 🔥 " : "الفائز: "}
+            {go.winners.map((winner) => winner.name).join("، ")}{tied ? "" : " 🏆"}
+          </div>
+        ) : null}
         {mine ? <p className="subtitle">ترتيبك: {mine.rank} — {mine.score} نقطة</p> : null}
       </div>
       {go ? (

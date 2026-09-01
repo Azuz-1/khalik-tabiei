@@ -111,8 +111,8 @@ export interface ScoreboardRow {
 }
 
 export interface GameOverInfo {
-  winnerUid: string;
-  winnerName: string;
+  /** All top-scoring players. More than one entry represents a real tie. */
+  winners: Array<{ uid: string; name: string }>;
   ranking: ScoreboardRow[];
 }
 
@@ -179,7 +179,7 @@ export interface ClientView {
 
 /** Messages sent from a browser client to the server. */
 export type ClientMessage =
-  | { t: "HELLO"; clientKey: string }
+  | { t: "HELLO" }
   | { t: "CREATE_ROOM" }
   | { t: "JOIN_ROOM"; code: string; name: string }
   | { t: "LEAVE_ROOM" }

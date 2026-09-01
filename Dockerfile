@@ -8,7 +8,7 @@ COPY server/package.json ./server/
 COPY client/package.json ./client/
 
 # Install all workspace deps (dev deps needed to build the client).
-RUN npm install
+RUN npm ci
 
 COPY . .
 
@@ -16,6 +16,7 @@ COPY . .
 RUN npm run build
 
 ENV PORT=8080
+ENV NODE_ENV=production
 EXPOSE 8080
 
 CMD ["npm", "start"]

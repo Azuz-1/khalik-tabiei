@@ -1,6 +1,6 @@
 /**
  * WebSocket client + reactive store. Owns the single connection to the
- * authoritative server, persists the anonymous client key, auto-reconnects,
+ * authoritative server, bootstraps an HttpOnly anonymous session, auto-reconnects,
  * and exposes typed action helpers plus a `useGame()` hook.
  *
  * The client is intentionally "dumb": it renders whatever `view` the server
@@ -14,26 +14,6 @@ import type {
   ServerMessage,
   CategoryId,
 } from "../../../shared/types.js";
-
-const KEY_STORAGE = "kt_client_key";
-
-function getClientKey(): string {
-  try {
-    let k = localStorage.getItem(KEY_STORAGE);
-    if (k && /^[a-f0-9]{32,128}$/.test(k)) return k;
-    const bytes = new Uint8Array(24);
-    crypto.getRandomValues(bytes);
-    k = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-    localStorage.setItem(KEY_STORAGE, k);
-    return k;
-  } catch {
-    // Private mode / storage blocked: fall back to an in-memory key (identity
-    // won't survive refresh, but the game still works this session).
-    const bytes = new Uint8Array(24);
-    crypto.getRandomValues(bytes);
-    return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
-}
 
 export interface GameState {
   status: "connecting" | "online" | "offline";
@@ -66,21 +46,38 @@ function set(patch: Partial<GameState>): void {
 let ws: WebSocket | null = null;
 let reconnectDelay = 500;
 let reconnectTimer: number | undefined;
-const clientKey = getClientKey();
+let connecting = false;
 
 function wsUrl(): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   return `${proto}://${location.host}/ws`;
 }
 
-function connect(): void {
+async function connectNow(): Promise<void> {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  set({ status: state.uid ? "connecting" : "connecting" });
+  if (connecting) return;
+  connecting = true;
+  set({ status: "connecting" });
+  try {
+    const response = await fetch("/api/session", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) throw new Error("session bootstrap failed");
+  } catch {
+    connecting = false;
+    set({ status: "offline" });
+    scheduleReconnect();
+    return;
+  }
   ws = new WebSocket(wsUrl());
+  connecting = false;
 
   ws.onopen = () => {
     reconnectDelay = 500;
-    send({ t: "HELLO", clientKey });
+    send({ t: "HELLO" });
   };
   ws.onmessage = (ev) => {
     let msg: ServerMessage;
@@ -104,6 +101,10 @@ function connect(): void {
   };
 }
 
+function connect(): void {
+  void connectNow();
+}
+
 function scheduleReconnect(): void {
   window.clearTimeout(reconnectTimer);
   reconnectTimer = window.setTimeout(() => {
@@ -115,7 +116,7 @@ function scheduleReconnect(): void {
 function dispatch(msg: ServerMessage): void {
   switch (msg.t) {
     case "HELLO_OK":
-      set({ status: "online", uid: msg.uid });
+      set({ status: "online", uid: msg.uid, view: null });
       break;
     case "STATE":
       set({ status: "online", view: msg.view, uid: msg.view.self.uid });
@@ -185,7 +186,6 @@ export const actions = {
   joinRoom: (code: string, name: string) => send({ t: "JOIN_ROOM", code, name }),
   leaveRoom: () => {
     send({ t: "LEAVE_ROOM" });
-    resetToHome();
   },
   setSettings: (patch: { totalRounds?: number; categories?: CategoryId[] }) =>
     send({ t: "SET_SETTINGS", ...patch }),

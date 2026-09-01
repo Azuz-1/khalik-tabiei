@@ -18,6 +18,7 @@ import {
   activePlayers,
   allPlayers,
   cleanAnswer,
+  roundParticipants,
   type RoomState,
   type RoundState,
 } from "./state.js";
@@ -110,6 +111,7 @@ function beginRound(room: RoomState, deps: EngineDeps): void {
     normalQuestion: pair.normalQuestion,
     impostorQuestion: pair.impostorQuestion,
     impostorUid,
+    participantUids: activePlayers(room).map((p) => p.uid),
     answers: new Map(),
     votes: new Map(),
     resultComputed: false,
@@ -168,7 +170,9 @@ export function submitAnswer(
   const round = room.round;
   if (!round) throw new GameError("INVALID_PHASE");
   const player = room.players.get(uid);
-  if (!player || !player.connected) throw new GameError("NOT_PLAYER");
+  if (!player || !player.connected || !round.participantUids.includes(uid)) {
+    throw new GameError("NOT_PLAYER");
+  }
   if (round.answers.has(uid)) throw new GameError("ANSWER_ALREADY_SUBMITTED");
   const answer = cleanAnswer(rawAnswer);
   round.answers.set(uid, answer);
@@ -179,9 +183,9 @@ export function submitAnswer(
 export function allAnswered(room: RoomState): boolean {
   const round = room.round;
   if (!round) return false;
-  const active = activePlayers(room);
-  if (active.length === 0) return false;
-  return active.every((p) => round.answers.has(p.uid));
+  const participants = roundParticipants(room);
+  if (participants.length === 0) return false;
+  return participants.every((p) => round.answers.has(p.uid));
 }
 
 /** ANSWERING -> REVEAL. */
@@ -224,11 +228,15 @@ export function submitVote(
   const round = room.round;
   if (!round) throw new GameError("INVALID_PHASE");
   const voter = room.players.get(uid);
-  if (!voter || !voter.connected) throw new GameError("NOT_PLAYER");
+  if (!voter || !voter.connected || !round.participantUids.includes(uid)) {
+    throw new GameError("NOT_PLAYER");
+  }
   if (typeof targetUid !== "string") throw new GameError("INVALID_VOTE");
   if (targetUid === uid) throw new GameError("INVALID_VOTE"); // no self-vote
   const target = room.players.get(targetUid);
-  if (!target || !target.connected) throw new GameError("INVALID_VOTE");
+  if (!target || !round.participantUids.includes(targetUid)) {
+    throw new GameError("INVALID_VOTE");
+  }
   if (round.votes.has(uid)) throw new GameError("VOTE_ALREADY_SUBMITTED");
   round.votes.set(uid, targetUid);
   touch(room, deps);
@@ -238,9 +246,9 @@ export function submitVote(
 export function allVoted(room: RoomState): boolean {
   const round = room.round;
   if (!round) return false;
-  const active = activePlayers(room);
-  if (active.length === 0) return false;
-  return active.every((p) => round.votes.has(p.uid));
+  const participants = roundParticipants(room);
+  if (participants.length === 0) return false;
+  return participants.every((p) => round.votes.has(p.uid));
 }
 
 /**
@@ -260,16 +268,16 @@ export function computeResult(
   if (!round) throw new GameError("INVALID_PHASE");
 
   const tally = new Map<string, number>();
-  for (const p of room.players.values()) tally.set(p.uid, 0);
+  for (const p of roundParticipants(room)) tally.set(p.uid, 0);
   for (const target of round.votes.values()) {
     tally.set(target, (tally.get(target) ?? 0) + 1);
   }
 
   let maxVotes = 0;
-  for (const p of activePlayers(room)) {
+  for (const p of roundParticipants(room)) {
     maxVotes = Math.max(maxVotes, tally.get(p.uid) ?? 0);
   }
-  const topPlayers = activePlayers(room).filter(
+  const topPlayers = roundParticipants(room).filter(
     (p) => (tally.get(p.uid) ?? 0) === maxVotes,
   );
   const uniqueTop = maxVotes > 0 && topPlayers.length === 1 ? topPlayers[0].uid : null;
@@ -277,7 +285,7 @@ export function computeResult(
 
   // Scoring
   const roundScores = new Map<string, number>();
-  for (const p of room.players.values()) roundScores.set(p.uid, 0);
+  for (const p of roundParticipants(room)) roundScores.set(p.uid, 0);
   if (groupFound) {
     for (const [voterUid, targetUid] of round.votes) {
       if (voterUid === round.impostorUid) continue; // impostor earns nothing
@@ -317,6 +325,31 @@ export function nextRound(
   beginRound(room, deps);
 }
 
+/** Cancel an incomplete round after disconnect grace and redeal without points. */
+export function redealCurrentRound(
+  room: RoomState,
+  deps: EngineDeps = defaultDeps,
+): void {
+  assertPhase(room, "QUESTION", "ANSWERING", "REVEAL", "DISCUSSION", "VOTING");
+  const cancelled = room.round;
+  if (!cancelled) throw new GameError("INVALID_PHASE");
+  if (room.impostorHistory.at(-1) === cancelled.impostorUid) {
+    room.impostorHistory.pop();
+  }
+  beginRound(room, deps);
+}
+
+/** Abort an unfinishable game and return to a clean lobby. */
+export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): void {
+  room.phase = "LOBBY";
+  room.currentRound = 0;
+  room.round = null;
+  room.usedPairIds.clear();
+  room.impostorHistory = [];
+  for (const p of room.players.values()) p.score = 0;
+  touch(room, deps);
+}
+
 /** GAME_OVER -> LOBBY, keeping players but resetting all game progress. */
 export function rematch(
   room: RoomState,
@@ -342,5 +375,12 @@ export function ranking(room: RoomState) {
   const rows = allPlayers(room)
     .map((p) => ({ uid: p.uid, name: p.name, score: p.score }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "ar"));
-  return rows.map((r, i) => ({ ...r, rank: i + 1 }));
+  let previousScore: number | undefined;
+  let previousRank = 0;
+  return rows.map((r, i) => {
+    const rank = previousScore === r.score ? previousRank : i + 1;
+    previousScore = r.score;
+    previousRank = rank;
+    return { ...r, rank };
+  });
 }

@@ -11,6 +11,7 @@ export default defineConfig({
     fs: { allow: [".."] },
     proxy: {
       "/ws": { target: "ws://localhost:8080", ws: true },
+      "/api/session": "http://localhost:8080",
       "/healthz": "http://localhost:8080",
     },
   },

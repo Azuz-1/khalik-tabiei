@@ -3,29 +3,90 @@ import type { ServerMessage } from "../../../shared/types.js";
 
 let counter = 0;
 
-/**
- * One live browser socket. `uid` is set after a valid HELLO. `roomCode` tracks
- * which room this socket is currently viewing. `origin` is the public origin
- * this client connected through (used to build correct QR/join URLs behind a
- * tunnel or custom domain).
- */
+/** One live browser socket with bounded writes and one-time authentication. */
 export class Connection {
   readonly id: number;
   readonly ws: WebSocket;
+  readonly origin: string;
+  readonly ip: string;
   uid: string | null = null;
   roomCode: string | null = null;
-  origin: string;
   alive = true;
+  private disconnected = false;
+  private authTimer: NodeJS.Timeout | null = null;
 
-  constructor(ws: WebSocket, origin: string) {
+  constructor(
+    ws: WebSocket,
+    origin: string,
+    ip: string,
+    private readonly maxBufferedBytes = 512 * 1024,
+  ) {
     this.id = ++counter;
     this.ws = ws;
     this.origin = origin;
+    this.ip = ip;
   }
 
-  send(msg: ServerMessage): void {
-    if (this.ws.readyState === this.ws.OPEN) {
+  authenticate(uid: string): boolean {
+    if (this.uid !== null) return false;
+    this.uid = uid;
+    this.clearAuthenticationTimeout();
+    return true;
+  }
+
+  startAuthenticationTimeout(ms: number): void {
+    this.clearAuthenticationTimeout();
+    this.authTimer = setTimeout(() => {
+      if (this.uid === null) this.closePolicy("authentication timeout");
+    }, ms);
+    this.authTimer.unref?.();
+  }
+
+  clearAuthenticationTimeout(): void {
+    if (this.authTimer) clearTimeout(this.authTimer);
+    this.authTimer = null;
+  }
+
+  /** Returns true only once, making close/error cleanup idempotent. */
+  markDisconnected(): boolean {
+    if (this.disconnected) return false;
+    this.disconnected = true;
+    this.clearAuthenticationTimeout();
+    return true;
+  }
+
+  send(msg: ServerMessage): boolean {
+    if (this.ws.readyState !== 1) return false;
+    if (this.ws.bufferedAmount > this.maxBufferedBytes) {
+      try {
+        this.ws.terminate();
+      } catch {
+        /* close/error cleanup is idempotent */
+      }
+      return false;
+    }
+    try {
       this.ws.send(JSON.stringify(msg));
+      return true;
+    } catch {
+      try {
+        this.ws.terminate();
+      } catch {
+        /* ignore */
+      }
+      return false;
+    }
+  }
+
+  closePolicy(reason: string): void {
+    try {
+      this.ws.close(1008, reason.slice(0, 80));
+    } catch {
+      try {
+        this.ws.terminate();
+      } catch {
+        /* ignore */
+      }
     }
   }
 }

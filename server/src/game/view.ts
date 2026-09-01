@@ -16,7 +16,7 @@ import type {
   RevealedAnswer,
 } from "../../../shared/types.js";
 import { CATEGORIES } from "../../../shared/constants.js";
-import { activePlayers, type RoomState } from "./state.js";
+import { roundParticipants, type RoomState } from "./state.js";
 import { questionFor, ranking } from "./engine.js";
 
 function roleFor(room: RoomState, uid: string): Role {
@@ -84,12 +84,12 @@ export function buildView(
   // --- QUESTION / ANSWERING -------------------------------------------------
   if (room.phase === "QUESTION" || room.phase === "ANSWERING") {
     if (round) {
-      const active = activePlayers(room);
+      const participants = roundParticipants(room);
       view.answersProgress = {
         submitted: round.answers.size,
-        total: active.length,
+        total: participants.length,
       };
-      if (role === "player" && self?.connected) {
+      if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
         // Each player receives ONLY their own question.
         view.myQuestion = questionFor(round, uid);
         view.myAnswerSubmitted = round.answers.has(uid);
@@ -109,10 +109,10 @@ export function buildView(
 
   // --- VOTING ---------------------------------------------------------------
   if (room.phase === "VOTING" && round) {
-    const active = activePlayers(room);
-    view.votesProgress = { submitted: round.votes.size, total: active.length };
-    if (role === "player" && self?.connected) {
-      view.voteTargets = active
+    const participants = roundParticipants(room);
+    view.votesProgress = { submitted: round.votes.size, total: participants.length };
+    if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
+      view.voteTargets = participants
         .filter((p) => p.uid !== uid)
         .map((p) => ({ uid: p.uid, name: p.name }));
       view.myVoteSubmitted = round.votes.has(uid);
@@ -149,10 +149,11 @@ export function buildView(
   // --- GAME_OVER ------------------------------------------------------------
   if (room.phase === "GAME_OVER") {
     const rows = ranking(room);
-    const winner = rows[0];
+    const topScore = rows[0]?.score;
     view.gameOver = {
-      winnerUid: winner?.uid ?? "",
-      winnerName: winner?.name ?? "—",
+      winners: rows
+        .filter((row) => topScore !== undefined && row.score === topScore)
+        .map(({ uid: winnerUid, name }) => ({ uid: winnerUid, name })),
       ranking: rows,
     };
     view.scoreboard = rows;

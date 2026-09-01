@@ -41,7 +41,7 @@ function CloseRoom() {
 
 function HostLobby({ view }: { view: ClientView }) {
   const [copied, setCopied] = useState(false);
-  const joinUrl = `${location.origin}/join/${view.room.code}`;
+  const joinUrl = view.room.joinUrl;
   const active = view.players.filter((p) => p.connected).length;
   const cats = new Set(view.room.categories);
   const totalRounds = view.room.totalRounds || 5;
@@ -237,13 +237,16 @@ function HostResult({ view }: { view: ClientView }) {
 
 function HostGameOver({ view }: { view: ClientView }) {
   const go = view.gameOver;
+  const tied = (go?.winners.length ?? 0) > 1;
   return (
     <div className="screen host stack center">
       <h1 className="brand">خلصت اللعبة 🎉</h1>
       {go ? (
         <>
-          <p className="subtitle">الفائز</p>
-          <div className="impostor-name" style={{ fontSize: "clamp(40px,7vw,92px)" }}>{go.winnerName} 🏆</div>
+          <p className="subtitle">{tied ? "تعادل! 🔥" : "الفائز"}</p>
+          <div className="impostor-name" style={{ fontSize: "clamp(40px,7vw,92px)" }}>
+            {go.winners.map((winner) => winner.name).join("، ")} {tied ? "🔥" : "🏆"}
+          </div>
           <div className="card" style={{ maxWidth: 560, marginInline: "auto", width: "100%" }}>
             <Scoreboard rows={go.ranking} />
           </div>

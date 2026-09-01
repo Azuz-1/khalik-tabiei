@@ -4,22 +4,33 @@
  * leaks secrets. Run: `node test/integration.mjs` (server must be on :8080).
  */
 import { WebSocket } from "ws";
-import { randomBytes } from "node:crypto";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
+const ORIGIN = process.env.ORIGIN ?? URL.replace(/^ws/, "http").replace(/\/ws$/, "");
 let failures = 0;
 const ok = (c, m) => { if (!c) { failures++; console.error("  ✗", m); } else console.log("  ✓", m); };
 
 class Client {
   constructor(label) {
     this.label = label;
-    this.key = randomBytes(24).toString("hex");
+    this.cookie = null;
     this.uid = null;
     this.view = null;
     this.messages = [];
-    this.ws = new WebSocket(URL);
-    this.ready = new Promise((res) => {
-      this.ws.on("open", () => this.sendRaw({ t: "HELLO", clientKey: this.key }));
+    this.ws = null;
+    this.ready = this.connect();
+  }
+  async connect(cookie = null) {
+    if (!cookie) {
+      const response = await fetch(`${ORIGIN}/api/session`);
+      if (!response.ok) throw new Error("session bootstrap failed");
+      cookie = response.headers.get("set-cookie")?.split(";", 1)[0] ?? null;
+    }
+    if (!cookie) throw new Error("session cookie missing");
+    this.cookie = cookie;
+    this.ws = new WebSocket(URL, { headers: { Cookie: cookie, Origin: ORIGIN } });
+    return new Promise((res) => {
+      this.ws.on("open", () => this.sendRaw({ t: "HELLO" }));
       this.ws.on("message", (d) => {
         const m = JSON.parse(d.toString());
         this.messages.push(m);
@@ -105,7 +116,7 @@ async function main() {
   await Promise.all([host.ready, ...players.map((p) => p.ready)]);
 
   console.log("\n[negative] join non-existent room:");
-  host.send({ t: "JOIN_ROOM", code: "ZZZZZ", name: "x" });
+  host.send({ t: "JOIN_ROOM", code: "ZZZZZ", name: "xx" });
   await waitFor(host, (c) => c.messages.some((m) => m.t === "ERROR" && m.code === "ROOM_NOT_FOUND"), "ROOM_NOT_FOUND");
   ok(true, "unknown code rejected with ROOM_NOT_FOUND");
 
@@ -148,23 +159,24 @@ async function main() {
   await playRound(host, players, 3);
   host.send({ t: "NEXT_ROUND" });
   await waitFor(host, (c) => c.phase() === "GAME_OVER", "GAME_OVER");
-  ok(!!host.view.gameOver?.winnerName, `game over, winner: ${host.view.gameOver?.winnerName}`);
+  const winnerNames = host.view.gameOver?.winners?.map((winner) => winner.name).join("، ");
+  ok(!!winnerNames, `game over, winner(s): ${winnerNames}`);
 
-  console.log("\n[reconnect] same key restores the same seat:");
-  // p2 "refreshes": close its socket, open a new one with the SAME saved key.
-  const savedKey = p2.key;
+  console.log("\n[reconnect] same cookie restores the same seat:");
+  // p2 "refreshes": close its socket, open a new one with the same HttpOnly cookie.
+  const savedCookie = p2.cookie;
   const savedUid = p2.uid;
   p2.close();
   await sleep(300);
-  const rc = new WebSocket(URL);
+  const rc = new WebSocket(URL, { headers: { Cookie: savedCookie, Origin: ORIGIN } });
   const rcMsgs = [];
   await new Promise((res) => {
-    rc.on("open", () => rc.send(JSON.stringify({ t: "HELLO", clientKey: savedKey })));
+    rc.on("open", () => rc.send(JSON.stringify({ t: "HELLO" })));
     rc.on("message", (d) => { const m = JSON.parse(d.toString()); rcMsgs.push(m); if (m.t === "STATE") res(); });
     setTimeout(res, 3000);
   });
   const restored = rcMsgs.find((m) => m.t === "STATE");
-  ok(!!restored && restored.view.self.uid === savedUid, "reconnect resolves to the SAME uid via saved key");
+  ok(!!restored && restored.view.self.uid === savedUid, "reconnect resolves to the SAME uid via the session cookie");
   ok(!!restored && restored.view.room?.code === code, "reconnect restored the same room");
   rc.close();
 
