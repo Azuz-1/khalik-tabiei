@@ -24,7 +24,6 @@ export function Home() {
   const [name, setName] = useState("");
   const [localErr, setLocalErr] = useState<string | null>(null);
 
-  // Surface server errors during the join flow.
   useEffect(() => {
     if (error) setLocalErr(errorText(error.code));
   }, [error]);
@@ -37,8 +36,9 @@ export function Home() {
         <div className="spacer" />
         <div className="center stack">
           <h1 className="brand">خلك طبيعي</h1>
-          <p className="subtitle">واحد منكم عنده سؤال مختلف… لا تفضح نفسك.</p>
+          <p className="subtitle">واحد منكم عنده سؤال مختلف… جاوب كأن كل شيء طبيعي ولا تفضح نفسك.</p>
         </div>
+
         <div className="stack" style={{ marginTop: 24 }}>
           <button className="btn btn-primary" disabled={disabled} onClick={() => actions.createRoom()}>
             سو غرفة
@@ -55,6 +55,26 @@ export function Home() {
           </button>
         </div>
         <p className="helper">بدون تحميل وبدون تسجيل</p>
+
+        <div className="card stack" style={{ marginTop: 20 }}>
+          <div className="eyebrow">وش السالفة؟</div>
+          <div className="stack" style={{ gap: 10 }}>
+            <p className="subtitle" style={{ margin: 0 }}>١. كل اللاعبين يوصلهم سؤال متشابه — إلا شخص واحد يوصله سؤال مختلف.</p>
+            <p className="subtitle" style={{ margin: 0 }}>٢. كل واحد يكتب إجابة قصيرة بدون ما يقول سؤاله.</p>
+            <p className="subtitle" style={{ margin: 0 }}>٣. تظهر الإجابات، تناقشون، وبعدها كل واحد يصوّت مين يحس إنه المتخفي.</p>
+            <p className="subtitle" style={{ margin: 0 }}>٤. بالنهاية نكشف المتخفي، السؤالين، ومين صوّت لمين.</p>
+          </div>
+        </div>
+
+        <div className="card stack" style={{ marginTop: 14 }}>
+          <div className="eyebrow">كيف تنحسب النقاط؟</div>
+          <div className="stack" style={{ gap: 10 }}>
+            <p className="subtitle" style={{ margin: 0 }}><strong>+١</strong> لكل لاعب عادي صوّت للمتخفي، بشرط إن المتخفي ينكشف بدون تعادل.</p>
+            <p className="subtitle" style={{ margin: 0 }}><strong>+٢</strong> للمتخفي إذا نجا — يعني أعلى تصويت راح لشخص ثاني أو صار تعادل.</p>
+            <p className="helper" style={{ margin: 0 }}>المتخفي ما ياخذ نقطة حتى لو صوّت صح. الهدف عنده ينجو من التصويت.</p>
+          </div>
+        </div>
+
         <div className="spacer" />
       </div>
     );
@@ -64,9 +84,7 @@ export function Home() {
     const ok = code.length === ROOM_CODE_LENGTH;
     return (
       <div className="screen">
-        <button className="link-btn" onClick={() => setStep("home")}>
-          ← رجوع
-        </button>
+        <button className="link-btn" onClick={() => setStep("home")}>← رجوع</button>
         <div className="spacer" />
         <div className="center stack">
           <h2 className="title">اكتب كود الغرفة</h2>
@@ -92,29 +110,22 @@ export function Home() {
           }}
         />
         {localErr ? <p className="helper" style={{ color: "var(--bad)" }}>{localErr}</p> : null}
-        <button className="btn btn-primary" disabled={!ok} onClick={() => setStep("name")}>
-          التالي
-        </button>
+        <button className="btn btn-primary" disabled={!ok} onClick={() => setStep("name")}>التالي</button>
         <div className="spacer" />
       </div>
     );
   }
 
-  // step === "name"
   const trimmed = name.replace(/\s+/g, " ").trim();
   const len = [...trimmed].length;
   const ok = len >= NAME_MIN && len <= NAME_MAX;
   return (
     <div className="screen">
-      <button className="link-btn" onClick={() => setStep(deepCode ? "home" : "code")}>
-        ← رجوع
-      </button>
+      <button className="link-btn" onClick={() => setStep(deepCode ? "home" : "code")}>← رجوع</button>
       <div className="spacer" />
       <div className="center stack">
         <h2 className="title">وش نناديك؟</h2>
-        <span className="pill-note" style={{ direction: "ltr" }}>
-          غرفة {code}
-        </span>
+        <span className="pill-note" style={{ direction: "ltr" }}>غرفة {code}</span>
       </div>
       <input
         className="input"
