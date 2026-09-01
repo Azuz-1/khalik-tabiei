@@ -37,7 +37,14 @@ function startedRoom(): RoomState {
 }
 
 function assertNoSharedSecretFields(serialized: string): void {
-  for (const field of ["impostorUid", "impostorQuestion", "normalQuestion", "voteTally", "roundScores"]) {
+  for (const field of [
+    "impostorUid",
+    "impostorQuestion",
+    "normalQuestion",
+    "voteTally",
+    "voteBreakdown",
+    "roundScores",
+  ]) {
     assert.ok(!serialized.includes(`\"${field}\"`), field);
   }
 }
@@ -101,10 +108,16 @@ test("serialized per-recipient views preserve secrecy in every pre-result phase"
   engine.submitVote(room, uids[1], uids[0], deps);
   engine.submitVote(room, uids[2], uids[0], deps);
   engine.computeResult(room, deps);
-  const resultJson = JSON.stringify(buildView(room, room.hostUid, "https://good.example/join/ABCDE"));
+  const resultView = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
+  const resultJson = JSON.stringify(resultView);
   assert.ok(resultJson.includes("NORMAL-SECRET-QUESTION"));
   assert.ok(resultJson.includes("IMPOSTOR-SECRET-QUESTION"));
   assert.ok(resultJson.includes("impostorUid"));
+  assert.equal(resultView.result?.voteBreakdown.length, 3);
+  assert.deepEqual(
+    resultView.result?.voteBreakdown.map((vote) => [vote.voterUid, vote.targetUid]),
+    [[uids[0], uids[1]], [uids[1], uids[0]], [uids[2], uids[0]]],
+  );
 });
 
 test("non-participants never receive a private question after a later-round reconnect", () => {
