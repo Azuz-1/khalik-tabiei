@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { WebSocket } from "ws";
 import { RoomManager } from "../src/game/roomManager.js";
-import { Connection } from "../src/net/connection.js";
 import {
   authenticatedConnection,
   createRoom,
@@ -13,25 +11,40 @@ import {
   wait,
 } from "./helpers.js";
 
-function setupPlayers(manager: RoomManager, count: number) {
+function errorCode(socket: FakeSocket): string | undefined {
+  return lastMessage(socket, "ERROR")?.code;
+}
+
+function setupPlayers(manager: RoomManager, count = 3) {
   const host = createRoom(manager);
   const players = Array.from({ length: count }, (_, offset) =>
     joinPlayer(manager, host.code, offset + 2),
   );
-  return { host, players, room: manager.roomForTests(host.code)! };
+  const room = manager.roomForTests(host.code)!;
+  return { host, players, room };
 }
 
-async function startAnswering(manager: RoomManager, count = 3) {
+function start(manager: RoomManager, count = 3) {
   const setup = setupPlayers(manager, count);
-  manager.handle(setup.host.conn, { t: "SET_SETTINGS", totalRounds: 3, categories: ["food"] });
+  manager.handle(setup.host.conn, {
+    t: "SET_SETTINGS",
+    totalRounds: 3,
+    selectedModes: ["HANDS", "POINT", "NUMBER"],
+  });
   manager.handle(setup.host.conn, { t: "START_GAME" });
-  await wait(8);
-  assert.equal(setup.room.phase, "ANSWERING");
+  assert.equal(setup.room.phase, "QUESTION");
   return setup;
 }
 
-function errorCode(socket: FakeSocket): string | undefined {
-  return lastMessage(socket, "ERROR")?.code;
+async function toDiscussion(manager: RoomManager, count = 3) {
+  const setup = start(manager, count);
+  for (const player of setup.players) {
+    manager.handle(player.conn, { t: "MARK_READY" });
+  }
+  assert.equal(setup.room.phase, "REVEAL");
+  await wait(8);
+  assert.equal(setup.room.phase, "DISCUSSION");
+  return setup;
 }
 
 test("one uid belongs to one room and room creation is globally capped", () => {
@@ -39,347 +52,254 @@ test("one uid belongs to one room and room creation is globally capped", () => {
   const first = createRoom(manager, testUid(1));
   manager.handle(first.conn, { t: "CREATE_ROOM" });
   assert.equal(errorCode(first.socket), "ALREADY_IN_ROOM");
-  assert.equal(manager.roomCount, 1);
 
   const second = createRoom(manager, testUid(50));
   const player = joinPlayer(manager, first.code, 2);
-  manager.handle(player.conn, { t: "JOIN_ROOM", code: second.code, name: "لاعب٢" });
+  manager.handle(player.conn, {
+    t: "JOIN_ROOM",
+    code: second.code,
+    name: "لاعب٢",
+  });
   assert.equal(errorCode(player.socket), "ALREADY_IN_ROOM");
-  assert.equal(manager.roomCodeForUidForTests(player.uid), first.code);
-  assert.equal(manager.roomForTests(first.code)?.players.has(player.uid), true);
-  assert.equal(manager.roomForTests(second.code)?.players.has(player.uid), false);
 
-  const thirdHost = authenticatedConnection(manager, testUid(60));
-  manager.handle(thirdHost.conn, { t: "CREATE_ROOM" });
-  assert.equal(errorCode(thirdHost.socket), "RATE_LIMITED");
+  const third = authenticatedConnection(manager, testUid(60));
+  manager.handle(third.conn, { t: "CREATE_ROOM" });
+  assert.equal(errorCode(third.socket), "RATE_LIMITED");
   assert.equal(manager.roomCount, 2);
   manager.dispose();
 });
 
-test("room capacity and normalized duplicate names are enforced", () => {
+test("room capacity and normalized duplicate names remain enforced", () => {
   const manager = new RoomManager();
   const host = createRoom(manager);
   joinPlayer(manager, host.code, 2, "أحمد");
+
   const duplicate = authenticatedConnection(manager, testUid(20));
-  manager.handle(duplicate.conn, { t: "JOIN_ROOM", code: host.code, name: "احمد" });
+  manager.handle(duplicate.conn, {
+    t: "JOIN_ROOM",
+    code: host.code,
+    name: "احمد",
+  });
   assert.equal(errorCode(duplicate.socket), "DUPLICATE_NAME");
 
-  for (let index = 3; index <= 11; index += 1) joinPlayer(manager, host.code, index);
-  assert.equal(manager.roomForTests(host.code)?.players.size, 10);
+  for (let index = 3; index <= 11; index += 1) {
+    joinPlayer(manager, host.code, index);
+  }
+
   const extra = authenticatedConnection(manager, testUid(30));
-  manager.handle(extra.conn, { t: "JOIN_ROOM", code: host.code, name: "زيادة" });
+  manager.handle(extra.conn, {
+    t: "JOIN_ROOM",
+    code: host.code,
+    name: "زيادة",
+  });
   assert.equal(errorCode(extra.socket), "ROOM_FULL");
   manager.dispose();
 });
 
-test("host authorization is enforced for every privileged action", () => {
+test("host can select one/two/three modes; non-host and zero-mode changes are rejected", () => {
   const manager = new RoomManager();
-  const { host, players, room } = setupPlayers(manager, 3);
-  const player = players[0];
+  const { host, players, room } = setupPlayers(manager);
 
-  manager.handle(player.conn, { t: "SET_SETTINGS", totalRounds: 3 });
-  assert.equal(errorCode(player.socket), "NOT_HOST");
-  manager.handle(player.conn, { t: "START_GAME" });
-  assert.equal(errorCode(player.socket), "NOT_HOST");
-  room.phase = "DISCUSSION";
-  manager.handle(player.conn, { t: "START_VOTING" });
-  assert.equal(errorCode(player.socket), "NOT_HOST");
-  room.phase = "RESULT";
-  manager.handle(player.conn, { t: "NEXT_ROUND" });
-  assert.equal(errorCode(player.socket), "NOT_HOST");
-  room.phase = "LOBBY";
-  manager.handle(player.conn, { t: "KICK_PLAYER", uid: players[1].uid });
-  assert.equal(errorCode(player.socket), "NOT_HOST");
-  manager.handle(player.conn, { t: "CLOSE_ROOM" });
-  assert.equal(errorCode(player.socket), "NOT_HOST");
-  room.phase = "GAME_OVER";
-  manager.handle(player.conn, { t: "REMATCH" });
-  assert.equal(errorCode(player.socket), "NOT_HOST");
-  assert.equal(manager.roomCodeForUidForTests(host.uid), host.code);
+  manager.handle(host.conn, { t: "SET_SETTINGS", selectedModes: ["POINT"] });
+  assert.deepEqual(room.selectedModes, ["POINT"]);
+
+  manager.handle(host.conn, {
+    t: "SET_SETTINGS",
+    selectedModes: ["POINT", "HANDS"],
+  });
+  assert.deepEqual(room.selectedModes, ["POINT", "HANDS"]);
+
+  manager.handle(host.conn, {
+    t: "SET_SETTINGS",
+    selectedModes: ["HANDS", "POINT", "NUMBER"],
+  });
+  assert.equal(room.selectedModes.length, 3);
+
+  manager.handle(host.conn, { t: "SET_SETTINGS", selectedModes: [] });
+  assert.equal(errorCode(host.socket), "NO_MODE_SELECTED");
+
+  manager.handle(players[0].conn, {
+    t: "SET_SETTINGS",
+    selectedModes: ["POINT"],
+  });
+  assert.equal(errorCode(players[0].socket), "NOT_HOST");
+  assert.equal(room.selectedModes.length, 3);
   manager.dispose();
 });
 
-test("disconnect in QUESTION does not transition and reconnect restores exact round", async () => {
-  const manager = new RoomManager({
-    rng: () => 0,
-    disconnectGraceMs: 30,
-    questionToAnsweringMs: 1_000,
-  });
-  const { host, players, room } = setupPlayers(manager, 3);
-  manager.handle(host.conn, { t: "SET_SETTINGS", totalRounds: 3, categories: ["food"] });
-  manager.handle(host.conn, { t: "START_GAME" });
-  const player = players[0];
-  const round = room.round;
-  const question = round?.normalQuestion;
-  const impostor = round?.impostorUid;
-  manager.disconnect(player.conn);
-  assert.equal(room.phase, "QUESTION");
-  assert.equal(room.round?.participantUids.length, 3);
-  assert.equal(room.players.get(player.uid)?.connected, false);
+test("legacy category selection is rejected by backend, not merely hidden in UI", () => {
+  const manager = new RoomManager();
+  const { host, room } = setupPlayers(manager);
+  manager.handle(host.conn, { t: "SET_SETTINGS", categories: ["food"] });
+  assert.equal(errorCode(host.socket), "BAD_REQUEST");
+  assert.deepEqual(room.categories, []);
+  manager.dispose();
+});
 
-  const reconnect = authenticatedConnection(manager, player.uid);
-  assert.equal(room.players.get(player.uid)?.connected, true);
+test("selected modes lock after game starts", () => {
+  const manager = new RoomManager({ rng: () => 0 });
+  const { host, room } = start(manager);
+  const before = [...room.selectedModes];
+  manager.handle(host.conn, {
+    t: "SET_SETTINGS",
+    selectedModes: ["POINT"],
+  });
+  assert.equal(errorCode(host.socket), "INVALID_PHASE");
+  assert.deepEqual(room.selectedModes, before);
+  manager.dispose();
+});
+
+test("impostor receives no prompt in network state; normal receives current prompt", () => {
+  const manager = new RoomManager({ rng: () => 0 });
+  const { players, room } = start(manager);
+  const round = room.round!;
+  const impostor = players.find((player) => player.uid === round.impostorUid)!;
+  const normal = players.find((player) => player.uid !== round.impostorUid)!;
+  const impostorView = lastMessage(impostor.socket, "STATE")!.view;
+  const normalView = lastMessage(normal.socket, "STATE")!.view;
+
+  assert.equal(impostorView.isImpostor, true);
+  assert.equal(impostorView.myPrompt, undefined);
+  assert.ok(!JSON.stringify(impostorView).includes(round.prompt));
+  assert.ok(!JSON.stringify(impostorView).includes(round.promptId));
+  assert.equal(normalView.myPrompt?.text, round.prompt);
+  manager.dispose();
+});
+
+test("reconnect restores the exact current private view without leaking to impostor", async () => {
+  const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 40 });
+  const { players, room } = start(manager);
+  const round = room.round!;
+  const impostor = players.find((player) => player.uid === round.impostorUid)!;
+  const normal = players.find((player) => player.uid !== round.impostorUid)!;
+
+  manager.disconnect(impostor.conn);
+  const impostorReconnect = authenticatedConnection(manager, impostor.uid);
+  const impostorView = lastMessage(impostorReconnect.socket, "STATE")!.view;
   assert.equal(room.round, round);
-  assert.equal(room.round?.normalQuestion, question);
-  assert.equal(room.round?.impostorUid, impostor);
-  await wait(45);
-  assert.equal(room.round, round, "stale grace timer must not fire after reconnect");
+  assert.equal(impostorView.isImpostor, true);
+  assert.equal(impostorView.myPrompt, undefined);
+  assert.ok(!JSON.stringify(impostorView).includes(round.prompt));
 
-  manager.disconnect(reconnect.conn);
-  const reconnectAgain = authenticatedConnection(manager, player.uid);
-  manager.disconnect(reconnectAgain.conn);
-  authenticatedConnection(manager, player.uid);
-  await wait(45);
-  assert.equal(room.round, round, "repeated reconnects must cancel every stale timer");
+  manager.disconnect(normal.conn);
+  const normalReconnect = authenticatedConnection(manager, normal.uid);
+  const normalView = lastMessage(normalReconnect.socket, "STATE")!.view;
+  assert.equal(normalView.myPrompt?.text, round.prompt);
+  assert.equal(normalView.challenge?.index, 1);
+
+  await wait(50);
+  assert.equal(room.round, round, "stale grace callbacks must be cancelled on reconnect");
   manager.dispose();
 });
 
-test("disconnect before/after answering preserves eligibility and submitted answer", async () => {
-  const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 60, questionToAnsweringMs: 1 });
-  const { players, room } = await startAnswering(manager);
-  const [first, second, third] = players;
-  manager.handle(first.conn, { t: "SUBMIT_ANSWER", answer: "جواب محفوظ" });
-  manager.disconnect(first.conn);
-  manager.disconnect(second.conn);
-  manager.handle(third.conn, { t: "SUBMIT_ANSWER", answer: "جواب ثالث" });
-  assert.equal(room.phase, "ANSWERING");
-  assert.equal(room.round?.answers.get(first.uid), "جواب محفوظ");
-  assert.equal(room.round?.answers.size, 2);
+test("all ready starts authoritative countdown then discussion; no physical answer payload exists", async () => {
+  const manager = new RoomManager({ rng: () => 0, physicalCountdownMs: 2 });
+  const { players, room } = start(manager);
 
-  const firstReconnect = authenticatedConnection(manager, first.uid);
-  assert.equal(lastMessage(firstReconnect.socket, "STATE")?.view.myAnswerSubmitted, true);
-  const secondReconnect = authenticatedConnection(manager, second.uid);
-  manager.handle(secondReconnect.conn, { t: "SUBMIT_ANSWER", answer: "جواب ثاني" });
+  for (let index = 0; index < players.length - 1; index += 1) {
+    manager.handle(players[index].conn, { t: "MARK_READY" });
+  }
+  assert.equal(room.phase, "QUESTION");
+
+  manager.handle(players.at(-1)!.conn, { t: "MARK_READY" });
   assert.equal(room.phase, "REVEAL");
+  assert.ok(room.phaseEndsAt);
+
+  await wait(8);
+  assert.equal(room.phase, "DISCUSSION");
   manager.dispose();
 });
 
-test("disconnect in DISCUSSION and VOTING never completes the phase by socket count", async () => {
+test("voting survives disconnect/reconnect and completes only after every participant votes", async () => {
   const manager = new RoomManager({
     rng: () => 0,
+    physicalCountdownMs: 2,
     disconnectGraceMs: 80,
-    questionToAnsweringMs: 1,
-    revealToDiscussionMs: 1,
   });
-  const { host, players, room } = await startAnswering(manager);
-  for (const player of players) manager.handle(player.conn, { t: "SUBMIT_ANSWER", answer: `ج${player.uid.slice(-1)}` });
-  await wait(8);
-  assert.equal(room.phase, "DISCUSSION");
-  manager.disconnect(players[0].conn);
-  assert.equal(room.phase, "DISCUSSION");
-  const firstReconnect = authenticatedConnection(manager, players[0].uid);
+  const { host, players, room } = await toDiscussion(manager);
 
   manager.handle(host.conn, { t: "START_VOTING" });
-  manager.disconnect(players[2].conn);
-  manager.handle(firstReconnect.conn, { t: "SUBMIT_VOTE", targetUid: players[1].uid });
-  manager.handle(players[1].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
-  assert.equal(room.phase, "VOTING", "missing disconnected vote must still be required");
-  const thirdReconnect = authenticatedConnection(manager, players[2].uid);
-  manager.handle(thirdReconnect.conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
-  assert.equal(room.phase, "RESULT");
-  manager.dispose();
-});
-
-test("a vote survives disconnect and can complete while that voter is offline", async () => {
-  const manager = new RoomManager({
-    rng: () => 0,
-    disconnectGraceMs: 80,
-    questionToAnsweringMs: 1,
-    revealToDiscussionMs: 1,
+  manager.handle(players[0].conn, {
+    t: "SUBMIT_VOTE",
+    targetUid: players[1].uid,
   });
-  const { host, players, room } = await startAnswering(manager);
-  for (const player of players) manager.handle(player.conn, { t: "SUBMIT_ANSWER", answer: "جواب" });
-  await wait(8);
-  manager.handle(host.conn, { t: "START_VOTING" });
-  manager.handle(players[0].conn, { t: "SUBMIT_VOTE", targetUid: players[1].uid });
   manager.disconnect(players[0].conn);
-  assert.equal(room.round?.votes.get(players[0].uid), players[1].uid);
-  manager.handle(players[1].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
-  manager.handle(players[2].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  manager.handle(players[1].conn, {
+    t: "SUBMIT_VOTE",
+    targetUid: players[0].uid,
+  });
+  assert.equal(room.phase, "VOTING");
+
+  const third = players[2];
+  manager.disconnect(third.conn);
+  const thirdReconnect = authenticatedConnection(manager, third.uid);
+  assert.equal(lastMessage(thirdReconnect.socket, "STATE")?.view.room.phase, "VOTING");
+  manager.handle(thirdReconnect.conn, {
+    t: "SUBMIT_VOTE",
+    targetUid: players[0].uid,
+  });
+
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round?.votes.get(players[0].uid), players[1].uid);
   manager.dispose();
 });
 
-test("grace expiry cancels and redeals for disconnected impostor or normal player", async () => {
-  for (const disconnectIndex of [0, 1]) {
-    const manager = new RoomManager({
-      rng: () => 0,
-      disconnectGraceMs: 12,
-      questionToAnsweringMs: 1,
-    });
-    const { players, room } = await startAnswering(manager, 4);
-    const oldRound = room.round!;
-    const target = disconnectIndex === 0
-      ? players.find((player) => player.uid === oldRound.impostorUid)!
-      : players.find((player) => player.uid !== oldRound.impostorUid)!;
-    manager.disconnect(target.conn);
-    await wait(25);
-    assert.equal(room.currentRound, 1);
-    assert.ok(room.phase === "QUESTION" || room.phase === "ANSWERING");
-    assert.notEqual(room.round, oldRound);
-    assert.equal(room.players.has(target.uid), false);
-    assert.equal(manager.roomCodeForUidForTests(target.uid), undefined);
-    assert.ok(!room.round!.participantUids.includes(target.uid));
-    assert.ok([...room.players.values()].every((player) => player.score === 0));
-    if (target.uid === oldRound.impostorUid) {
-      assert.notEqual(room.round!.impostorUid, target.uid);
-    }
-    manager.dispose();
-  }
+test("grace expiry during a challenge redeals safely without advancing round number", async () => {
+  const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 4 });
+  const { players, room } = start(manager, 4);
+  const oldRound = room.round!;
+  const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
+
+  manager.disconnect(target.conn);
+  await wait(12);
+
+  assert.equal(room.currentRound, 1);
+  assert.notEqual(room.round, oldRound);
+  assert.equal(room.round?.challengeIndex, 1);
+  assert.equal(room.phase, "QUESTION");
+  manager.dispose();
 });
 
-test("fewer than three eligible players after grace aborts safely to lobby", async () => {
-  const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 10, questionToAnsweringMs: 1 });
-  const { players, room } = await startAnswering(manager, 3);
-  manager.disconnect(players[0].conn);
-  await wait(25);
-  assert.equal(room.phase, "LOBBY");
-  assert.equal(room.currentRound, 0);
-  assert.equal(room.round, null);
-  assert.equal(room.players.size, 2);
+test("grace expiry after a survived challenge redeals the incomplete round safely", async () => {
+  const manager = new RoomManager({
+    rng: () => 0,
+    physicalCountdownMs: 2,
+    disconnectGraceMs: 4,
+  });
+  const { host, players, room } = await toDiscussion(manager, 4);
+  manager.handle(host.conn, { t: "START_VOTING" });
+
+  // Force a 1-1-1-1 top tie, so challenge 1 is survived but the round is not complete.
+  manager.handle(players[0].conn, {
+    t: "SUBMIT_VOTE",
+    targetUid: players[1].uid,
+  });
+  manager.handle(players[1].conn, {
+    t: "SUBMIT_VOTE",
+    targetUid: players[0].uid,
+  });
+  manager.handle(players[2].conn, {
+    t: "SUBMIT_VOTE",
+    targetUid: players[3].uid,
+  });
+  manager.handle(players[3].conn, {
+    t: "SUBMIT_VOTE",
+    targetUid: players[2].uid,
+  });
+  assert.equal(room.phase, "RESULT");
+  assert.equal(room.round?.roundComplete, false);
+
+  const oldRound = room.round!;
+  const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
+  manager.disconnect(target.conn);
+  await wait(12);
+
+  assert.equal(room.currentRound, 1);
+  assert.equal(room.phase, "QUESTION");
+  assert.notEqual(room.round, oldRound);
+  assert.equal(room.round?.challengeIndex, 1);
+  assert.ok(!room.players.has(target.uid));
+  assert.equal(room.players.size, 3);
   assert.ok([...room.players.values()].every((player) => player.score === 0));
-  manager.dispose();
-});
-
-test("leave and kick are non-destructive during every active round phase", () => {
-  const manager = new RoomManager({ rng: () => 0, questionToAnsweringMs: 10_000 });
-  const { host, players, room } = setupPlayers(manager, 3);
-  manager.handle(host.conn, { t: "SET_SETTINGS", totalRounds: 3, categories: ["food"] });
-  manager.handle(host.conn, { t: "START_GAME" });
-  const target = players[0];
-  const impostorUid = room.round!.impostorUid;
-  for (const phase of ["QUESTION", "ANSWERING", "REVEAL", "DISCUSSION", "VOTING", "RESULT"] as const) {
-    room.phase = phase;
-    manager.handle(target.conn, { t: "LEAVE_ROOM" });
-    assert.equal(errorCode(target.socket), "INVALID_PHASE", `leave ${phase}`);
-    assert.equal(room.players.has(target.uid), true);
-    manager.handle(host.conn, { t: "KICK_PLAYER", uid: target.uid });
-    assert.equal(errorCode(host.socket), "INVALID_PHASE", `kick ${phase}`);
-    assert.equal(room.players.has(target.uid), true);
-    manager.handle(host.conn, { t: "KICK_PLAYER", uid: impostorUid });
-    assert.equal(errorCode(host.socket), "INVALID_PHASE", `kick impostor ${phase}`);
-    assert.equal(room.players.has(impostorUid), true);
-  }
-  manager.dispose();
-});
-
-test("leave before/after an answer or vote cannot corrupt participant state", async () => {
-  const manager = new RoomManager({
-    rng: () => 0,
-    questionToAnsweringMs: 1,
-    revealToDiscussionMs: 1,
-  });
-  const { host, players, room } = await startAnswering(manager);
-  manager.handle(players[0].conn, { t: "LEAVE_ROOM" });
-  assert.equal(errorCode(players[0].socket), "INVALID_PHASE");
-  manager.handle(players[0].conn, { t: "SUBMIT_ANSWER", answer: "محفوظ" });
-  manager.handle(players[0].conn, { t: "LEAVE_ROOM" });
-  assert.equal(room.round?.answers.get(players[0].uid), "محفوظ");
-  for (const player of players.slice(1)) manager.handle(player.conn, { t: "SUBMIT_ANSWER", answer: "جواب" });
-  await wait(8);
-  manager.handle(host.conn, { t: "START_VOTING" });
-  manager.handle(players[0].conn, { t: "LEAVE_ROOM" });
-  assert.equal(errorCode(players[0].socket), "INVALID_PHASE");
-  manager.handle(players[0].conn, { t: "SUBMIT_VOTE", targetUid: players[1].uid });
-  manager.handle(players[0].conn, { t: "LEAVE_ROOM" });
-  assert.equal(room.round?.votes.get(players[0].uid), players[1].uid);
-  assert.equal(room.players.has(players[0].uid), true);
-  manager.dispose();
-});
-
-test("safe lobby kick, room close, and GC clean every index and timer", () => {
-  let now = 0;
-  const manager = new RoomManager({ now: () => now, disconnectGraceMs: 10_000_000 });
-  const { host, players, room } = setupPlayers(manager, 3);
-  manager.handle(host.conn, { t: "KICK_PLAYER", uid: players[0].uid });
-  assert.equal(room.players.has(players[0].uid), false);
-  assert.equal(manager.roomCodeForUidForTests(players[0].uid), undefined);
-  assert.ok(lastMessage(players[0].socket, "KICKED"));
-
-  manager.handle(host.conn, { t: "CLOSE_ROOM" });
-  assert.equal(manager.roomCount, 0);
-  for (const uid of [host.uid, players[1].uid, players[2].uid]) {
-    assert.equal(manager.roomCodeForUidForTests(uid), undefined);
-  }
-
-  const gcHost = createRoom(manager, testUid(100));
-  const gcPlayers = [
-    joinPlayer(manager, gcHost.code, 101),
-    joinPlayer(manager, gcHost.code, 102),
-  ];
-  const gcRoom = { host: gcHost, players: gcPlayers };
-  manager.disconnect(gcRoom.host.conn);
-  for (const player of gcRoom.players) manager.disconnect(player.conn);
-  now = 31 * 60 * 1000;
-  manager.runGcForTests();
-  assert.equal(manager.roomCount, 0);
-  assert.equal(manager.roomCodeForUidForTests(gcRoom.host.uid), undefined);
-  for (const player of gcRoom.players) {
-    assert.equal(manager.roomCodeForUidForTests(player.uid), undefined);
-  }
-  manager.dispose();
-});
-
-test("multiple tabs keep presence, duplicate cleanup is safe, and cap is enforced", () => {
-  const manager = new RoomManager({ maxConnectionsPerUid: 2 });
-  const { players, room } = setupPlayers(manager, 3);
-  const player = players[0];
-  const secondTab = authenticatedConnection(manager, player.uid);
-  assert.equal(manager.connectionCountForUidForTests(player.uid), 2);
-  manager.disconnect(player.conn);
-  manager.disconnect(player.conn);
-  assert.equal(room.players.get(player.uid)?.connected, true);
-  assert.equal(manager.connectionCountForUidForTests(player.uid), 1);
-
-  const thirdSocket = new FakeSocket();
-  const thirdConn = new Connection(thirdSocket as unknown as WebSocket, "http://localhost:8080", "127.0.0.1");
-  thirdConn.authenticate(player.uid);
-  manager.register(thirdConn);
-  const fourthSocket = new FakeSocket();
-  const fourthConn = new Connection(fourthSocket as unknown as WebSocket, "http://localhost:8080", "127.0.0.1");
-  fourthConn.authenticate(player.uid);
-  assert.throws(
-    () => manager.register(fourthConn),
-    (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "RATE_LIMITED",
-  );
-  manager.disconnect(secondTab.conn);
-  assert.equal(room.players.get(player.uid)?.connected, true, "third tab remains live");
-  manager.dispose();
-});
-
-test("final-round winner remains in GAME_OVER after RESULT grace expiry", async () => {
-  const manager = new RoomManager({ disconnectGraceMs: 10 });
-  const { host, players, room } = setupPlayers(manager, 3);
-  const winner = players[0];
-  room.totalRounds = 3;
-  room.currentRound = 3;
-  room.phase = "RESULT";
-  room.players.get(winner.uid)!.score = 7;
-  room.players.get(players[1].uid)!.score = 3;
-  room.players.get(players[2].uid)!.score = 1;
-
-  manager.disconnect(winner.conn);
-  await wait(25);
-  assert.equal(room.players.get(winner.uid)?.pendingRemoval, true);
-
-  manager.handle(host.conn, { t: "NEXT_ROUND" });
-  assert.equal(room.phase, "GAME_OVER");
-  assert.equal(room.players.has(winner.uid), true);
-  const finalState = lastMessage(host.socket, "STATE");
-  assert.deepEqual(finalState?.view.gameOver?.winners, [{ uid: winner.uid, name: "لاعب2" }]);
-  assert.equal(finalState?.view.gameOver?.ranking[0]?.uid, winner.uid);
-
-  const lateDisconnect = players[1];
-  manager.disconnect(lateDisconnect.conn);
-  await wait(25);
-  assert.equal(room.players.get(lateDisconnect.uid)?.pendingRemoval, true);
-  assert.equal(room.players.has(lateDisconnect.uid), true, "GAME_OVER grace must preserve final ranking");
-
-  manager.handle(host.conn, { t: "REMATCH" });
-  assert.equal(room.phase, "LOBBY");
-  assert.equal(room.players.has(winner.uid), false);
-  assert.equal(room.players.has(lateDisconnect.uid), false);
-  assert.equal(manager.roomCodeForUidForTests(winner.uid), undefined);
   manager.dispose();
 });

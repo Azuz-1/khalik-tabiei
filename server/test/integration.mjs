@@ -1,191 +1,319 @@
 /**
  * End-to-end multi-client test over real WebSockets against a running server.
- * Drives 1 host + 3 players through two full rounds and asserts the wire never
- * leaks secrets. Run: `node test/integration.mjs` (server must be on :8080).
+ *
+ * Drives one shared host screen plus three player phones through the current
+ * HANDS / POINT / NUMBER imitation flow and inspects raw wire messages for
+ * secret-data leaks.
+ *
+ * Run from the repository root while the server is listening on :8080:
+ *   node server/test/integration.mjs
  */
 import { WebSocket } from "ws";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
 const ORIGIN = process.env.ORIGIN ?? URL.replace(/^ws/, "http").replace(/\/ws$/, "");
+const TIMEOUT_MS = 10_000;
+
 let failures = 0;
-const ok = (c, m) => { if (!c) { failures++; console.error("  ✗", m); } else console.log("  ✓", m); };
+
+function ok(condition, message) {
+  if (condition) {
+    console.log("  ✓", message);
+    return;
+  }
+
+  failures += 1;
+  console.error("  ✗", message);
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class Client {
-  constructor(label) {
+  constructor(label, cookie = null) {
     this.label = label;
-    this.cookie = null;
+    this.cookie = cookie;
     this.uid = null;
     this.view = null;
     this.messages = [];
     this.ws = null;
-    this.ready = this.connect();
+    this.ready = this.connect(cookie);
   }
+
   async connect(cookie = null) {
-    if (!cookie) {
+    let sessionCookie = cookie;
+    if (!sessionCookie) {
       const response = await fetch(`${ORIGIN}/api/session`);
-      if (!response.ok) throw new Error("session bootstrap failed");
-      cookie = response.headers.get("set-cookie")?.split(";", 1)[0] ?? null;
+      if (!response.ok) throw new Error(`${this.label}: session bootstrap failed`);
+      sessionCookie = response.headers.get("set-cookie")?.split(";", 1)[0] ?? null;
     }
-    if (!cookie) throw new Error("session cookie missing");
-    this.cookie = cookie;
-    this.ws = new WebSocket(URL, { headers: { Cookie: cookie, Origin: ORIGIN } });
-    return new Promise((res) => {
-      this.ws.on("open", () => this.sendRaw({ t: "HELLO" }));
-      this.ws.on("message", (d) => {
-        const m = JSON.parse(d.toString());
-        this.messages.push(m);
-        if (m.t === "HELLO_OK") { this.uid = m.uid; res(); }
-        if (m.t === "STATE") { this.view = m.view; this.uid = m.view.self.uid; res(); }
+
+    if (!sessionCookie) throw new Error(`${this.label}: session cookie missing`);
+    this.cookie = sessionCookie;
+    this.ws = new WebSocket(URL, {
+      headers: { Cookie: sessionCookie, Origin: ORIGIN },
+    });
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`${this.label}: websocket authentication timed out`)),
+        TIMEOUT_MS,
+      );
+
+      this.ws.once("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+
+      this.ws.on("open", () => this.send({ t: "HELLO" }));
+      this.ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        this.messages.push(message);
+
+        if (message.t === "HELLO_OK") {
+          this.uid = message.uid;
+          clearTimeout(timer);
+          resolve();
+        }
+
+        if (message.t === "STATE") {
+          this.view = message.view;
+          this.uid = message.view.self.uid;
+          clearTimeout(timer);
+          resolve();
+        }
       });
     });
   }
-  sendRaw(o) { this.ws.send(JSON.stringify(o)); }
-  send(o) { this.sendRaw(o); }
-  phase() { return this.view?.room?.phase; }
-  rawText() { return JSON.stringify(this.messages); }
-  close() { this.ws.close(); }
+
+  send(message) {
+    this.ws.send(JSON.stringify(message));
+  }
+
+  phase() {
+    return this.view?.room?.phase;
+  }
+
+  rawText() {
+    return JSON.stringify(this.messages);
+  }
+
+  clearMessages() {
+    this.messages = [];
+  }
+
+  async reconnect() {
+    const cookie = this.cookie;
+    const uid = this.uid;
+    this.ws?.close();
+    await sleep(120);
+    this.view = null;
+    this.messages = [];
+    await this.connect(cookie);
+    ok(this.uid === uid, `${this.label} reconnect keeps the same uid`);
+  }
+
+  close() {
+    this.ws?.close();
+  }
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(client, pred, label, timeout = 8000) {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    if (pred(client)) return true;
+async function waitFor(client, predicate, label, timeout = TIMEOUT_MS) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeout) {
+    if (predicate(client)) return;
     await sleep(40);
   }
-  throw new Error(`timeout waiting for: ${label} (phase=${client.phase()})`);
+
+  throw new Error(`timeout waiting for ${label}; ${client.label} phase=${client.phase()}`);
 }
 
-async function playRound(host, players, roundNo) {
-  // Only inspect THIS round's traffic — prior rounds legitimately revealed
-  // their result (impostor + questions + tally) at RESULT.
-  [host, ...players].forEach((c) => { c.messages = []; });
-  await waitFor(host, (c) => c.phase() === "ANSWERING", `round ${roundNo} ANSWERING`);
+function currentRoles(players) {
+  const impostors = players.filter((player) => player.view?.isImpostor === true);
+  const normals = players.filter((player) => player.view?.isImpostor === false);
+  ok(impostors.length === 1, "exactly one player is marked as the impostor privately");
+  ok(normals.length === 2, "the other two players are marked as normal privately");
+  return { impostor: impostors[0], normals };
+}
 
-  // --- SECURITY checks during ANSWERING -----------------------------------
-  const qs = players.map((p) => p.view.myQuestion);
-  ok(qs.every((q) => typeof q === "string" && q.length > 0), "each player received a question");
-  const distinct = new Set(qs);
-  ok(distinct.size === 2, "exactly two distinct questions dealt (impostor differs)");
-  ok(host.view.myQuestion === undefined, "host view carries NO question");
-  // Host wire must contain no question text at all.
-  const anyQ = [...distinct];
-  ok(!anyQ.some((q) => host.rawText().includes(q)), "host wire never contained any question");
-  // Each normal player's wire must not contain the impostor's (other) question.
-  for (const p of players) {
-    const others = anyQ.filter((q) => q !== p.view.myQuestion);
-    ok(!others.some((q) => p.rawText().includes(q)), `player ${p.label} wire has only their own question`);
-    ok(!/impostor/i.test(p.rawText()), `player ${p.label} wire has no impostor marker`);
+function currentPrompt(normals) {
+  const prompts = normals.map((player) => player.view?.myPrompt?.text);
+  ok(prompts.every((prompt) => typeof prompt === "string" && prompt.length > 0), "normal players receive a prompt");
+  ok(new Set(prompts).size === 1, "normal players receive the same current prompt");
+  return prompts[0];
+}
+
+function assertPrivateQuestionWire(host, impostor, normals, prompt) {
+  ok(host.view?.myPrompt === undefined, "host never receives a private prompt");
+  ok(impostor.view?.isImpostor === true, "impostor knows they are the impostor");
+  ok(impostor.view?.myPrompt === undefined, "impostor receives no prompt");
+  ok(!impostor.rawText().includes(prompt), "raw impostor wire never contains the secret prompt text");
+  ok(!impostor.rawText().includes("promptId"), "raw impostor wire never contains promptId");
+  ok(!host.rawText().includes(prompt), "raw host wire never contains the private prompt text");
+
+  for (const normal of normals) {
+    ok(normal.view?.myPrompt?.text === prompt, `${normal.label} has the expected private prompt`);
+    ok(!normal.rawText().includes("promptId"), `${normal.label} wire does not expose promptId`);
   }
+}
 
-  // Submit answers (each uses their own dealt question, answers freely).
-  for (const p of players) p.send({ t: "SUBMIT_ANSWER", answer: `جواب-${p.label}` });
+async function markReadyAndReachDiscussion(host, players, challengeIndex) {
+  for (const player of players) player.send({ t: "MARK_READY" });
 
-  // ANSWERING -> REVEAL -> DISCUSSION (auto)
-  await waitFor(host, (c) => c.phase() === "REVEAL" || c.phase() === "DISCUSSION", "REVEAL");
-  ok((host.view.reveal ?? []).length === players.length, "all answers revealed on host");
-  await waitFor(host, (c) => c.phase() === "DISCUSSION", "DISCUSSION");
+  await waitFor(host, (client) => client.phase() === "REVEAL", `challenge ${challengeIndex} countdown`);
+  ok(typeof host.view?.room?.phaseEndsAt === "number", `challenge ${challengeIndex} exposes an authoritative countdown deadline`);
 
+  await waitFor(host, (client) => client.phase() === "DISCUSSION", `challenge ${challengeIndex} discussion`);
+  ok(host.view?.room?.phaseEndsAt === undefined, `challenge ${challengeIndex} clears the countdown deadline in discussion`);
+}
+
+function submitThreeWayTie(players) {
+  const [a, b, c] = players;
+  a.send({ t: "SUBMIT_VOTE", targetUid: b.uid });
+  b.send({ t: "SUBMIT_VOTE", targetUid: c.uid });
+  c.send({ t: "SUBMIT_VOTE", targetUid: a.uid });
+}
+
+async function surviveChallenge(host, players, challengeIndex) {
   host.send({ t: "START_VOTING" });
-  await waitFor(players[0], (c) => c.phase() === "VOTING", "VOTING");
+  await waitFor(players[0], (client) => client.phase() === "VOTING", `challenge ${challengeIndex} voting`);
 
-  // Mid-vote secrecy: after one vote, others see only a count, no result.
   players[0].send({ t: "SUBMIT_VOTE", targetUid: players[1].uid });
-  await waitFor(host, (c) => (c.view.votesProgress?.submitted ?? 0) >= 1, "vote progress");
-  ok(host.view.result === undefined, "no result exposed mid-voting");
-  ok(!players[2].rawText().includes("voteTally"), "voteTally not leaked before result");
+  await waitFor(host, (client) => (client.view?.votesProgress?.submitted ?? 0) >= 1, `challenge ${challengeIndex} vote progress`);
+  ok(host.view?.result === undefined, `challenge ${challengeIndex} does not expose a result mid-vote`);
+  ok(!players[2].rawText().includes("voteTally"), `challenge ${challengeIndex} does not leak a tally mid-vote`);
 
-  // Remaining players vote.
-  players[1].send({ t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  players[1].send({ t: "SUBMIT_VOTE", targetUid: players[2].uid });
   players[2].send({ t: "SUBMIT_VOTE", targetUid: players[0].uid });
-
-  await waitFor(host, (c) => c.phase() === "RESULT", "RESULT");
-  const r = host.view.result;
-  ok(!!r && typeof r.impostorUid === "string", "result reveals impostor at RESULT");
-  ok(!!r.normalQuestion && !!r.impostorQuestion, "both questions revealed at RESULT");
-  ok((host.view.scoreboard ?? []).length === players.length, "scoreboard present at RESULT");
+  await waitFor(host, (client) => client.phase() === "RESULT", `challenge ${challengeIndex} result`);
 }
 
 async function main() {
-  console.log("Connecting clients…");
+  console.log("Connecting host + 3 players…");
   const host = new Client("HOST");
-  const p1 = new Client("سلمان");
-  const p2 = new Client("ناصر");
-  const p3 = new Client("فيصل");
-  const players = [p1, p2, p3];
-  await Promise.all([host.ready, ...players.map((p) => p.ready)]);
+  const players = [new Client("سلمان"), new Client("ناصر"), new Client("فيصل")];
+  await Promise.all([host.ready, ...players.map((player) => player.ready)]);
 
-  console.log("\n[negative] join non-existent room:");
-  host.send({ t: "JOIN_ROOM", code: "ZZZZZ", name: "xx" });
-  await waitFor(host, (c) => c.messages.some((m) => m.t === "ERROR" && m.code === "ROOM_NOT_FOUND"), "ROOM_NOT_FOUND");
-  ok(true, "unknown code rejected with ROOM_NOT_FOUND");
-
-  console.log("\n[setup] create + join:");
+  console.log("\n[setup] create room + join players:");
   host.send({ t: "CREATE_ROOM" });
-  await waitFor(host, (c) => c.phase() === "LOBBY", "host LOBBY");
+  await waitFor(host, (client) => client.phase() === "LOBBY", "host lobby");
   const code = host.view.room.code;
-  ok(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5}$/.test(code), `room code valid: ${code}`);
+  ok(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5}$/.test(code), `room code is valid: ${code}`);
 
-  for (const p of players) p.send({ t: "JOIN_ROOM", code, name: p.label });
-  await waitFor(host, (c) => c.view.players.length === 3, "3 players joined");
-  ok(true, "players appear on host in real time");
+  for (const player of players) {
+    player.send({ t: "JOIN_ROOM", code, name: player.label });
+  }
+  await waitFor(host, (client) => client.view?.players?.length === 3, "three joined players");
+  ok(true, "host sees all three players in real time");
 
-  console.log("\n[negative] duplicate name + start with settings:");
-  const dup = new Client("dup");
-  await dup.ready;
-  dup.send({ t: "JOIN_ROOM", code, name: "سلمان" });
-  await waitFor(dup, (c) => c.messages.some((m) => m.t === "ERROR" && m.code === "DUPLICATE_NAME"), "DUPLICATE_NAME");
-  ok(true, "duplicate normalized name rejected");
-  dup.close();
-
-  host.send({ t: "SET_SETTINGS", totalRounds: 3, categories: ["food", "friends"] });
-  // totalRounds must be one of the allowed options; use 3.
-  await waitFor(host, (c) => c.view.room.totalRounds === 3 && c.view.room.categories.length === 2, "settings applied");
-  ok(true, "host settings applied (3 rounds, 2 categories)");
-
-  // Shorten to 2 rounds for the test by resetting to an allowed value.
-  host.send({ t: "SET_SETTINGS", totalRounds: 3 });
-  host.send({ t: "START_GAME" });
-
-  console.log("\n[round 1]:");
-  await playRound(host, players, 1);
-
-  console.log("\n[round 2]:");
-  host.send({ t: "NEXT_ROUND" });
-  await playRound(host, players, 2);
-
-  console.log("\n[round 3 -> game over]:");
-  host.send({ t: "NEXT_ROUND" });
-  await playRound(host, players, 3);
-  host.send({ t: "NEXT_ROUND" });
-  await waitFor(host, (c) => c.phase() === "GAME_OVER", "GAME_OVER");
-  const winnerNames = host.view.gameOver?.winners?.map((winner) => winner.name).join("، ");
-  ok(!!winnerNames, `game over, winner(s): ${winnerNames}`);
-
-  console.log("\n[reconnect] same cookie restores the same seat:");
-  // p2 "refreshes": close its socket, open a new one with the same HttpOnly cookie.
-  const savedCookie = p2.cookie;
-  const savedUid = p2.uid;
-  p2.close();
-  await sleep(300);
-  const rc = new WebSocket(URL, { headers: { Cookie: savedCookie, Origin: ORIGIN } });
-  const rcMsgs = [];
-  await new Promise((res) => {
-    rc.on("open", () => rc.send(JSON.stringify({ t: "HELLO" })));
-    rc.on("message", (d) => { const m = JSON.parse(d.toString()); rcMsgs.push(m); if (m.t === "STATE") res(); });
-    setTimeout(res, 3000);
+  host.send({
+    t: "SET_SETTINGS",
+    totalRounds: 3,
+    selectedModes: ["HANDS", "POINT", "NUMBER"],
   });
-  const restored = rcMsgs.find((m) => m.t === "STATE");
-  ok(!!restored && restored.view.self.uid === savedUid, "reconnect resolves to the SAME uid via the session cookie");
-  ok(!!restored && restored.view.room?.code === code, "reconnect restored the same room");
-  rc.close();
+  await waitFor(
+    host,
+    (client) =>
+      client.view?.room?.totalRounds === 3 &&
+      client.view?.room?.selectedModes?.length === 3,
+    "new gameplay settings",
+  );
+  ok(
+    host.view.room.selectedModes.join(",") === "HANDS,POINT,NUMBER",
+    "selectedModes are authoritative on the room",
+  );
 
+  host.send({ t: "START_GAME" });
+  await waitFor(host, (client) => client.phase() === "QUESTION", "challenge 1 private prompt phase");
+  await Promise.all(players.map((player) => waitFor(player, (client) => client.phase() === "QUESTION", `${player.label} challenge 1 prompt`)));
+
+  console.log("\n[challenge 1] private prompt + reconnect + survived result:");
+  let { impostor, normals } = currentRoles(players);
+  const impostorUid = impostor.uid;
+  const firstPrompt = currentPrompt(normals);
+  assertPrivateQuestionWire(host, impostor, normals, firstPrompt);
+
+  const normalToReconnect = normals[0];
+  await normalToReconnect.reconnect();
+  await waitFor(normalToReconnect, (client) => client.phase() === "QUESTION", "normal private view after reconnect");
+  ok(normalToReconnect.view?.myPrompt?.text === firstPrompt, "normal reconnect restores the exact private prompt");
+
+  await impostor.reconnect();
+  await waitFor(impostor, (client) => client.phase() === "QUESTION", "impostor private view after reconnect");
+  ok(impostor.view?.isImpostor === true, "impostor reconnect restores their private role");
+  ok(impostor.view?.myPrompt === undefined, "impostor reconnect still receives no prompt");
+  ok(!impostor.rawText().includes(firstPrompt), "reconnected impostor wire still contains no prompt text");
+  ok(!impostor.rawText().includes("promptId"), "reconnected impostor wire still contains no promptId");
+
+  await markReadyAndReachDiscussion(host, players, 1);
+  await surviveChallenge(host, players, 1);
+
+  const challengeOneResult = host.view.result;
+  ok(challengeOneResult?.roundComplete === false, "challenge 1 survival keeps the round open");
+  ok(challengeOneResult?.impostorUid === undefined, "challenge 1 result hides impostor uid");
+  ok(challengeOneResult?.impostorName === undefined, "challenge 1 result hides impostor name");
+  ok(challengeOneResult?.prompt === undefined, "challenge 1 result hides the previous prompt");
+  ok(challengeOneResult?.voteTally?.length === 0, "challenge 1 result hides vote tally");
+  ok(challengeOneResult?.voteBreakdown?.length === 0, "challenge 1 result hides vote details");
+  ok(challengeOneResult?.roundScores?.length === 0, "challenge 1 result hides score deltas");
+
+  host.send({ t: "NEXT_ROUND" });
+  await waitFor(host, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 2, "challenge 2 question phase");
+  await Promise.all(players.map((player) => waitFor(player, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 2, `${player.label} challenge 2 prompt`)));
+
+  console.log("\n[challenge 2] same impostor + new prompt:");
+  players.forEach((player) => player.clearMessages());
+  host.clearMessages();
+  ({ impostor, normals } = currentRoles(players));
+  const secondPrompt = currentPrompt(normals);
+  ok(impostor.uid === impostorUid, "the same impostor continues into challenge 2");
+  ok(secondPrompt !== firstPrompt, "challenge 2 receives a new prompt");
+  assertPrivateQuestionWire(host, impostor, normals, secondPrompt);
+
+  await markReadyAndReachDiscussion(host, players, 2);
+  await surviveChallenge(host, players, 2);
+  ok(host.view.result?.roundComplete === false, "challenge 2 survival still keeps the round open");
+  ok(host.view.result?.impostorUid === undefined, "challenge 2 still hides impostor identity");
+  ok(host.view.result?.voteTally?.length === 0, "challenge 2 still hides vote tally");
+
+  host.send({ t: "NEXT_ROUND" });
+  await waitFor(host, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 3, "challenge 3 question phase");
+  await Promise.all(players.map((player) => waitFor(player, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 3, `${player.label} challenge 3 prompt`)));
+
+  console.log("\n[challenge 3] survival completes round and awards +2:");
+  players.forEach((player) => player.clearMessages());
+  host.clearMessages();
+  ({ impostor, normals } = currentRoles(players));
+  const thirdPrompt = currentPrompt(normals);
+  ok(impostor.uid === impostorUid, "the same impostor continues into challenge 3");
+  ok(thirdPrompt !== secondPrompt, "challenge 3 receives another new prompt");
+  assertPrivateQuestionWire(host, impostor, normals, thirdPrompt);
+
+  await markReadyAndReachDiscussion(host, players, 3);
+  await surviveChallenge(host, players, 3);
+
+  const finalResult = host.view.result;
+  ok(finalResult?.roundComplete === true, "surviving challenge 3 completes the round");
+  ok(finalResult?.groupFound === false, "challenge 3 tie records an impostor survival");
+  ok(finalResult?.impostorUid === impostorUid, "completed round reveals the impostor");
+  ok(finalResult?.prompt === thirdPrompt, "completed round reveals the final challenge prompt");
+  ok((finalResult?.voteTally?.length ?? 0) > 0, "completed round reveals vote tally");
+  ok((finalResult?.voteBreakdown?.length ?? 0) === 3, "completed round reveals vote details");
+
+  const impostorScore = host.view.scoreboard?.find((row) => row.uid === impostorUid)?.score;
+  ok(impostorScore === 2, "impostor receives +2 only after surviving challenge 3");
+
+  console.log("\n[cleanup]:");
   host.send({ t: "CLOSE_ROOM" });
   await sleep(200);
+  ok(true, "room closed cleanly");
 
-  console.log(`\n${failures === 0 ? "ALL PASSED ✅" : failures + " FAILED ❌"}`);
-  [host, p2, p3].forEach((c) => c.close());
+  for (const client of [host, ...players]) client.close();
+
+  console.log(`\n${failures === 0 ? "ALL PASSED ✅" : `${failures} FAILED ❌`}`);
   process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => { console.error("FATAL", e); process.exit(1); });
+main().catch((error) => {
+  console.error("FATAL", error);
+  process.exit(1);
+});

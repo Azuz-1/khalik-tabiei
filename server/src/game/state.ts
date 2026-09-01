@@ -1,53 +1,58 @@
-/**
- * Internal, server-only room + round state. THIS is where secrets live
- * (impostor identity, both questions, raw answers, raw votes). None of these
- * fields are ever serialized into a broadcast — see view.ts for the safe
- * per-recipient projection.
- */
-import type { CategoryId, GamePhase } from "../../../shared/types.js";
+/** Internal server-only room state. */
+import type { CategoryId, GameMode, GamePhase } from "../../../shared/types.js";
 import {
+  ANSWER_MAX,
+  DEFAULT_GAME_MODES,
   MAX_PLAYERS,
   MIN_PLAYERS,
   NAME_MAX,
   NAME_MIN,
-  ANSWER_MAX,
 } from "../../../shared/constants.js";
 import { GameError } from "./errors.js";
 
 export interface InternalPlayer {
   uid: string;
-  /** Original display name, shown verbatim. */
   name: string;
-  /** Normalized form used only for duplicate detection. */
   normalizedName: string;
   score: number;
   connected: boolean;
   joinedAt: number;
   lastSeen: number;
-  /** Changes on every disconnect/reconnect so stale grace callbacks are inert. */
   disconnectGeneration: number;
   disconnectedAt?: number;
-  /** Grace expired after a completed final round; remove on rematch/lobby. */
   pendingRemoval?: boolean;
   isHost: boolean;
 }
 
+/**
+ * Legacy and current rounds still share one state interface because a number of
+ * generic room/result helpers consume both shapes. The active IMITATION path
+ * owns challenge/mode/prompt/ready fields; TEXT_PAIR owns question/answer fields.
+ * TEXT_PAIR is retained for legacy content only and is not selectable today.
+ */
 export interface RoundState {
-  index: number; // 1-based round number
+  kind: "IMITATION" | "TEXT_PAIR";
+  index: number;
+  impostorUid: string;
+  participantUids: string[];
+
+  challengeIndex: number;
+  mode: GameMode;
+  promptId: string;
+  prompt: string;
+  readyUids: Set<string>;
+  roundComplete: boolean;
+
   pairId: string;
   category: CategoryId;
-  // --- SECRET fields ---
   normalQuestion: string;
   impostorQuestion: string;
-  impostorUid: string;
-  /** Stable set of players who began this round; sockets do not change it. */
-  participantUids: string[];
-  answers: Map<string, string>; // uid -> answer (secret until REVEAL)
-  votes: Map<string, string>; // voterUid -> targetUid (secret until RESULT)
-  // --- derived after result ---
+  answers: Map<string, string>;
+
+  votes: Map<string, string>;
   resultComputed: boolean;
   groupFound?: boolean;
-  roundScores: Map<string, number>; // uid -> delta this round
+  roundScores: Map<string, number>;
 }
 
 export interface RoomState {
@@ -59,21 +64,23 @@ export interface RoomState {
   minPlayers: number;
   maxPlayers: number;
   totalRounds: number;
-  currentRound: number; // 0 while in lobby
+  currentRound: number;
+
   categories: CategoryId[];
-  /** Insertion-ordered map of players. */
+  selectedModes: GameMode[];
+  modeBag: GameMode[];
+  lastMode?: GameMode;
   players: Map<string, InternalPlayer>;
   round: RoundState | null;
+
   usedPairIds: Set<string>;
-  impostorHistory: string[]; // uids chosen as impostor, in order
+  usedPromptIds: Set<string>;
+  impostorHistory: string[];
+  phaseEndsAt?: number;
   closed: boolean;
 }
 
-export function createRoomState(
-  code: string,
-  hostUid: string,
-  now: number,
-): RoomState {
+export function createRoomState(code: string, hostUid: string, now: number): RoomState {
   return {
     code,
     hostUid,
@@ -85,73 +92,65 @@ export function createRoomState(
     totalRounds: 0,
     currentRound: 0,
     categories: [],
+    selectedModes: [...DEFAULT_GAME_MODES],
+    modeBag: [],
     players: new Map(),
     round: null,
     usedPairIds: new Set(),
+    usedPromptIds: new Set(),
     impostorHistory: [],
     closed: false,
   };
 }
 
-/** Active = currently connected players who count toward the game. */
 export function activePlayers(room: RoomState): InternalPlayer[] {
-  return [...room.players.values()].filter((p) => p.connected);
+  return [...room.players.values()].filter((player) => player.connected);
 }
 
-/** Stable participants for the current round, including grace-disconnected seats. */
 export function roundParticipants(room: RoomState): InternalPlayer[] {
   if (!room.round) return [];
   return room.round.participantUids
     .map((uid) => room.players.get(uid))
-    .filter((p): p is InternalPlayer => p !== undefined);
+    .filter((player): player is InternalPlayer => player !== undefined);
 }
 
 export function allPlayers(room: RoomState): InternalPlayer[] {
   return [...room.players.values()];
 }
 
-// ---------------------------------------------------------------------------
-// Input validation / normalization (defensive — all client input is untrusted)
-// ---------------------------------------------------------------------------
-
-/**
- * Normalize Arabic text for duplicate-name detection only. The visible name is
- * never altered. Handles alef/hamza variants, teh marbuta, alef maqsura,
- * tatweel, diacritics, and whitespace/case.
- */
 export function normalizeArabic(input: string): string {
   return input
     .normalize("NFKC")
-    .replace(/[ً-ٰٟـ]/g, "") // diacritics + tatweel
-    .replace(/[آأإٱ]/g, "ا") // آأإٱ -> ا
-    .replace(/ة/g, "ه") // ة -> ه
-    .replace(/ى/g, "ي") // ى -> ي
-    .replace(/ؤ/g, "و") // ؤ -> و
-    .replace(/ئ/g, "ي") // ئ -> ي
+    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[آأإٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 }
 
-/** Remove display-spoofing/control characters without damaging normal Arabic. */
 export function stripUnsafeTextControls(input: string): string {
-  return input.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "");
+  return input.replace(
+    /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
+    "",
+  );
 }
 
-/** Trim and validate a display name; returns the cleaned visible name. */
 export function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("INVALID_NAME");
   const name = stripUnsafeTextControls(raw).replace(/\s+/g, " ").trim();
-  const len = [...name].length; // count code points, not UTF-16 units
-  if (len < NAME_MIN || len > NAME_MAX) throw new GameError("INVALID_NAME");
+  const length = [...name].length;
+  if (length < NAME_MIN || length > NAME_MAX) throw new GameError("INVALID_NAME");
   return name;
 }
 
-/** Trim and validate a submitted answer. */
 export function cleanAnswer(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("INVALID_ANSWER");
   const answer = stripUnsafeTextControls(raw).replace(/\s+/g, " ").trim();
-  const len = [...answer].length;
-  if (len < 1 || len > ANSWER_MAX) throw new GameError("INVALID_ANSWER");
+  const length = [...answer].length;
+  if (length < 1 || length > ANSWER_MAX) throw new GameError("INVALID_ANSWER");
   return answer;
 }

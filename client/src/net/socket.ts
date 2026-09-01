@@ -1,27 +1,18 @@
-/**
- * WebSocket client + reactive store. Owns the single connection to the
- * authoritative server, bootstraps an HttpOnly anonymous session, auto-reconnects,
- * and exposes typed action helpers plus a `useGame()` hook.
- *
- * The client is intentionally "dumb": it renders whatever `view` the server
- * sends and never computes game logic locally.
- */
 import { useSyncExternalStore } from "react";
 import type {
+  CategoryId,
   ClientMessage,
   ClientView,
   ErrorCode,
+  GameMode,
   ServerMessage,
-  CategoryId,
 } from "../../../shared/types.js";
 
 export interface GameState {
   status: "connecting" | "online" | "offline";
   uid: string | null;
   view: ClientView | null;
-  /** Last error from the server, with a monotonically increasing id. */
   error: { code: ErrorCode; id: number } | null;
-  /** A transient full-screen notice (room closed / kicked). */
   notice: string | null;
 }
 
@@ -35,29 +26,28 @@ let state: GameState = {
 
 const listeners = new Set<() => void>();
 let errorSeq = 0;
-
-function set(patch: Partial<GameState>): void {
-  state = { ...state, ...patch };
-  for (const l of listeners) l();
-}
-
-// ---- connection ----------------------------------------------------------
-
 let ws: WebSocket | null = null;
 let reconnectDelay = 500;
 let reconnectTimer: number | undefined;
 let connecting = false;
 
+function set(patch: Partial<GameState>): void {
+  state = { ...state, ...patch };
+  for (const listener of listeners) listener();
+}
+
 function wsUrl(): string {
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${location.host}/ws`;
+  return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 }
 
 async function connectNow(): Promise<void> {
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  if (connecting) return;
+  const socketBusy =
+    ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING);
+  if (socketBusy || connecting) return;
+
   connecting = true;
   set({ status: "connecting" });
+
   try {
     const response = await fetch("/api/session", {
       method: "GET",
@@ -72,6 +62,7 @@ async function connectNow(): Promise<void> {
     scheduleReconnect();
     return;
   }
+
   ws = new WebSocket(wsUrl());
   connecting = false;
 
@@ -79,14 +70,12 @@ async function connectNow(): Promise<void> {
     reconnectDelay = 500;
     send({ t: "HELLO" });
   };
-  ws.onmessage = (ev) => {
-    let msg: ServerMessage;
+  ws.onmessage = (event) => {
     try {
-      msg = JSON.parse(ev.data as string) as ServerMessage;
+      dispatch(JSON.parse(event.data as string) as ServerMessage);
     } catch {
-      return;
+      // Ignore malformed server frames. The server is authoritative.
     }
-    dispatch(msg);
   };
   ws.onclose = () => {
     set({ status: "offline" });
@@ -96,7 +85,7 @@ async function connectNow(): Promise<void> {
     try {
       ws?.close();
     } catch {
-      /* ignore */
+      // Ignore close races.
     }
   };
 }
@@ -108,22 +97,22 @@ function connect(): void {
 function scheduleReconnect(): void {
   window.clearTimeout(reconnectTimer);
   reconnectTimer = window.setTimeout(() => {
-    reconnectDelay = Math.min(reconnectDelay * 1.7, 8000);
+    reconnectDelay = Math.min(reconnectDelay * 1.7, 8_000);
     connect();
   }, reconnectDelay);
 }
 
-function dispatch(msg: ServerMessage): void {
-  switch (msg.t) {
+function dispatch(message: ServerMessage): void {
+  switch (message.t) {
     case "HELLO_OK":
-      set({ status: "online", uid: msg.uid, view: null });
+      set({ status: "online", uid: message.uid, view: null });
       break;
     case "STATE":
-      set({ status: "online", view: msg.view, uid: msg.view.self.uid });
+      set({ status: "online", view: message.view, uid: message.view.self.uid });
       break;
     case "ERROR":
       errorSeq += 1;
-      set({ error: { code: msg.code, id: errorSeq } });
+      set({ error: { code: message.code, id: errorSeq } });
       break;
     case "ROOM_CLOSED":
       set({ view: null, notice: "الغرفة مقفلة" });
@@ -136,30 +125,23 @@ function dispatch(msg: ServerMessage): void {
   }
 }
 
-export function send(msg: ClientMessage): void {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
-  }
+export function send(message: ClientMessage): void {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
 }
-
-// ---- lifecycle & tab visibility ------------------------------------------
 
 if (typeof window !== "undefined") {
   connect();
-  // Reconnect promptly when the user returns to the tab / regains network.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") connect();
   });
-  window.addEventListener("online", () => connect());
+  window.addEventListener("online", connect);
 }
-
-// ---- store hook -----------------------------------------------------------
 
 export function useGame(): GameState {
   return useSyncExternalStore(
-    (cb) => {
-      listeners.add(cb);
-      return () => listeners.delete(cb);
+    (callback) => {
+      listeners.add(callback);
+      return () => listeners.delete(callback);
     },
     () => state,
   );
@@ -169,27 +151,26 @@ export function clearNotice(): void {
   set({ notice: null });
 }
 
-/** Return to the home screen locally (e.g. after leaving a room). */
 export function resetToHome(): void {
   try {
     history.replaceState(null, "", "/");
   } catch {
-    /* ignore */
+    // Ignore History API failures.
   }
   set({ view: null, notice: null });
 }
 
-// ---- typed actions --------------------------------------------------------
-
 export const actions = {
   createRoom: () => send({ t: "CREATE_ROOM" }),
   joinRoom: (code: string, name: string) => send({ t: "JOIN_ROOM", code, name }),
-  leaveRoom: () => {
-    send({ t: "LEAVE_ROOM" });
-  },
-  setSettings: (patch: { totalRounds?: number; categories?: CategoryId[] }) =>
-    send({ t: "SET_SETTINGS", ...patch }),
+  leaveRoom: () => send({ t: "LEAVE_ROOM" }),
+  setSettings: (patch: {
+    totalRounds?: number;
+    categories?: CategoryId[];
+    selectedModes?: GameMode[];
+  }) => send({ t: "SET_SETTINGS", ...patch }),
   startGame: () => send({ t: "START_GAME" }),
+  markReady: () => send({ t: "MARK_READY" }),
   submitAnswer: (answer: string) => send({ t: "SUBMIT_ANSWER", answer }),
   startVoting: () => send({ t: "START_VOTING" }),
   submitVote: (targetUid: string) => send({ t: "SUBMIT_VOTE", targetUid }),

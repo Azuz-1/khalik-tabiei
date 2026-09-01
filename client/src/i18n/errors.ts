@@ -1,6 +1,5 @@
 import type { ErrorCode } from "../../../shared/types.js";
 
-/** Maps server error codes to natural Saudi Arabic, player-facing copy. */
 export const ERROR_AR: Record<ErrorCode, string> = {
   ROOM_NOT_FOUND: "ما لقينا غرفة بهذا الكود 👀",
   ROOM_FULL: "الغرفة فلّت 😅",
@@ -19,6 +18,7 @@ export const ERROR_AR: Record<ErrorCode, string> = {
   INVALID_PHASE: "الحركة هذي مو وقتها الحين",
   NOT_ENOUGH_PLAYERS: "نحتاج ٣ لاعبين على الأقل",
   NO_CATEGORY_SELECTED: "اختر تصنيف واحد على الأقل",
+  NO_MODE_SELECTED: "اختر طريقة لعب وحدة على الأقل",
   KICKED: "تم إخراجك من الغرفة",
   RATE_LIMITED: "بروية شوي 🙂",
   BAD_REQUEST: "صار خطأ بسيط، جرّب مرة ثانية",

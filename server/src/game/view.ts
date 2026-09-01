@@ -1,21 +1,14 @@
-/**
- * Per-recipient view projection — the ONLY bridge from secret server state to
- * the wire. Given the full room and the identity of ONE recipient, it returns
- * a `ClientView` containing public data plus that recipient's own private
- * data, and nothing else.
- *
- * Security invariants enforced here:
- *  - `myQuestion` is filled from the recipient's OWN uid only.
- *  - Impostor identity and both questions appear ONLY in RESULT / GAME_OVER.
- *  - Raw answers/votes never leak; only counts are exposed pre-reveal.
- */
 import type {
   ClientView,
   PublicPlayer,
-  Role,
   RevealedAnswer,
+  Role,
 } from "../../../shared/types.js";
-import { CATEGORIES } from "../../../shared/constants.js";
+import {
+  CATEGORIES,
+  GAME_MODES,
+  MAX_CHALLENGES_PER_ROUND,
+} from "../../../shared/constants.js";
 import { roundParticipants, type RoomState } from "./state.js";
 import { questionFor, ranking } from "./engine.js";
 
@@ -26,11 +19,11 @@ function roleFor(room: RoomState, uid: string): Role {
 }
 
 function publicPlayers(room: RoomState): PublicPlayer[] {
-  return [...room.players.values()].map((p) => ({
-    uid: p.uid,
-    name: p.name,
-    score: p.score,
-    connected: p.connected,
+  return [...room.players.values()].map((player) => ({
+    uid: player.uid,
+    name: player.name,
+    score: player.score,
+    connected: player.connected,
     isHost: false,
   }));
 }
@@ -38,19 +31,18 @@ function publicPlayers(room: RoomState): PublicPlayer[] {
 function revealAnswers(room: RoomState): RevealedAnswer[] {
   const round = room.round;
   if (!round) return [];
-  const out: RevealedAnswer[] = [];
-  for (const p of room.players.values()) {
-    const answer = round.answers.get(p.uid);
-    if (answer !== undefined) out.push({ uid: p.uid, name: p.name, answer });
+
+  const answers: RevealedAnswer[] = [];
+  for (const player of room.players.values()) {
+    const answer = round.answers.get(player.uid);
+    if (answer !== undefined) {
+      answers.push({ uid: player.uid, name: player.name, answer });
+    }
   }
-  return out;
+  return answers;
 }
 
-export function buildView(
-  room: RoomState,
-  uid: string,
-  joinUrl: string,
-): ClientView {
+export function buildView(room: RoomState, uid: string, joinUrl: string): ClientView {
   const role = roleFor(room, uid);
   const self = room.players.get(uid);
   const round = room.round;
@@ -70,75 +62,142 @@ export function buildView(
       maxPlayers: room.maxPlayers,
       minPlayers: room.minPlayers,
       hostUid: room.hostUid,
+      selectedModes: room.selectedModes,
+      availableModes: GAME_MODES,
       categories: room.categories,
       availableCategories: CATEGORIES,
       joinUrl,
+      ...(room.phaseEndsAt ? { phaseEndsAt: room.phaseEndsAt } : {}),
     },
     players: publicPlayers(room),
   };
 
-  if (role === "host" && room.phase === "LOBBY") view.settingsEditable = true;
+  if (role === "host" && room.phase === "LOBBY") {
+    view.settingsEditable = true;
+  }
 
-  if (room.phase === "QUESTION" || room.phase === "ANSWERING") {
-    if (round) {
-      const participants = roundParticipants(room);
-      view.answersProgress = { submitted: round.answers.size, total: participants.length };
-      if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
-        view.myQuestion = questionFor(round, uid);
-        view.myAnswerSubmitted = round.answers.has(uid);
+  if (round?.kind === "IMITATION" && room.phase !== "GAME_OVER") {
+    view.challenge = {
+      mode: round.mode,
+      index: round.challengeIndex,
+      max: MAX_CHALLENGES_PER_ROUND,
+    };
+  }
+
+  if (
+    round?.kind === "TEXT_PAIR" &&
+    (room.phase === "QUESTION" || room.phase === "ANSWERING")
+  ) {
+    const participants = roundParticipants(room);
+    view.answersProgress = {
+      submitted: round.answers.size,
+      total: participants.length,
+    };
+
+    if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
+      view.myQuestion = questionFor(round, uid);
+      view.myAnswerSubmitted = round.answers.has(uid);
+    }
+  }
+
+  if (
+    round?.kind === "TEXT_PAIR" &&
+    ["REVEAL", "DISCUSSION", "VOTING", "RESULT"].includes(room.phase)
+  ) {
+    view.reveal = revealAnswers(room);
+  }
+
+  if (room.phase === "QUESTION" && round?.kind === "IMITATION") {
+    const participants = roundParticipants(room);
+    view.readyProgress = {
+      submitted: round.readyUids.size,
+      total: participants.length,
+    };
+
+    if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
+      view.myReady = round.readyUids.has(uid);
+      if (uid === round.impostorUid) {
+        view.isImpostor = true;
+      } else {
+        view.isImpostor = false;
+        view.myPrompt = { mode: round.mode, text: round.prompt };
       }
     }
   }
 
-  if (["REVEAL", "DISCUSSION", "VOTING", "RESULT"].includes(room.phase)) {
-    view.reveal = revealAnswers(room);
-  }
-
   if (room.phase === "VOTING" && round) {
     const participants = roundParticipants(room);
-    view.votesProgress = { submitted: round.votes.size, total: participants.length };
+    view.votesProgress = {
+      submitted: round.votes.size,
+      total: participants.length,
+    };
+
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
-      view.voteTargets = participants.filter((p) => p.uid !== uid).map((p) => ({ uid: p.uid, name: p.name }));
+      view.voteTargets = participants
+        .filter((player) => player.uid !== uid)
+        .map((player) => ({ uid: player.uid, name: player.name }));
       view.myVoteSubmitted = round.votes.has(uid);
       if (round.votes.has(uid)) view.myVoteTargetUid = round.votes.get(uid);
     }
   }
 
   if (room.phase === "RESULT" && round && round.resultComputed) {
+    const participants = roundParticipants(room);
     const impostor = room.players.get(round.impostorUid);
     const tally = new Map<string, number>();
-    for (const p of room.players.values()) tally.set(p.uid, 0);
-    for (const target of round.votes.values()) tally.set(target, (tally.get(target) ?? 0) + 1);
 
-    const voteBreakdown = [...round.votes.entries()].map(([voterUid, targetUid]) => {
-      const voter = room.players.get(voterUid);
-      const target = room.players.get(targetUid);
-      return {
-        voterUid,
-        voterName: voter?.name ?? "—",
-        targetUid,
-        targetName: target?.name ?? "—",
-        correct: targetUid === round.impostorUid,
-        voterWasImpostor: voterUid === round.impostorUid,
-        points: round.roundScores.get(voterUid) ?? 0,
-      };
-    });
+    for (const player of participants) tally.set(player.uid, 0);
+    for (const targetUid of round.votes.values()) {
+      tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
+    }
 
+    const revealIdentity = round.roundComplete;
     view.result = {
-      impostorUid: round.impostorUid,
-      impostorName: impostor?.name ?? "—",
+      ...(revealIdentity
+        ? {
+            impostorUid: round.impostorUid,
+            impostorName: impostor?.name ?? "—",
+          }
+        : {}),
       groupFound: round.groupFound ?? false,
-      normalQuestion: round.normalQuestion,
-      impostorQuestion: round.impostorQuestion,
-      category: round.category,
-      voteTally: [...room.players.values()]
-        .map((p) => ({ uid: p.uid, name: p.name, votes: tally.get(p.uid) ?? 0 }))
-        .filter((r) => r.votes > 0)
-        .sort((a, b) => b.votes - a.votes),
-      voteBreakdown,
-      roundScores: [...round.roundScores.entries()]
-        .filter(([, d]) => d !== 0)
-        .map(([u, delta]) => ({ uid: u, delta })),
+      roundComplete: round.roundComplete,
+      challengeIndex: round.challengeIndex,
+      maxChallenges: round.kind === "IMITATION" ? MAX_CHALLENGES_PER_ROUND : 1,
+      mode: round.mode,
+      ...(revealIdentity && round.kind === "IMITATION" ? { prompt: round.prompt } : {}),
+      ...(round.kind === "TEXT_PAIR"
+        ? {
+            normalQuestion: round.normalQuestion,
+            impostorQuestion: round.impostorQuestion,
+            category: round.category,
+          }
+        : {}),
+      voteTally: revealIdentity
+        ? participants
+            .map((player) => ({
+              uid: player.uid,
+              name: player.name,
+              votes: tally.get(player.uid) ?? 0,
+            }))
+            .filter((row) => row.votes > 0)
+            .sort((a, b) => b.votes - a.votes)
+        : [],
+      voteBreakdown: revealIdentity
+        ? [...round.votes.entries()].map(([voterUid, targetUid]) => ({
+            voterUid,
+            voterName: room.players.get(voterUid)?.name ?? "—",
+            targetUid,
+            targetName: room.players.get(targetUid)?.name ?? "—",
+            correct: targetUid === round.impostorUid,
+            voterWasImpostor: voterUid === round.impostorUid,
+            points: round.roundScores.get(voterUid) ?? 0,
+          }))
+        : [],
+      roundScores: revealIdentity
+        ? [...round.roundScores.entries()]
+            .filter(([, delta]) => delta !== 0)
+            .map(([scoreUid, delta]) => ({ uid: scoreUid, delta }))
+        : [],
     };
     view.scoreboard = ranking(room);
   }
