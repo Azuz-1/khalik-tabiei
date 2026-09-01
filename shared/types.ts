@@ -99,6 +99,16 @@ export interface RoundResult {
   impostorQuestion: string;
   category: CategoryId;
   voteTally: Array<{ uid: string; name: string; votes: number }>;
+  /** Public only after RESULT: exactly who voted for whom. */
+  voteBreakdown: Array<{
+    voterUid: string;
+    voterName: string;
+    targetUid: string;
+    targetName: string;
+    correct: boolean;
+    voterWasImpostor: boolean;
+    points: number;
+  }>;
   /** Per-player points earned this round (for the little "+1" flourishes). */
   roundScores: Array<{ uid: string; delta: number }>;
 }
