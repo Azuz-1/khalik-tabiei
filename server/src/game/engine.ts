@@ -253,9 +253,12 @@ export function nextRound(room: RoomState, uid: string, deps: EngineDeps = defau
 }
 
 export function redealCurrentRound(room: RoomState, deps: EngineDeps = defaultDeps): void {
-  assertPhase(room, "QUESTION", "ANSWERING", "REVEAL", "DISCUSSION", "VOTING");
+  assertPhase(room, "QUESTION", "ANSWERING", "REVEAL", "DISCUSSION", "VOTING", "RESULT");
   const r = room.round;
   if (!r) throw new GameError("INVALID_PHASE");
+  if (room.phase === "RESULT" && (r.kind !== "IMITATION" || r.roundComplete)) {
+    throw new GameError("INVALID_PHASE");
+  }
   if (room.impostorHistory.at(-1) === r.impostorUid) room.impostorHistory.pop();
   if (r.kind === "TEXT_PAIR") beginLegacyRound(room, deps);
   else beginImitationRound(room, deps);

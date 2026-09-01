@@ -180,3 +180,31 @@ test("grace expiry during a challenge redeals safely without advancing round num
   assert.equal(room.phase, "QUESTION");
   manager.dispose();
 });
+
+test("grace expiry after a survived challenge redeals the incomplete round safely", async () => {
+  const manager = new RoomManager({ rng: () => 0, physicalCountdownMs: 2, disconnectGraceMs: 4 });
+  const { host, players, room } = await toDiscussion(manager, 4);
+  manager.handle(host.conn, { t: "START_VOTING" });
+
+  // Force a 1-1-1-1 top tie, so challenge 1 is survived but the round is not complete.
+  manager.handle(players[0].conn, { t: "SUBMIT_VOTE", targetUid: players[1].uid });
+  manager.handle(players[1].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  manager.handle(players[2].conn, { t: "SUBMIT_VOTE", targetUid: players[3].uid });
+  manager.handle(players[3].conn, { t: "SUBMIT_VOTE", targetUid: players[2].uid });
+  assert.equal(room.phase, "RESULT");
+  assert.equal(room.round?.roundComplete, false);
+
+  const oldRound = room.round!;
+  const target = players.find((p) => p.uid !== oldRound.impostorUid)!;
+  manager.disconnect(target.conn);
+  await wait(12);
+
+  assert.equal(room.currentRound, 1);
+  assert.equal(room.phase, "QUESTION");
+  assert.notEqual(room.round, oldRound);
+  assert.equal(room.round?.challengeIndex, 1);
+  assert.ok(!room.players.has(target.uid));
+  assert.equal(room.players.size, 3);
+  assert.ok([...room.players.values()].every((player) => player.score === 0));
+  manager.dispose();
+});

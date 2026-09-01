@@ -154,6 +154,21 @@ export class RoomManager {
   private expirePlayerDisconnect(room: RoomState, uid: string, generation: number): void {
     if (this.rooms.get(room.code) !== room || this.uidToRoomCode.get(uid) !== room.code) return; const player = room.players.get(uid);
     if (!player || player.connected || player.disconnectGeneration !== generation || this.hasRoomConnection(uid, room.code)) return;
+
+    // A survived challenge result is not the end of the round: the same hidden
+    // impostor would otherwise carry a stale disconnected seat into the next
+    // challenge. Expiry here cancels the incomplete round and redeals from
+    // challenge 1 with no points, matching the mid-challenge disconnect policy.
+    if (room.phase === "RESULT" && room.round?.kind === "IMITATION" && !room.round.roundComplete) {
+      const wasParticipant = room.round.participantUids.includes(uid);
+      this.removePlayer(room, uid);
+      if (!wasParticipant) { this.broadcast(room); return; }
+      if (activePlayers(room).length < room.minPlayers) engine.abortToLobby(room, this.deps);
+      else engine.redealCurrentRound(room, this.deps);
+      this.broadcast(room);
+      return;
+    }
+
     if (room.phase === "RESULT" || room.phase === "GAME_OVER") { player.pendingRemoval = true; this.broadcast(room); return; }
     if (SAFE_REMOVAL_PHASES.has(room.phase)) { this.removePlayer(room, uid); this.broadcast(room); return; }
     const wasParticipant = room.round?.participantUids.includes(uid) ?? false; this.removePlayer(room, uid); if (!wasParticipant) { this.broadcast(room); return; }
