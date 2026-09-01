@@ -1,13 +1,11 @@
-/**
- * RoomManager — the single authority that owns all rooms and connections.
- *
- * It authenticates every action against the connection's server-derived uid
- * (never a uid from the request body), delegates rules to the pure engine,
- * runs auto-advance timers, reconciles round completion when the active set
- * changes, and pushes tailored per-recipient views to sockets.
- */
-import type { CategoryId, ClientMessage } from "../../../shared/types.js";
-import { MAX_PLAYERS, TIMERS } from "../../../shared/constants.js";
+/** Authoritative room, connection, timer, and membership orchestration. */
+import type { ClientMessage } from "../../../shared/types.js";
+import {
+  MAX_ACTIVE_ROOMS,
+  MAX_CONNECTIONS_PER_UID,
+  MAX_PLAYERS,
+  TIMERS,
+} from "../../../shared/constants.js";
 import { track } from "../analytics.js";
 import { Connection } from "../net/connection.js";
 import { GameError, isGameError } from "./errors.js";
@@ -26,66 +24,114 @@ import {
 interface Deps {
   rng: () => number;
   now: () => number;
+  disconnectGraceMs: number;
+  questionToAnsweringMs: number;
+  revealToDiscussionMs: number;
+  maxRooms: number;
+  maxConnectionsPerUid: number;
 }
 
-const IDLE_ROOM_MS = 30 * 60 * 1000; // GC rooms with no sockets for 30 min
+const IDLE_ROOM_MS = 30 * 60 * 1000;
+const GC_INTERVAL_MS = 60_000;
+const SAFE_REMOVAL_PHASES = new Set(["LOBBY", "GAME_OVER"]);
 
 export class RoomManager {
-  private rooms = new Map<string, RoomState>();
-  /** uid -> the set of that user's live connections. */
-  private connsByUid = new Map<string, Set<Connection>>();
-  /** roomCode -> pending timer handles keyed by purpose. */
-  private timers = new Map<string, Map<string, NodeJS.Timeout>>();
-  private deps: Deps;
+  private readonly rooms = new Map<string, RoomState>();
+  /** Authoritative invariant index: one uid maps to at most one room. */
+  private readonly uidToRoomCode = new Map<string, string>();
+  private readonly connsByUid = new Map<string, Set<Connection>>();
+  private readonly timers = new Map<string, Map<string, NodeJS.Timeout>>();
+  private readonly deps: Deps;
+  private readonly gcTimer: NodeJS.Timeout;
 
   constructor(deps: Partial<Deps> = {}) {
-    this.deps = { rng: deps.rng ?? Math.random, now: deps.now ?? Date.now };
-    setInterval(() => this.gcIdleRooms(), 60_000).unref?.();
+    this.deps = {
+      rng: deps.rng ?? Math.random,
+      now: deps.now ?? Date.now,
+      disconnectGraceMs: deps.disconnectGraceMs ?? TIMERS.DISCONNECT_GRACE,
+      questionToAnsweringMs: deps.questionToAnsweringMs ?? TIMERS.QUESTION_TO_ANSWERING,
+      revealToDiscussionMs: deps.revealToDiscussionMs ?? TIMERS.REVEAL_TO_DISCUSSION,
+      maxRooms: deps.maxRooms ?? MAX_ACTIVE_ROOMS,
+      maxConnectionsPerUid: deps.maxConnectionsPerUid ?? MAX_CONNECTIONS_PER_UID,
+    };
+    this.gcTimer = setInterval(() => this.gcIdleRooms(), GC_INTERVAL_MS);
+    this.gcTimer.unref?.();
   }
 
   // ---- connection lifecycle ---------------------------------------------
 
-  register(conn: Connection, uid: string): void {
-    conn.uid = uid;
+  register(conn: Connection): void {
+    const uid = conn.uid;
+    if (!uid) throw new GameError("UNAUTHORIZED");
     let set = this.connsByUid.get(uid);
     if (!set) this.connsByUid.set(uid, (set = new Set()));
+    if (!set.has(conn) && set.size >= this.deps.maxConnectionsPerUid) {
+      throw new GameError("RATE_LIMITED", "too many connections");
+    }
     set.add(conn);
 
-    // Reconnect: if this uid belongs to an active room, restore the seat.
     const room = this.roomOf(uid);
-    if (room) {
-      conn.roomCode = room.code;
-      const p = room.players.get(uid);
-      if (p && !p.connected) {
-        p.connected = true;
-        p.lastSeen = this.deps.now();
-      }
-      this.broadcast(room);
-    } else {
-      this.sendState(conn); // idle "no room" state
+    if (!room) {
+      this.sendState(conn);
+      return;
     }
+
+    const player = room.players.get(uid);
+    if (player?.pendingRemoval) {
+      this.sendState(conn);
+      return;
+    }
+    conn.roomCode = room.code;
+    if (player) {
+      player.disconnectGeneration += 1;
+      player.disconnectedAt = undefined;
+      player.connected = true;
+      player.lastSeen = this.deps.now();
+      this.cancelTimer(room.code, this.disconnectTimerKey(uid));
+    } else if (uid === room.hostUid) {
+      this.cancelTimer(room.code, this.disconnectTimerKey(uid));
+    }
+    room.updatedAt = this.deps.now();
+    this.broadcast(room);
   }
 
   disconnect(conn: Connection): void {
+    if (!conn.markDisconnected()) return;
     const uid = conn.uid;
     if (!uid) return;
+    const roomCode = conn.roomCode ?? this.uidToRoomCode.get(uid) ?? null;
+    conn.roomCode = null;
+
     const set = this.connsByUid.get(uid);
     set?.delete(conn);
-    const stillConnected = !!set && set.size > 0;
-    if (set && set.size === 0) this.connsByUid.delete(uid);
+    if (set?.size === 0) this.connsByUid.delete(uid);
+    if (!roomCode || this.hasRoomConnection(uid, roomCode)) return;
 
-    if (stillConnected) return; // another tab still open for this uid
+    const room = this.rooms.get(roomCode);
+    if (!room || this.uidToRoomCode.get(uid) !== roomCode) return;
+    room.updatedAt = this.deps.now();
 
-    const room = this.roomOf(uid);
-    if (!room) return;
-    const p = room.players.get(uid);
-    if (p) {
-      p.connected = false;
-      p.lastSeen = this.deps.now();
-      // Losing a player from the active set may complete a phase.
-      this.reconcile(room);
-      this.broadcast(room);
+    if (uid === room.hostUid) {
+      this.schedule(room, this.disconnectTimerKey(uid), this.deps.disconnectGraceMs, () => {
+        if (!this.hasRoomConnection(uid, room.code) && this.uidToRoomCode.get(uid) === room.code) {
+          this.doClose(room, "host_disconnect_timeout");
+        }
+      });
+      return;
     }
+
+    const player = room.players.get(uid);
+    if (!player) return;
+    player.connected = false;
+    player.lastSeen = this.deps.now();
+    player.disconnectedAt = player.lastSeen;
+    player.disconnectGeneration += 1;
+    const generation = player.disconnectGeneration;
+    this.schedule(room, this.disconnectTimerKey(uid), this.deps.disconnectGraceMs, () => {
+      this.expirePlayerDisconnect(room, uid, generation);
+    });
+    // Presence changes immediately, but participant eligibility and phase do not.
+    this.broadcast(room);
   }
 
   // ---- message dispatch --------------------------------------------------
@@ -93,13 +139,12 @@ export class RoomManager {
   handle(conn: Connection, msg: ClientMessage): void {
     try {
       this.dispatch(conn, msg);
-    } catch (e) {
-      if (isGameError(e)) {
-        conn.send({ t: "ERROR", code: e.code, message: e.message });
+    } catch (error) {
+      if (isGameError(error)) {
+        conn.send({ t: "ERROR", code: error.code, message: error.message });
       } else {
-        // Never leak internals to players.
         // eslint-disable-next-line no-console
-        console.error("unexpected error handling", msg.t, e);
+        console.error("unexpected error handling", msg.t, error);
         conn.send({ t: "ERROR", code: "INTERNAL" });
       }
     }
@@ -109,23 +154,20 @@ export class RoomManager {
     const uid = conn.uid;
     if (!uid) throw new GameError("UNAUTHORIZED");
     switch (msg.t) {
+      case "HELLO":
+        throw new GameError("BAD_REQUEST", "connection already authenticated");
       case "PING":
         conn.send({ t: "PONG" });
         return;
       case "CREATE_ROOM":
-        return this.createRoom(conn, uid);
+        return this.createRoom(uid);
       case "JOIN_ROOM":
-        return this.joinRoom(conn, uid, msg.code, msg.name);
+        return this.joinRoom(uid, msg.code, msg.name);
       case "LEAVE_ROOM":
-        return this.leaveRoom(conn, uid);
+        return this.leaveRoom(uid);
       case "SET_SETTINGS":
         return this.withRoom(uid, (room) => {
-          engine.setSettings(
-            room,
-            uid,
-            { totalRounds: msg.totalRounds, categories: msg.categories },
-            this.deps,
-          );
+          engine.setSettings(room, uid, msg, this.deps);
           if (msg.categories) track("selected_category", { count: msg.categories.length });
           this.broadcast(room);
         });
@@ -151,79 +193,83 @@ export class RoomManager {
           engine.rematch(room, uid, this.deps);
           this.broadcast(room);
         });
-      default:
-        throw new GameError("BAD_REQUEST");
     }
   }
 
-  // ---- actions -----------------------------------------------------------
+  // ---- room actions ------------------------------------------------------
 
-  private createRoom(conn: Connection, uid: string): void {
-    // Detach from any previous room first.
-    this.detach(uid);
+  private createRoom(uid: string): void {
+    if (this.uidToRoomCode.has(uid)) throw new GameError("ALREADY_IN_ROOM");
+    if (this.rooms.size >= this.deps.maxRooms) throw new GameError("RATE_LIMITED");
     const code = this.freshCode();
     const room = createRoomState(code, uid, this.deps.now());
     this.rooms.set(code, room);
-    conn.roomCode = code;
-    // Point all of this uid's connections at the new room.
-    for (const c of this.connsByUid.get(uid) ?? []) c.roomCode = code;
+    this.uidToRoomCode.set(uid, code);
+    this.attachAll(uid, code);
     track("room_created", {});
     this.broadcast(room);
   }
 
-  private joinRoom(conn: Connection, uid: string, rawCode: string, rawName: string): void {
+  private joinRoom(uid: string, rawCode: string, rawName: string): void {
     const code = normalizeCode(rawCode);
+    const indexedCode = this.uidToRoomCode.get(uid);
+    if (indexedCode && indexedCode !== code) throw new GameError("ALREADY_IN_ROOM");
     const room = this.rooms.get(code);
     if (!room || room.closed) throw new GameError("ROOM_NOT_FOUND");
     if (room.phase === "CLOSED") throw new GameError("ROOM_CLOSED");
 
-    // Existing player reconnecting via join -> just restore.
-    if (room.players.has(uid)) {
-      const p = room.players.get(uid)!;
-      p.connected = true;
-      p.lastSeen = this.deps.now();
-      this.attach(uid, code);
+    if (indexedCode === code) {
+      if (uid === room.hostUid) throw new GameError("ALREADY_IN_ROOM");
+      const existing = room.players.get(uid);
+      if (!existing || existing.pendingRemoval) throw new GameError("ALREADY_IN_ROOM");
+      existing.disconnectGeneration += 1;
+      existing.disconnectedAt = undefined;
+      existing.connected = true;
+      existing.lastSeen = this.deps.now();
+      this.cancelTimer(code, this.disconnectTimerKey(uid));
+      this.attachAll(uid, code);
       this.broadcast(room);
       return;
     }
-    if (uid === room.hostUid) throw new GameError("ALREADY_IN_ROOM");
+
     if (room.phase !== "LOBBY") throw new GameError("ROOM_NOT_IN_LOBBY");
     if (room.players.size >= MAX_PLAYERS) throw new GameError("ROOM_FULL");
-
     const name = cleanName(rawName);
-    const norm = normalizeArabic(name);
-    for (const p of room.players.values()) {
-      if (p.normalizedName === norm) throw new GameError("DUPLICATE_NAME");
+    const normalizedName = normalizeArabic(name);
+    for (const player of room.players.values()) {
+      if (player.normalizedName === normalizedName) throw new GameError("DUPLICATE_NAME");
     }
     const now = this.deps.now();
     const player: InternalPlayer = {
       uid,
       name,
-      normalizedName: norm,
+      normalizedName,
       score: 0,
       connected: true,
       joinedAt: now,
       lastSeen: now,
+      disconnectGeneration: 0,
       isHost: false,
     };
     room.players.set(uid, player);
-    this.attach(uid, code);
+    room.updatedAt = now;
+    this.uidToRoomCode.set(uid, code);
+    this.attachAll(uid, code);
     track("player_count", { count: room.players.size });
     this.broadcast(room);
   }
 
-  private leaveRoom(conn: Connection, uid: string): void {
+  private leaveRoom(uid: string): void {
     const room = this.roomOf(uid);
     if (!room) return;
     if (uid === room.hostUid) {
-      return this.doClose(room, "host_left");
+      this.doClose(room, "host_left");
+      return;
     }
-    if (room.players.delete(uid)) {
-      this.reconcile(room);
-    }
-    this.detach(uid);
+    if (!SAFE_REMOVAL_PHASES.has(room.phase)) throw new GameError("INVALID_PHASE");
+    this.removePlayer(room, uid);
     this.broadcast(room);
-    this.sendState(conn);
+    this.sendIdleToUid(uid);
   }
 
   private startGame(uid: string): void {
@@ -235,12 +281,7 @@ export class RoomManager {
         players: activePlayers(room).length,
       });
       this.broadcast(room);
-      // QUESTION -> ANSWERING after the "get ready" beat.
-      this.schedule(room, "q2a", TIMERS.QUESTION_TO_ANSWERING, () => {
-        if (room.phase !== "QUESTION") return;
-        engine.openAnswering(room, this.deps);
-        this.broadcast(room);
-      });
+      this.scheduleQuestionToAnswering(room);
     });
   }
 
@@ -262,35 +303,33 @@ export class RoomManager {
 
   private nextRound(uid: string): void {
     this.withRoom(uid, (room) => {
-      const wasRound = room.currentRound;
-      engine.nextRound(room, uid, this.deps);
-      if (room.phase === "GAME_OVER") {
-        track("game_completed", { rounds: wasRound });
+      if (room.hostUid !== uid) throw new GameError("NOT_HOST");
+      if (room.phase !== "RESULT") throw new GameError("INVALID_PHASE");
+      const completedRound = room.currentRound;
+      const isGameOver = room.currentRound >= room.totalRounds;
+      this.prunePendingPlayers(room);
+      if (room.currentRound < room.totalRounds && activePlayers(room).length < room.minPlayers) {
+        engine.abortToLobby(room, this.deps);
         this.broadcast(room);
         return;
       }
+      engine.nextRound(room, uid, this.deps);
+      if (isGameOver) {
+        track("game_completed", { rounds: completedRound });
+      } else {
+        this.scheduleQuestionToAnswering(room);
+      }
       this.broadcast(room);
-      this.schedule(room, "q2a", TIMERS.QUESTION_TO_ANSWERING, () => {
-        if (room.phase !== "QUESTION") return;
-        engine.openAnswering(room, this.deps);
-        this.broadcast(room);
-      });
     });
   }
 
   private kick(hostUid: string, targetUid: string): void {
     this.withRoom(hostUid, (room) => {
       if (room.hostUid !== hostUid) throw new GameError("NOT_HOST");
+      if (room.phase !== "LOBBY") throw new GameError("INVALID_PHASE");
       if (!room.players.has(targetUid)) throw new GameError("NOT_PLAYER");
-      room.players.delete(targetUid);
-      this.reconcile(room);
-      // Notify and detach the kicked user's sockets.
-      for (const c of this.connsByUid.get(targetUid) ?? []) {
-        if (c.roomCode === room.code) {
-          c.roomCode = null;
-          c.send({ t: "KICKED" });
-        }
-      }
+      this.removePlayer(room, targetUid);
+      for (const conn of this.connsByUid.get(targetUid) ?? []) conn.send({ t: "KICKED" });
       this.broadcast(room);
     });
   }
@@ -302,80 +341,121 @@ export class RoomManager {
     this.doClose(room, "closed_by_host");
   }
 
-  // ---- transitions helpers ----------------------------------------------
+  // ---- disconnect grace policy ------------------------------------------
+
+  private expirePlayerDisconnect(room: RoomState, uid: string, generation: number): void {
+    if (this.rooms.get(room.code) !== room || this.uidToRoomCode.get(uid) !== room.code) return;
+    const player = room.players.get(uid);
+    if (!player || player.connected || player.disconnectGeneration !== generation) return;
+    if (this.hasRoomConnection(uid, room.code)) return;
+
+    if (SAFE_REMOVAL_PHASES.has(room.phase)) {
+      this.removePlayer(room, uid);
+      this.broadcast(room);
+      return;
+    }
+    if (room.phase === "RESULT") {
+      player.pendingRemoval = true;
+      this.broadcast(room);
+      return;
+    }
+
+    const wasParticipant = room.round?.participantUids.includes(uid) ?? false;
+    this.removePlayer(room, uid);
+    if (!wasParticipant) {
+      this.broadcast(room);
+      return;
+    }
+
+    // Fair deterministic rule: cancel the incomplete round with no score
+    // changes. This also prevents a disconnected impostor from earning points.
+    this.cancelTimer(room.code, "question-to-answering");
+    this.cancelTimer(room.code, "reveal-to-discussion");
+    if (activePlayers(room).length < room.minPlayers) {
+      engine.abortToLobby(room, this.deps);
+    } else {
+      engine.redealCurrentRound(room, this.deps);
+      this.scheduleQuestionToAnswering(room);
+    }
+    this.broadcast(room);
+  }
+
+  private prunePendingPlayers(room: RoomState): void {
+    for (const player of [...room.players.values()]) {
+      if (player.pendingRemoval) this.removePlayer(room, player.uid);
+    }
+  }
+
+  // ---- transitions and timers -------------------------------------------
+
+  private scheduleQuestionToAnswering(room: RoomState): void {
+    this.schedule(room, "question-to-answering", this.deps.questionToAnsweringMs, () => {
+      if (room.phase !== "QUESTION") return;
+      engine.openAnswering(room, this.deps);
+      this.broadcast(room);
+    });
+  }
 
   private doReveal(room: RoomState): void {
     engine.reveal(room, this.deps);
-    this.schedule(room, "r2d", TIMERS.REVEAL_TO_DISCUSSION, () => {
+    this.schedule(room, "reveal-to-discussion", this.deps.revealToDiscussionMs, () => {
       if (room.phase !== "REVEAL") return;
       engine.toDiscussion(room, this.deps);
       this.broadcast(room);
     });
   }
 
-  /**
-   * After the active set shrinks (disconnect/leave/kick), a phase may now be
-   * complete. Advance accordingly. Safe to call in any phase.
-   */
-  private reconcile(room: RoomState): void {
-    if (room.phase === "ANSWERING" && engine.allAnswered(room)) {
-      this.doReveal(room);
-    } else if (room.phase === "VOTING" && engine.allVoted(room)) {
-      engine.computeResult(room, this.deps);
-    }
-  }
-
   private doClose(room: RoomState, reason: string): void {
     room.closed = true;
     room.phase = "CLOSED";
-    this.clearTimers(room.code);
-    const memberUids = new Set<string>([room.hostUid, ...room.players.keys()]);
+    const memberUids = [room.hostUid, ...room.players.keys()];
     for (const uid of memberUids) {
-      for (const c of this.connsByUid.get(uid) ?? []) {
-        if (c.roomCode === room.code) {
-          c.roomCode = null;
-          c.send({ t: "ROOM_CLOSED", reason });
+      for (const conn of this.connsByUid.get(uid) ?? []) {
+        if (conn.roomCode === room.code) {
+          conn.roomCode = null;
+          conn.send({ t: "ROOM_CLOSED", reason });
         }
       }
+      if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
     }
+    this.clearTimers(room.code);
     this.rooms.delete(room.code);
   }
 
-  // ---- broadcasting ------------------------------------------------------
+  // ---- safe per-recipient broadcasting ----------------------------------
 
   private broadcast(room: RoomState): void {
-    for (const set of this.connsByUid.values()) {
-      for (const conn of set) {
+    const memberUids = [room.hostUid, ...room.players.keys()];
+    for (const uid of memberUids) {
+      for (const conn of this.connsByUid.get(uid) ?? []) {
         if (conn.roomCode === room.code && conn.uid) {
           conn.send({
             t: "STATE",
-            view: buildView(room, conn.uid, this.joinUrl(conn, room.code)),
+            view: buildView(room, conn.uid, `${conn.origin}/join/${room.code}`),
           });
         }
       }
     }
   }
 
-  /** Send the current state to a single connection (room or idle). */
   private sendState(conn: Connection): void {
     if (!conn.uid) return;
     const room = conn.roomCode ? this.rooms.get(conn.roomCode) : undefined;
     if (room) {
       conn.send({
         t: "STATE",
-        view: buildView(room, conn.uid, this.joinUrl(conn, room.code)),
+        view: buildView(room, conn.uid, `${conn.origin}/join/${room.code}`),
       });
     } else {
-      // Minimal idle view so the client knows it's authenticated but roomless.
       conn.send({ t: "HELLO_OK", uid: conn.uid });
     }
   }
 
-  private joinUrl(conn: Connection, code: string): string {
-    return `${conn.origin}/join/${code}`;
+  private sendIdleToUid(uid: string): void {
+    for (const conn of this.connsByUid.get(uid) ?? []) this.sendState(conn);
   }
 
-  // ---- small helpers -----------------------------------------------------
+  // ---- indexes and cleanup ----------------------------------------------
 
   private withRoom(uid: string, fn: (room: RoomState) => void): void {
     const room = this.roomOf(uid);
@@ -384,77 +464,128 @@ export class RoomManager {
   }
 
   private roomOf(uid: string): RoomState | undefined {
-    for (const room of this.rooms.values()) {
-      if (room.hostUid === uid || room.players.has(uid)) return room;
+    const code = this.uidToRoomCode.get(uid);
+    if (!code) return undefined;
+    const room = this.rooms.get(code);
+    if (!room || (room.hostUid !== uid && !room.players.has(uid))) {
+      this.uidToRoomCode.delete(uid);
+      return undefined;
     }
-    return undefined;
+    return room;
   }
 
-  private attach(uid: string, code: string): void {
-    for (const c of this.connsByUid.get(uid) ?? []) c.roomCode = code;
+  private removePlayer(room: RoomState, uid: string): void {
+    room.players.delete(uid);
+    room.updatedAt = this.deps.now();
+    this.cancelTimer(room.code, this.disconnectTimerKey(uid));
+    if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
+    this.detachAll(uid, room.code);
   }
 
-  private detach(uid: string): void {
-    for (const c of this.connsByUid.get(uid) ?? []) {
-      // Only clear if pointing at a room this uid is no longer part of.
-      c.roomCode = null;
+  private attachAll(uid: string, code: string): void {
+    for (const conn of this.connsByUid.get(uid) ?? []) conn.roomCode = code;
+  }
+
+  private detachAll(uid: string, code: string): void {
+    for (const conn of this.connsByUid.get(uid) ?? []) {
+      if (conn.roomCode === code) conn.roomCode = null;
     }
+  }
+
+  private hasRoomConnection(uid: string, code: string): boolean {
+    for (const conn of this.connsByUid.get(uid) ?? []) {
+      if (conn.roomCode === code) return true;
+    }
+    return false;
   }
 
   private freshCode(): string {
-    for (let i = 0; i < 50; i++) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
       const code = generateCode();
       if (!this.rooms.has(code)) return code;
     }
     throw new GameError("INTERNAL", "could not allocate room code");
   }
 
+  private disconnectTimerKey(uid: string): string {
+    return `disconnect:${uid}`;
+  }
+
   private schedule(room: RoomState, key: string, ms: number, fn: () => void): void {
-    let map = this.timers.get(room.code);
-    if (!map) this.timers.set(room.code, (map = new Map()));
-    const existing = map.get(key);
-    if (existing) clearTimeout(existing);
-    const h = setTimeout(() => {
-      map!.delete(key);
+    let roomTimers = this.timers.get(room.code);
+    if (!roomTimers) this.timers.set(room.code, (roomTimers = new Map()));
+    this.cancelTimer(room.code, key);
+    const handle = setTimeout(() => {
+      roomTimers?.delete(key);
+      if (roomTimers?.size === 0) this.timers.delete(room.code);
+      if (this.rooms.get(room.code) !== room) return;
       try {
         fn();
-      } catch (e) {
+      } catch (error) {
         // eslint-disable-next-line no-console
-        console.error("timer error", key, e);
+        console.error("timer error", key, error);
       }
     }, ms);
-    map.set(key, h);
+    handle.unref?.();
+    roomTimers.set(key, handle);
+  }
+
+  private cancelTimer(code: string, key: string): void {
+    const roomTimers = this.timers.get(code);
+    const handle = roomTimers?.get(key);
+    if (handle) clearTimeout(handle);
+    roomTimers?.delete(key);
+    if (roomTimers?.size === 0) this.timers.delete(code);
   }
 
   private clearTimers(code: string): void {
-    const map = this.timers.get(code);
-    if (map) {
-      for (const h of map.values()) clearTimeout(h);
-      this.timers.delete(code);
-    }
+    const roomTimers = this.timers.get(code);
+    if (!roomTimers) return;
+    for (const handle of roomTimers.values()) clearTimeout(handle);
+    this.timers.delete(code);
   }
 
   private gcIdleRooms(): void {
     const now = this.deps.now();
     for (const room of [...this.rooms.values()]) {
-      const memberUids = new Set<string>([room.hostUid, ...room.players.keys()]);
-      let anyConnected = false;
-      for (const uid of memberUids) {
-        const set = this.connsByUid.get(uid);
-        if (set && set.size > 0) {
-          anyConnected = true;
-          break;
-        }
-      }
-      if (!anyConnected && now - room.updatedAt > IDLE_ROOM_MS) {
+      const memberUids = [room.hostUid, ...room.players.keys()];
+      const hasConnection = memberUids.some((uid) => this.hasRoomConnection(uid, room.code));
+      if (!hasConnection && now - room.updatedAt > IDLE_ROOM_MS) {
         this.clearTimers(room.code);
+        for (const uid of memberUids) {
+          if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
+        }
         this.rooms.delete(room.code);
       }
     }
   }
 
-  // ---- introspection (tests/health) -------------------------------------
+  dispose(): void {
+    clearInterval(this.gcTimer);
+    for (const code of this.timers.keys()) this.clearTimers(code);
+    this.rooms.clear();
+    this.uidToRoomCode.clear();
+    this.connsByUid.clear();
+  }
+
   get roomCount(): number {
     return this.rooms.size;
+  }
+
+  /** Test-only, read-only-by-convention diagnostics. Never exposed over HTTP. */
+  roomForTests(code: string): RoomState | undefined {
+    return this.rooms.get(code);
+  }
+
+  roomCodeForUidForTests(uid: string): string | undefined {
+    return this.uidToRoomCode.get(uid);
+  }
+
+  connectionCountForUidForTests(uid: string): number {
+    return this.connsByUid.get(uid)?.size ?? 0;
+  }
+
+  runGcForTests(): void {
+    this.gcIdleRooms();
   }
 }

@@ -24,6 +24,11 @@ export interface InternalPlayer {
   connected: boolean;
   joinedAt: number;
   lastSeen: number;
+  /** Changes on every disconnect/reconnect so stale grace callbacks are inert. */
+  disconnectGeneration: number;
+  disconnectedAt?: number;
+  /** Grace expired during RESULT; remove before the next safe transition. */
+  pendingRemoval?: boolean;
   isHost: boolean;
 }
 
@@ -35,6 +40,8 @@ export interface RoundState {
   normalQuestion: string;
   impostorQuestion: string;
   impostorUid: string;
+  /** Stable set of players who began this round; sockets do not change it. */
+  participantUids: string[];
   answers: Map<string, string>; // uid -> answer (secret until REVEAL)
   votes: Map<string, string>; // voterUid -> targetUid (secret until RESULT)
   // --- derived after result ---
@@ -91,6 +98,14 @@ export function activePlayers(room: RoomState): InternalPlayer[] {
   return [...room.players.values()].filter((p) => p.connected);
 }
 
+/** Stable participants for the current round, including grace-disconnected seats. */
+export function roundParticipants(room: RoomState): InternalPlayer[] {
+  if (!room.round) return [];
+  return room.round.participantUids
+    .map((uid) => room.players.get(uid))
+    .filter((p): p is InternalPlayer => p !== undefined);
+}
+
 export function allPlayers(room: RoomState): InternalPlayer[] {
   return [...room.players.values()];
 }
@@ -118,10 +133,15 @@ export function normalizeArabic(input: string): string {
     .toLowerCase();
 }
 
+/** Remove display-spoofing/control characters without damaging normal Arabic. */
+export function stripUnsafeTextControls(input: string): string {
+  return input.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "");
+}
+
 /** Trim and validate a display name; returns the cleaned visible name. */
 export function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("INVALID_NAME");
-  const name = raw.replace(/\s+/g, " ").trim();
+  const name = stripUnsafeTextControls(raw).replace(/\s+/g, " ").trim();
   const len = [...name].length; // count code points, not UTF-16 units
   if (len < NAME_MIN || len > NAME_MAX) throw new GameError("INVALID_NAME");
   return name;
@@ -130,7 +150,7 @@ export function cleanName(raw: unknown): string {
 /** Trim and validate a submitted answer. */
 export function cleanAnswer(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("INVALID_ANSWER");
-  const answer = raw.replace(/\s+/g, " ").trim();
+  const answer = stripUnsafeTextControls(raw).replace(/\s+/g, " ").trim();
   const len = [...answer].length;
   if (len < 1 || len > ANSWER_MAX) throw new GameError("INVALID_ANSWER");
   return answer;

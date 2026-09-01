@@ -8,6 +8,10 @@ import type { CategoryId, CategoryInfo } from "./types.js";
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 10;
 
+/** Process-level safety limits for the current single-instance MVP. */
+export const MAX_ACTIVE_ROOMS = 500;
+export const MAX_CONNECTIONS_PER_UID = 4;
+
 /** Room code: 5 chars from an unambiguous alphabet (no I, L, O, 0, 1). */
 export const ROOM_CODE_LENGTH = 5;
 export const ROOM_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -18,6 +22,9 @@ export const NAME_MAX = 16;
 
 /** Answer length cap (short, conversational answers only). */
 export const ANSWER_MAX = 40;
+
+/** Authoritative uid format used on the wire for vote/kick targets. */
+export const UID_RE = /^u_[a-f0-9]{24}$/;
 
 /** Allowed round counts offered in the host UI. */
 export const ROUND_OPTIONS = [3, 5, 7, 10] as const;

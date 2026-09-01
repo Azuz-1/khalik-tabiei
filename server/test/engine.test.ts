@@ -7,6 +7,7 @@ import {
 } from "../src/game/state.js";
 import * as engine from "../src/game/engine.js";
 import { buildView } from "../src/game/view.js";
+import { cleanAnswer, cleanName } from "../src/game/state.js";
 
 const NOW = () => 1_000;
 
@@ -19,6 +20,7 @@ function addPlayer(room: RoomState, uid: string, name: string): void {
     connected: true,
     joinedAt: 1,
     lastSeen: 1,
+    disconnectGeneration: 0,
     isHost: false,
   };
   room.players.set(uid, p);
@@ -94,6 +96,27 @@ test("duplicate answers and votes are rejected", () => {
   engine.openAnswering(room, { rng: Math.random, now: NOW });
   engine.submitAnswer(room, "p1", "قهوة", { rng: Math.random, now: NOW });
   assert.throws(() => engine.submitAnswer(room, "p1", "شاهي", { rng: Math.random, now: NOW }), /ALREADY_SUBMITTED/);
+});
+
+test("answers and vote targets are strictly validated", () => {
+  const room = lobbyWith(3);
+  const deps = { rng: seqRng([0.0]), now: NOW };
+  engine.startGame(room, "host", deps);
+  engine.openAnswering(room, deps);
+  assert.throws(() => engine.submitAnswer(room, "p1", "x".repeat(41), deps), /INVALID_ANSWER/);
+  for (const uid of room.players.keys()) engine.submitAnswer(room, uid, "جواب", deps);
+  engine.reveal(room, deps);
+  engine.toDiscussion(room, deps);
+  engine.startVoting(room, "host", deps);
+  assert.throws(() => engine.submitVote(room, "p1", "p1", deps), /INVALID_VOTE/);
+  assert.throws(() => engine.submitVote(room, "p1", "missing", deps), /INVALID_VOTE/);
+  engine.submitVote(room, "p1", "p2", deps);
+  assert.throws(() => engine.submitVote(room, "p1", "p3", deps), /VOTE_ALREADY_SUBMITTED/);
+});
+
+test("Arabic text remains intact while control and bidi spoofing characters are removed", () => {
+  assert.equal(cleanName("  س\u202Eلمان\u0000  "), "سلمان");
+  assert.equal(cleanAnswer("قهوة\u2066 عربية\u0007"), "قهوة عربية");
 });
 
 test("full round: group finds impostor → voters score, impostor gets 0", () => {
