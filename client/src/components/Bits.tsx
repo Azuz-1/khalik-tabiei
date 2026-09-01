@@ -17,7 +17,7 @@ export function Scoreboard({ rows, selfUid }: { rows: ScoreboardRow[]; selfUid?:
   );
 }
 
-/** The dramatic reveal body: verdict, impostor, both questions, vote tally. */
+/** The dramatic reveal body: verdict, impostor, both questions, and individual votes. */
 export function ResultBody({ result }: { result: RoundResult }) {
   const caught = result.groupFound;
   return (
@@ -39,9 +39,33 @@ export function ResultBody({ result }: { result: RoundResult }) {
         </div>
       </div>
 
+      {result.voteBreakdown.length > 0 ? (
+        <div className="stack" style={{ gap: 10 }}>
+          <div className="eyebrow">مين صوّت لمين؟</div>
+          {result.voteBreakdown.map((vote) => {
+            const status = vote.voterWasImpostor
+              ? "المتخفي"
+              : vote.correct
+                ? vote.points > 0 ? `صح ✓ +${vote.points}` : "اختيار صح ✓ بدون نقطة"
+                : "غلط ✕";
+            return (
+              <div key={vote.voterUid} className="card" style={{ padding: 12 }}>
+                <div className="row between" style={{ gap: 12 }}>
+                  <span style={{ fontWeight: 900 }}>{vote.voterName} ← {vote.targetName}</span>
+                  <span className="pill-note">{status}</span>
+                </div>
+              </div>
+            );
+          })}
+          {!caught ? (
+            <p className="helper center">إذا تعادل أعلى تصويت أو راح لشخص ثاني، المتخفي ينجو وياخذ +2.</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {result.voteTally.length > 0 ? (
         <div className="stack" style={{ gap: 8 }}>
-          <div className="eyebrow">نتيجة التصويت</div>
+          <div className="eyebrow">مجموع الأصوات</div>
           {result.voteTally.map((v) => (
             <div key={v.uid} className="row between" style={{ fontWeight: 800 }}>
               <span>{v.name}</span>
