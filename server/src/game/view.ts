@@ -77,57 +77,53 @@ export function buildView(
     players: publicPlayers(room),
   };
 
-  if (role === "host" && room.phase === "LOBBY") {
-    view.settingsEditable = true;
-  }
+  if (role === "host" && room.phase === "LOBBY") view.settingsEditable = true;
 
-  // --- QUESTION / ANSWERING -------------------------------------------------
   if (room.phase === "QUESTION" || room.phase === "ANSWERING") {
     if (round) {
       const participants = roundParticipants(room);
-      view.answersProgress = {
-        submitted: round.answers.size,
-        total: participants.length,
-      };
+      view.answersProgress = { submitted: round.answers.size, total: participants.length };
       if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
-        // Each player receives ONLY their own question.
         view.myQuestion = questionFor(round, uid);
         view.myAnswerSubmitted = round.answers.has(uid);
       }
     }
   }
 
-  // --- REVEAL / DISCUSSION / VOTING / RESULT: public answers ---------------
-  if (
-    room.phase === "REVEAL" ||
-    room.phase === "DISCUSSION" ||
-    room.phase === "VOTING" ||
-    room.phase === "RESULT"
-  ) {
+  if (["REVEAL", "DISCUSSION", "VOTING", "RESULT"].includes(room.phase)) {
     view.reveal = revealAnswers(room);
   }
 
-  // --- VOTING ---------------------------------------------------------------
   if (room.phase === "VOTING" && round) {
     const participants = roundParticipants(room);
     view.votesProgress = { submitted: round.votes.size, total: participants.length };
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
-      view.voteTargets = participants
-        .filter((p) => p.uid !== uid)
-        .map((p) => ({ uid: p.uid, name: p.name }));
+      view.voteTargets = participants.filter((p) => p.uid !== uid).map((p) => ({ uid: p.uid, name: p.name }));
       view.myVoteSubmitted = round.votes.has(uid);
       if (round.votes.has(uid)) view.myVoteTargetUid = round.votes.get(uid);
     }
   }
 
-  // --- RESULT: secrets are now safe to reveal to everyone -------------------
   if (room.phase === "RESULT" && round && round.resultComputed) {
     const impostor = room.players.get(round.impostorUid);
     const tally = new Map<string, number>();
     for (const p of room.players.values()) tally.set(p.uid, 0);
-    for (const target of round.votes.values()) {
-      tally.set(target, (tally.get(target) ?? 0) + 1);
-    }
+    for (const target of round.votes.values()) tally.set(target, (tally.get(target) ?? 0) + 1);
+
+    const voteBreakdown = [...round.votes.entries()].map(([voterUid, targetUid]) => {
+      const voter = room.players.get(voterUid);
+      const target = room.players.get(targetUid);
+      return {
+        voterUid,
+        voterName: voter?.name ?? "—",
+        targetUid,
+        targetName: target?.name ?? "—",
+        correct: targetUid === round.impostorUid,
+        voterWasImpostor: voterUid === round.impostorUid,
+        points: round.roundScores.get(voterUid) ?? 0,
+      };
+    });
+
     view.result = {
       impostorUid: round.impostorUid,
       impostorName: impostor?.name ?? "—",
@@ -139,6 +135,7 @@ export function buildView(
         .map((p) => ({ uid: p.uid, name: p.name, votes: tally.get(p.uid) ?? 0 }))
         .filter((r) => r.votes > 0)
         .sort((a, b) => b.votes - a.votes),
+      voteBreakdown,
       roundScores: [...round.roundScores.entries()]
         .filter(([, d]) => d !== 0)
         .map(([u, delta]) => ({ uid: u, delta })),
@@ -146,7 +143,6 @@ export function buildView(
     view.scoreboard = ranking(room);
   }
 
-  // --- GAME_OVER ------------------------------------------------------------
   if (room.phase === "GAME_OVER") {
     const rows = ranking(room);
     const topScore = rows[0]?.score;
