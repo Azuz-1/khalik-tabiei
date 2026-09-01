@@ -51,7 +51,7 @@ export function ResultBody({ result }: { result: RoundResult }) {
             return (
               <div key={vote.voterUid} className="card" style={{ padding: 12 }}>
                 <div className="row between" style={{ gap: 12 }}>
-                  <span style={{ fontWeight: 900 }}>{vote.voterName} ← {vote.targetName}</span>
+                  <span style={{ fontWeight: 900 }}>{vote.voterName} صوّت لـ {vote.targetName}</span>
                   <span className="pill-note">{status}</span>
                 </div>
               </div>
