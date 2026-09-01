@@ -13,7 +13,7 @@ export function ResultBody({ result }: { result: RoundResult }) {
       </div>
       {result.roundComplete ? <><div className="subtitle center">المتخفي كان</div><div className="impostor-name center">{result.impostorName}</div></> : <div className="subtitle center">نفس المتخفي مكمل معكم…</div>}
     </div>
-    <div className="qpair"><div className="qrow"><div className="lbl">المطلوب كان</div><div className="val">{result.prompt}</div></div></div>
+    {result.prompt ? <div className="qpair"><div className="qrow"><div className="lbl">المطلوب كان</div><div className="val">{result.prompt}</div></div></div> : null}
     {result.voteBreakdown.length > 0 ? <div className="stack" style={{ gap: 10 }}><div className="eyebrow">مين صوّت لمين؟</div>{result.voteBreakdown.map((vote) => <div key={vote.voterUid} className="card" style={{ padding: 12 }}><div className="row between" style={{ gap: 12 }}><span style={{ fontWeight: 900 }}>{vote.voterName} صوّت لـ {vote.targetName}</span><span className="pill-note">{vote.voterWasImpostor ? "المتخفي" : vote.correct ? vote.points > 0 ? `صح ✓ +${vote.points}` : "صح ✓" : "غلط ✕"}</span></div></div>)}</div> : null}
     {result.voteTally.length > 0 ? <div className="stack" style={{ gap: 8 }}><div className="eyebrow">مجموع الأصوات</div>{result.voteTally.map((v) => <div key={v.uid} className="row between" style={{ fontWeight: 800 }}><span>{v.name}</span><span style={{ color: "var(--violet-2)" }}>{v.votes} {v.votes === 1 ? "صوت" : "أصوات"}</span></div>)}</div> : null}
   </div>;
