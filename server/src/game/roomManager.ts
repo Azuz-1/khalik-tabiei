@@ -190,6 +190,9 @@ export class RoomManager {
         return this.closeRoom(uid);
       case "REMATCH":
         return this.withRoom(uid, (room) => {
+          if (room.hostUid !== uid) throw new GameError("NOT_HOST");
+          if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
+          this.prunePendingPlayers(room);
           engine.rematch(room, uid, this.deps);
           this.broadcast(room);
         });
@@ -307,11 +310,16 @@ export class RoomManager {
       if (room.phase !== "RESULT") throw new GameError("INVALID_PHASE");
       const completedRound = room.currentRound;
       const isGameOver = room.currentRound >= room.totalRounds;
-      this.prunePendingPlayers(room);
-      if (room.currentRound < room.totalRounds && activePlayers(room).length < room.minPlayers) {
-        engine.abortToLobby(room, this.deps);
-        this.broadcast(room);
-        return;
+      // Final scores include everyone who completed the last round, even if
+      // their RESULT grace expired. Deferred seats are pruned only when there
+      // is another playable round or a rematch returns the room to the lobby.
+      if (!isGameOver) {
+        this.prunePendingPlayers(room);
+        if (activePlayers(room).length < room.minPlayers) {
+          engine.abortToLobby(room, this.deps);
+          this.broadcast(room);
+          return;
+        }
       }
       engine.nextRound(room, uid, this.deps);
       if (isGameOver) {
@@ -349,13 +357,13 @@ export class RoomManager {
     if (!player || player.connected || player.disconnectGeneration !== generation) return;
     if (this.hasRoomConnection(uid, room.code)) return;
 
-    if (SAFE_REMOVAL_PHASES.has(room.phase)) {
-      this.removePlayer(room, uid);
+    if (room.phase === "RESULT" || room.phase === "GAME_OVER") {
+      player.pendingRemoval = true;
       this.broadcast(room);
       return;
     }
-    if (room.phase === "RESULT") {
-      player.pendingRemoval = true;
+    if (SAFE_REMOVAL_PHASES.has(room.phase)) {
+      this.removePlayer(room, uid);
       this.broadcast(room);
       return;
     }

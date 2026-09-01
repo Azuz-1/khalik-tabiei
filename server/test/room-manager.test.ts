@@ -347,3 +347,39 @@ test("multiple tabs keep presence, duplicate cleanup is safe, and cap is enforce
   assert.equal(room.players.get(player.uid)?.connected, true, "third tab remains live");
   manager.dispose();
 });
+
+test("final-round winner remains in GAME_OVER after RESULT grace expiry", async () => {
+  const manager = new RoomManager({ disconnectGraceMs: 10 });
+  const { host, players, room } = setupPlayers(manager, 3);
+  const winner = players[0];
+  room.totalRounds = 3;
+  room.currentRound = 3;
+  room.phase = "RESULT";
+  room.players.get(winner.uid)!.score = 7;
+  room.players.get(players[1].uid)!.score = 3;
+  room.players.get(players[2].uid)!.score = 1;
+
+  manager.disconnect(winner.conn);
+  await wait(25);
+  assert.equal(room.players.get(winner.uid)?.pendingRemoval, true);
+
+  manager.handle(host.conn, { t: "NEXT_ROUND" });
+  assert.equal(room.phase, "GAME_OVER");
+  assert.equal(room.players.has(winner.uid), true);
+  const finalState = lastMessage(host.socket, "STATE");
+  assert.deepEqual(finalState?.view.gameOver?.winners, [{ uid: winner.uid, name: "لاعب2" }]);
+  assert.equal(finalState?.view.gameOver?.ranking[0]?.uid, winner.uid);
+
+  const lateDisconnect = players[1];
+  manager.disconnect(lateDisconnect.conn);
+  await wait(25);
+  assert.equal(room.players.get(lateDisconnect.uid)?.pendingRemoval, true);
+  assert.equal(room.players.has(lateDisconnect.uid), true, "GAME_OVER grace must preserve final ranking");
+
+  manager.handle(host.conn, { t: "REMATCH" });
+  assert.equal(room.phase, "LOBBY");
+  assert.equal(room.players.has(winner.uid), false);
+  assert.equal(room.players.has(lateDisconnect.uid), false);
+  assert.equal(manager.roomCodeForUidForTests(winner.uid), undefined);
+  manager.dispose();
+});

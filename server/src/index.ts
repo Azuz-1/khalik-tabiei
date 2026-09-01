@@ -55,7 +55,7 @@ export function createGameServer() {
   });
 
   app.get("/api/session", (req, res) => {
-    const ip = clientIp(req, config.trustProxy);
+    const ip = clientIp(req, config.clientIpMode);
     res.setHeader("Cache-Control", "no-store");
     if (!abuse.allowSession(ip)) {
       res.status(429).json({ ok: false, code: "RATE_LIMITED" });
@@ -66,7 +66,13 @@ export function createGameServer() {
   });
 
   app.use(express.static(clientDist));
-  app.get("*", (_req, res) => {
+  app.get("*", (req, res) => {
+    const ip = clientIp(req, config.clientIpMode);
+    if (!abuse.allowHttpFallback(ip)) {
+      res.status(429).type("text/plain").send("Too Many Requests");
+      return;
+    }
+    // The path is a fixed server-owned build artifact, never request-derived.
     res.sendFile(join(clientDist, "index.html"), (error) => {
       if (error && !res.headersSent) res.status(503).send("Client build unavailable.");
     });
@@ -81,7 +87,7 @@ export function createGameServer() {
     }
     if (pathname !== "/ws") return rejectUpgrade(socket, 404, "Not Found");
 
-    const ip = clientIp(req, config.trustProxy);
+    const ip = clientIp(req, config.clientIpMode);
     if (!abuse.allowConnection(ip)) return rejectUpgrade(socket, 429, "Too Many Requests");
     const rawOrigin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin;
     if (!isAllowedWebSocketOrigin(rawOrigin, config.allowedOrigins, config.production)) {

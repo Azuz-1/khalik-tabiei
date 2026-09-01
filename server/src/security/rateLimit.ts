@@ -1,5 +1,6 @@
 import type { ClientMessage } from "../../../shared/types.js";
 import type { IncomingMessage } from "node:http";
+import { isIP } from "node:net";
 
 interface Bucket {
   count: number;
@@ -57,6 +58,7 @@ export class AbuseGuard {
   private readonly connection: FixedWindowLimiter;
   private readonly session: FixedWindowLimiter;
   private readonly generic: FixedWindowLimiter;
+  private readonly httpFallback: FixedWindowLimiter;
   private readonly actions = new Map<ClientMessage["t"], FixedWindowLimiter>();
   private readonly cleanupTimer: NodeJS.Timeout;
 
@@ -64,6 +66,7 @@ export class AbuseGuard {
     this.connection = new FixedWindowLimiter(30, 60_000, 20_000, now);
     this.session = new FixedWindowLimiter(60, 60_000, 20_000, now);
     this.generic = new FixedWindowLimiter(80, 10_000, 20_000, now);
+    this.httpFallback = new FixedWindowLimiter(120, 60_000, 20_000, now);
     for (const [type, [limit, windowMs]] of Object.entries(ACTION_LIMITS)) {
       this.actions.set(type as ClientMessage["t"], new FixedWindowLimiter(limit, windowMs, 20_000, now));
     }
@@ -85,10 +88,15 @@ export class AbuseGuard {
     return limiter ? limiter.allow(identity) : true;
   }
 
+  allowHttpFallback(ip: string): boolean {
+    return this.httpFallback.allow(ip);
+  }
+
   cleanup(): void {
     this.connection.cleanup();
     this.session.cleanup();
     this.generic.cleanup();
+    this.httpFallback.cleanup();
     for (const limiter of this.actions.values()) limiter.cleanup();
   }
 
@@ -97,11 +105,32 @@ export class AbuseGuard {
   }
 }
 
-export function clientIp(req: Pick<IncomingMessage, "headers" | "socket">, trustProxy: boolean): string {
-  if (trustProxy) {
+export type ClientIpMode = "socket" | "render" | "trusted-proxy";
+
+function validIp(value: string | undefined): string | null {
+  const candidate = value?.trim();
+  return candidate && candidate.length <= 64 && isIP(candidate) !== 0 ? candidate : null;
+}
+
+export function clientIp(
+  req: Pick<IncomingMessage, "headers" | "socket">,
+  mode: ClientIpMode,
+): string {
+  if (mode === "render") {
+    // Render public web traffic passes through Cloudflare, which overwrites
+    // CF-Connecting-IP. Never fall back to caller-prepended XFF on Render.
+    const connectingIp = req.headers["cf-connecting-ip"];
+    const trusted = Array.isArray(connectingIp) ? null : validIp(connectingIp);
+    if (trusted) return trusted;
+  } else if (mode === "trusted-proxy") {
+    // TRUST_PROXY means exactly one trusted terminating proxy. It appends the
+    // directly observed client to XFF, so use the right-most value; a caller's
+    // spoofed left-most entries can only make limiting more coarse, not bypass it.
     const forwarded = req.headers["x-forwarded-for"];
-    const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim();
-    if (first && first.length <= 64 && /^[a-f0-9:.]+$/i.test(first)) return first;
+    const combined = Array.isArray(forwarded) ? forwarded.join(",") : forwarded;
+    const rightMost = combined?.split(",").at(-1);
+    const trusted = validIp(rightMost);
+    if (trusted) return trusted;
   }
   return req.socket.remoteAddress ?? "unknown";
 }

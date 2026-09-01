@@ -64,7 +64,11 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     publicOrigin: configuredOrigin,
     allowedOrigins,
     sessionSecret,
-    trustProxy: env.RENDER === "true" || env.TRUST_PROXY === "true",
+    clientIpMode: env.RENDER === "true"
+      ? "render"
+      : env.TRUST_PROXY === "true"
+        ? "trusted-proxy"
+        : "socket",
     maxMessageBytes: 8 * 1024,
     maxBufferedBytes: 512 * 1024,
     heartbeatMs: 30_000,

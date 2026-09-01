@@ -135,7 +135,7 @@ This game contains secret information, so the architecture is built around it:
   sends and never compute game logic. The room `status`, current round, scores,
   impostor, and question are set only by the server.
 - **Identity is server-derived.** `/api/session` issues a cryptographically
-  random anonymous bearer credential in an `HttpOnly`, `SameSite=Lax` cookie
+  random, HMAC-authenticated anonymous bearer credential in an `HttpOnly`, `SameSite=Lax` cookie
   (`Secure` in production). The browser never reads it, stores it in React, or
   sends it in WebSocket JSON. The same-origin WebSocket upgrade reads the cookie
   server-side and derives a stable uid with HMAC. There are still no accounts or
@@ -177,8 +177,9 @@ If grace expires during an incomplete round, that round is cancelled with no
 score changes and redealt to the connected players. If fewer than three remain,
 the game returns to a clean lobby. This rule also guarantees a disconnected
 impostor never receives survival points merely for disappearing. Grace expiry
-at `RESULT` defers removal until the next safe transition so the revealed result
-cannot lose the impostor name. Kicks and voluntary destructive leaves are
+at `RESULT`/`GAME_OVER` defers removal until rematch or a return to the lobby, so
+the revealed result and final ranking keep every player who completed the round.
+Kicks and voluntary destructive leaves are
 restricted to safe phases; closing the whole room remains available to the host.
 
 ### Environment
@@ -190,7 +191,7 @@ restricted to safe phases; closing the whole room remains available to the host.
 | `PUBLIC_ORIGIN` | Required in production; exact canonical `https://host` origin. |
 | `ALLOWED_ORIGINS` | Optional comma-separated additional exact origins. Do not use `*`. |
 | `PORT`, `HOST` | Optional listener settings; defaults are `8080` and `0.0.0.0`. |
-| `TRUST_PROXY` | Only set for a trusted terminating proxy. Render is detected via `RENDER=true`. |
+| `TRUST_PROXY` | Only set behind exactly one trusted terminating proxy that appends XFF. Render is detected via `RENDER=true` and uses Cloudflare's overwritten `CF-Connecting-IP`, never caller-prepended XFF. |
 
 The CSP is same-origin and does not allow script `unsafe-eval`. Existing React
 inline style attributes require `style-src 'unsafe-inline'`; scripts remain

@@ -1,10 +1,10 @@
 /** HttpOnly anonymous bearer sessions. No account, email, or password. */
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 
 export const SESSION_COOKIE = "kt_session";
 export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
-const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+const TOKEN_PART_RE = /^[A-Za-z0-9_-]{43}$/;
 
 export interface AnonymousSession {
   token: string;
@@ -24,16 +24,32 @@ export function sessionSecretProblem(secret: unknown): string | null {
   return null;
 }
 
-export function isValidSessionToken(token: unknown): token is string {
-  return typeof token === "string" && TOKEN_RE.test(token);
+function signatureFor(tokenPart: string, secret: string): string {
+  return createHmac("sha256", secret).update(tokenPart).digest("base64url");
 }
 
-export function newSessionToken(): string {
-  return randomBytes(32).toString("base64url");
+/** Create the complete cookie credential: random payload plus server MAC. */
+export function newSessionToken(secret: string): string {
+  const tokenPart = randomBytes(32).toString("base64url");
+  return `${tokenPart}.${signatureFor(tokenPart, secret)}`;
 }
 
-export function uidFromSessionToken(token: string, secret: string): string {
-  const mac = createHmac("sha256", secret).update(token).digest("hex");
+function verifiedTokenPart(token: unknown, secret: string): string | null {
+  if (typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [tokenPart, suppliedSignature] = parts;
+  if (!TOKEN_PART_RE.test(tokenPart) || !TOKEN_PART_RE.test(suppliedSignature)) return null;
+
+  const expectedSignature = signatureFor(tokenPart, secret);
+  const supplied = Buffer.from(suppliedSignature, "ascii");
+  const expected = Buffer.from(expectedSignature, "ascii");
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return null;
+  return tokenPart;
+}
+
+function uidFromTokenPart(tokenPart: string, secret: string): string {
+  const mac = createHmac("sha256", secret).update(tokenPart).digest("hex");
   return `u_${mac.slice(0, 24)}`;
 }
 
@@ -52,8 +68,9 @@ export function readAnonymousSession(
   secret: string,
 ): AnonymousSession | null {
   const token = cookieValue(req.headers.cookie, SESSION_COOKIE);
-  if (!isValidSessionToken(token)) return null;
-  return { token, uid: uidFromSessionToken(token, secret) };
+  const tokenPart = verifiedTokenPart(token, secret);
+  if (!token || !tokenPart) return null;
+  return { token, uid: uidFromTokenPart(tokenPart, secret) };
 }
 
 export function ensureAnonymousSession(
@@ -64,7 +81,9 @@ export function ensureAnonymousSession(
 ): AnonymousSession {
   const existing = readAnonymousSession(req, secret);
   if (existing) return existing;
-  const token = newSessionToken();
+  const token = newSessionToken(secret);
+  const tokenPart = verifiedTokenPart(token, secret);
+  if (!tokenPart) throw new Error("failed to issue anonymous session");
   const attributes = [
     `${SESSION_COOKIE}=${token}`,
     "HttpOnly",
@@ -74,5 +93,5 @@ export function ensureAnonymousSession(
   ];
   if (secure) attributes.push("Secure");
   res.setHeader("Set-Cookie", attributes.join("; "));
-  return { token, uid: uidFromSessionToken(token, secret) };
+  return { token, uid: uidFromTokenPart(tokenPart, secret) };
 }

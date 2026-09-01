@@ -27,7 +27,7 @@ export interface InternalPlayer {
   /** Changes on every disconnect/reconnect so stale grace callbacks are inert. */
   disconnectGeneration: number;
   disconnectedAt?: number;
-  /** Grace expired during RESULT; remove before the next safe transition. */
+  /** Grace expired after a completed final round; remove on rematch/lobby. */
   pendingRemoval?: boolean;
   isHost: boolean;
 }

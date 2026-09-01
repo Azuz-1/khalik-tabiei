@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { WebSocket } from "ws";
+import type { IncomingMessage } from "node:http";
 import {
   ensureAnonymousSession,
   newSessionToken,
@@ -11,7 +12,7 @@ import { readConfig } from "../src/config.js";
 import { Connection } from "../src/net/connection.js";
 import { isAllowedWebSocketOrigin } from "../src/security/origin.js";
 import { parseClientMessage, validateClientMessage } from "../src/security/messages.js";
-import { AbuseGuard, FixedWindowLimiter } from "../src/security/rateLimit.js";
+import { AbuseGuard, clientIp, FixedWindowLimiter } from "../src/security/rateLimit.js";
 import { RoomManager } from "../src/game/roomManager.js";
 import { FakeSocket, lastMessage, testUid, wait } from "./helpers.js";
 
@@ -31,6 +32,22 @@ test("valid anonymous session is stable and invalid sessions are rejected", () =
   const restored = readAnonymousSession({ headers: { cookie } }, SECRET);
   assert.equal(restored?.uid, created.uid);
   assert.equal(readAnonymousSession({ headers: { cookie: "kt_session=bad" } }, SECRET), null);
+
+  const [tokenPart, signature] = created.token.split(".");
+  const flip = (value: string) => `${value[0] === "A" ? "B" : "A"}${value.slice(1)}`;
+  for (const invalid of [
+    tokenPart,
+    `${flip(tokenPart)}.${signature}`,
+    `${tokenPart}.${flip(signature)}`,
+    `${"A".repeat(43)}.${"B".repeat(43)}`,
+  ]) {
+    assert.equal(
+      readAnonymousSession({ headers: { cookie: `kt_session=${invalid}` } }, SECRET),
+      null,
+      invalid,
+    );
+  }
+  assert.equal(readAnonymousSession({ headers: { cookie } }, `${SECRET}-wrong`), null);
 });
 
 test("production session secret fails closed", () => {
@@ -127,7 +144,34 @@ test("rate limiters are bounded, expire, and enforce action limits", () => {
   assert.equal(abuse.allowMessage(testUid(1), "CREATE_ROOM"), true);
   assert.equal(abuse.allowMessage(testUid(1), "CREATE_ROOM"), true);
   assert.equal(abuse.allowMessage(testUid(1), "CREATE_ROOM"), false);
+  for (let index = 0; index < 120; index += 1) {
+    assert.equal(abuse.allowHttpFallback("203.0.113.8"), true);
+  }
+  assert.equal(abuse.allowHttpFallback("203.0.113.8"), false);
   abuse.dispose();
+});
+
+test("Render client IP ignores spoofed XFF and trusts the proxy-controlled header", () => {
+  const request = (headers: IncomingMessage["headers"], remoteAddress = "10.0.0.9") => ({
+    headers,
+    socket: { remoteAddress },
+  }) as Pick<IncomingMessage, "headers" | "socket">;
+
+  const first = request({
+    "cf-connecting-ip": "203.0.113.20",
+    "x-forwarded-for": "198.51.100.1, 192.0.2.10",
+  });
+  const second = request({
+    "cf-connecting-ip": "203.0.113.20",
+    "x-forwarded-for": "198.51.100.222, 192.0.2.10",
+  });
+  assert.equal(clientIp(first, "render"), "203.0.113.20");
+  assert.equal(clientIp(second, "render"), "203.0.113.20");
+  assert.equal(clientIp(request({ "x-forwarded-for": "198.51.100.77" }), "render"), "10.0.0.9");
+  assert.equal(
+    clientIp(request({ "x-forwarded-for": "198.51.100.77, 203.0.113.9" }), "trusted-proxy"),
+    "203.0.113.9",
+  );
 });
 
 test("a Connection authenticates once, times out, and protects backpressure", async () => {
@@ -158,5 +202,5 @@ test("unauthenticated actions are rejected", () => {
 });
 
 test("session tokens have the required cryptographic wire format", () => {
-  assert.match(newSessionToken(), /^[A-Za-z0-9_-]{43}$/);
+  assert.match(newSessionToken(SECRET), /^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/);
 });
