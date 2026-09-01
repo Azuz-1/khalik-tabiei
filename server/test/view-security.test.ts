@@ -123,6 +123,7 @@ test("survived challenge 1/2 result keeps same-impostor secrets hidden", () => {
     assert.equal(view.result?.impostorUid, undefined);
     assert.equal(view.result?.impostorName, undefined);
     assert.equal(view.result?.prompt, undefined);
+    assert.equal(view.result?.voteTally.length, 0);
     assert.equal(view.result?.voteBreakdown.length, 0);
     assertNoPrompt(view, prompt, promptId);
   }

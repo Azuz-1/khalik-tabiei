@@ -69,7 +69,9 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       mode: round.mode,
       ...(revealIdentity && round.kind === "IMITATION" ? { prompt: round.prompt } : {}),
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
-      voteTally: participants.map((p) => ({ uid: p.uid, name: p.name, votes: tally.get(p.uid) ?? 0 })).filter((r) => r.votes > 0).sort((a, b) => b.votes - a.votes),
+      voteTally: revealIdentity
+        ? participants.map((p) => ({ uid: p.uid, name: p.name, votes: tally.get(p.uid) ?? 0 })).filter((r) => r.votes > 0).sort((a, b) => b.votes - a.votes)
+        : [],
       voteBreakdown: revealIdentity ? [...round.votes.entries()].map(([voterUid, targetUid]) => ({
         voterUid,
         voterName: room.players.get(voterUid)?.name ?? "—",
