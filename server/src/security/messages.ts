@@ -2,6 +2,7 @@ import type { ClientMessage } from "../../../shared/types.js";
 import {
   ANSWER_MAX,
   CATEGORY_IDS,
+  GAME_MODE_IDS,
   NAME_MAX,
   NAME_MIN,
   ROOM_CODE_ALPHABET,
@@ -30,9 +31,7 @@ function boundedString(value: unknown, min: number, max: number): value is strin
   return length >= min && length <= max;
 }
 
-function noFields(value: JsonObject): boolean {
-  return exactKeys(value, ["t"]);
-}
+function noFields(value: JsonObject): boolean { return exactKeys(value, ["t"]); }
 
 export function validateClientMessage(value: unknown): ClientMessage | null {
   if (!isObject(value) || typeof value.t !== "string") return null;
@@ -41,6 +40,7 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
     case "CREATE_ROOM":
     case "LEAVE_ROOM":
     case "START_GAME":
+    case "MARK_READY":
     case "START_VOTING":
     case "NEXT_ROUND":
     case "CLOSE_ROOM":
@@ -55,17 +55,28 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
       return value as ClientMessage;
     }
     case "SET_SETTINGS": {
-      if (!exactKeys(value, ["t"], ["totalRounds", "categories"])) return null;
-      if (!Object.hasOwn(value, "totalRounds") && !Object.hasOwn(value, "categories")) return null;
+      if (!exactKeys(value, ["t"], ["totalRounds", "categories", "selectedModes"])) return null;
+      if (
+        !Object.hasOwn(value, "totalRounds") &&
+        !Object.hasOwn(value, "categories") &&
+        !Object.hasOwn(value, "selectedModes")
+      ) return null;
       if (
         value.totalRounds !== undefined &&
         (typeof value.totalRounds !== "number" ||
           !ROUND_OPTIONS.includes(value.totalRounds as (typeof ROUND_OPTIONS)[number]))
       ) return null;
+      // Kept parseable so the authoritative engine can explicitly reject the
+      // hidden legacy setting rather than silently accepting malformed input.
       if (value.categories !== undefined) {
         if (!Array.isArray(value.categories) || value.categories.length > CATEGORY_IDS.length) return null;
         if (!value.categories.every((category) => CATEGORY_IDS.includes(category))) return null;
         if (new Set(value.categories).size !== value.categories.length) return null;
+      }
+      if (value.selectedModes !== undefined) {
+        if (!Array.isArray(value.selectedModes) || value.selectedModes.length > GAME_MODE_IDS.length) return null;
+        if (!value.selectedModes.every((mode) => GAME_MODE_IDS.includes(mode))) return null;
+        if (new Set(value.selectedModes).size !== value.selectedModes.length) return null;
       }
       return value as ClientMessage;
     }
@@ -91,13 +102,9 @@ export function parseClientMessage(raw: unknown, maxBytes: number): ClientMessag
   if (typeof raw === "string") text = raw;
   else if (Buffer.isBuffer(raw)) text = raw.toString("utf8");
   else if (raw instanceof ArrayBuffer) text = Buffer.from(raw).toString("utf8");
-  else if (Array.isArray(raw) && raw.every(Buffer.isBuffer)) {
-    text = Buffer.concat(raw as Buffer[]).toString("utf8");
-  } else return null;
+  else if (Array.isArray(raw) && raw.every(Buffer.isBuffer)) text = Buffer.concat(raw as Buffer[]).toString("utf8");
+  else return null;
   if (Buffer.byteLength(text, "utf8") > maxBytes) return null;
-  try {
-    return validateClientMessage(JSON.parse(text));
-  } catch {
-    return null;
-  }
+  try { return validateClientMessage(JSON.parse(text)); }
+  catch { return null; }
 }
