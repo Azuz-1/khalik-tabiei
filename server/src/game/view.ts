@@ -67,7 +67,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       challengeIndex: round.challengeIndex,
       maxChallenges: round.kind === "IMITATION" ? MAX_CHALLENGES_PER_ROUND : 1,
       mode: round.mode,
-      prompt: round.kind === "IMITATION" ? round.prompt : "",
+      ...(revealIdentity && round.kind === "IMITATION" ? { prompt: round.prompt } : {}),
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
       voteTally: participants.map((p) => ({ uid: p.uid, name: p.name, votes: tally.get(p.uid) ?? 0 })).filter((r) => r.votes > 0).sort((a, b) => b.votes - a.votes),
       voteBreakdown: revealIdentity ? [...round.votes.entries()].map(([voterUid, targetUid]) => ({
