@@ -21,6 +21,7 @@ export interface RoundResult {
   normalQuestion?: string;
   impostorQuestion?: string;
   category?: CategoryId;
+  /** Empty while the same impostor remains hidden for another challenge. */
   voteTally: Array<{ uid: string; name: string; votes: number }>;
   /** Empty while the same impostor must remain secret for another challenge. */
   voteBreakdown: Array<{ voterUid: string; voterName: string; targetUid: string; targetName: string; correct: boolean; voterWasImpostor: boolean; points: number }>;
