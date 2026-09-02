@@ -292,7 +292,16 @@ function HostDiscussion({ view }: { view: ClientView }) {
     <div className="screen host center stack">
       <div className="spacer" />
       <div className="eyebrow">{roundLabel(view)}</div>
-      <h1 className="title" style={{ fontSize: "clamp(48px,9vw,104px)" }}>
+      <div className="eyebrow" style={{ marginTop: 8 }}>
+        المطلوب كان
+      </div>
+      <div
+        className="title"
+        style={{ fontSize: "clamp(34px,6vw,68px)", maxWidth: 980, marginInline: "auto" }}
+      >
+        {view.publicPrompt?.text ?? "…"}
+      </div>
+      <h1 className="title" style={{ fontSize: "clamp(36px,7vw,76px)", marginTop: 18 }}>
         مين تصرفه مو طبيعي؟ 👀
       </h1>
       <button
