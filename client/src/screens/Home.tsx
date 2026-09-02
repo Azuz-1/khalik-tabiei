@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { actions, useGame } from "../net/socket.js";
 import { errorText } from "../i18n/errors.js";
 import {
+  GAME_MODES,
   NAME_MAX,
   NAME_MIN,
   ROOM_CODE_ALPHABET,
@@ -39,9 +40,9 @@ export function Home() {
 
   if (step === "home") {
     return (
-      <div className="screen">
+      <div className="screen home-screen">
         <div className="spacer" />
-        <div className="center stack">
+        <div className="center stack home-hero">
           <h1 className="brand">خلك طبيعي</h1>
           <p className="subtitle">
             واحد منكم هو المتخفي. يعرف دوره، لكن ما يعرف المطلوب ويحاول يقلّدكم
@@ -49,7 +50,7 @@ export function Home() {
           </p>
         </div>
 
-        <div className="stack" style={{ marginTop: 24 }}>
+        <div className="stack home-actions">
           <button
             className="btn btn-primary"
             disabled={disabled}
@@ -67,14 +68,40 @@ export function Home() {
           >
             ادخل غرفة
           </button>
+          <p className="helper" style={{ margin: 0 }}>
+            بدون تحميل وبدون تسجيل
+          </p>
         </div>
-        <p className="helper">بدون تحميل وبدون تسجيل</p>
 
-        <div className="card stack" style={{ marginTop: 20 }}>
+        <section className="stack mode-explainer" aria-labelledby="mode-explainer-title">
+          <div className="center stack" style={{ gap: 6 }}>
+            <div className="eyebrow">طرق اللعب</div>
+            <h2 className="title" id="mode-explainer-title">
+              قبل تبدأ، اعرف وش تسوي كل علامة
+            </h2>
+          </div>
+          <div className="mode-explainer-grid">
+            {GAME_MODES.map((mode) => (
+              <article className="mode-explainer-card" key={mode.id}>
+                <div className="mode-explainer-icon" aria-hidden="true">
+                  {mode.icon}
+                </div>
+                <h3>{mode.fullLabel}</h3>
+                <div className="mode-explainer-copy">
+                  {mode.onboardingInstructions.map((instruction) => (
+                    <p key={instruction}>{instruction}</p>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <div className="card stack home-story">
           <div className="eyebrow">وش السالفة؟</div>
           <div className="stack" style={{ gap: 10 }}>
             <p className="subtitle" style={{ margin: 0 }}>
-              ١. المضيف يختار من 🙋 ارفع، 👉 أشر، و🔢 كم؟ وكل جولة تستخدم مود واحد ثابت.
+              ١. المضيف يختار طرق اللعب، وكل تحدي يأخذ طريقة من الاختيارات بالتناوب المتوازن.
             </p>
             <p className="subtitle" style={{ margin: 0 }}>
               ٢. الباقين يشوفون المهمة في الجوال. المتخفي يعرف أنه المتخفي، لكنه ما يشوف المطلوب.
@@ -83,7 +110,7 @@ export function Home() {
               ٣. عند العد تنفذون الحركة كلّكم بنفس اللحظة، تثبّتونها شوي، وبعدها ينكشف المطلوب وتناقشون.
             </p>
             <p className="subtitle" style={{ margin: 0 }}>
-              ٤. تحتاجون أكثر من نصف الأصوات على المتخفي عشان ينكشف. عندكم حتى ٣ تحديات بنفس المتخفي.
+              ٤. تحتاجون أكثر من نصف الأصوات على المتخفي عشان ينكشف. عندكم حتى ٣ تحديات بنفس المتخفي، لكن طريقة اللعب ممكن تتغير بينهم.
             </p>
             <p className="subtitle" style={{ margin: 0 }}>
               ٥. إذا انكشف أو خلصت تحدياته، تبدأ جولة جديدة بمتخفي جديد. اللعبة تستمر لين يخلص عدد الجولات.
