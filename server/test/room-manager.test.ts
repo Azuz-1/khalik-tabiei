@@ -41,8 +41,8 @@ async function toDiscussion(manager: RoomManager, count = 3) {
   for (const player of setup.players) {
     manager.handle(player.conn, { t: "MARK_READY" });
   }
-  assert.equal(setup.room.phase, "REVEAL");
-  await wait(8);
+  assert.equal(setup.room.phase, "COUNTDOWN");
+  await wait(30);
   assert.equal(setup.room.phase, "DISCUSSION");
   return setup;
 }
@@ -166,34 +166,49 @@ test("impostor receives no prompt in network state; normal receives current prom
   manager.dispose();
 });
 
-test("reconnect restores the exact current private view without leaking to impostor", async () => {
-  const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 40 });
+test("reconnect during countdown restores normal prompt but never leaks it to impostor", async () => {
+  const manager = new RoomManager({
+    rng: () => 0,
+    countdownMs: 120,
+    actionMs: 5,
+    holdMs: 5,
+    promptRevealMs: 5,
+    disconnectGraceMs: 200,
+  });
   const { players, room } = start(manager);
   const round = room.round!;
   const impostor = players.find((player) => player.uid === round.impostorUid)!;
   const normal = players.find((player) => player.uid !== round.impostorUid)!;
 
-  manager.disconnect(impostor.conn);
-  const impostorReconnect = authenticatedConnection(manager, impostor.uid);
-  const impostorView = lastMessage(impostorReconnect.socket, "STATE")!.view;
-  assert.equal(room.round, round);
-  assert.equal(impostorView.isImpostor, true);
-  assert.equal(impostorView.myPrompt, undefined);
-  assert.ok(!JSON.stringify(impostorView).includes(round.prompt));
+  for (const player of players) manager.handle(player.conn, { t: "MARK_READY" });
+  assert.equal(room.phase, "COUNTDOWN");
 
   manager.disconnect(normal.conn);
   const normalReconnect = authenticatedConnection(manager, normal.uid);
   const normalView = lastMessage(normalReconnect.socket, "STATE")!.view;
+  assert.equal(normalView.room.phase, "COUNTDOWN");
   assert.equal(normalView.myPrompt?.text, round.prompt);
-  assert.equal(normalView.challenge?.index, 1);
 
-  await wait(50);
-  assert.equal(room.round, round, "stale grace callbacks must be cancelled on reconnect");
+  manager.disconnect(impostor.conn);
+  const impostorReconnect = authenticatedConnection(manager, impostor.uid);
+  const impostorView = lastMessage(impostorReconnect.socket, "STATE")!.view;
+  assert.equal(impostorView.room.phase, "COUNTDOWN");
+  assert.equal(impostorView.isImpostor, true);
+  assert.equal(impostorView.myPrompt, undefined);
+  assert.ok(!JSON.stringify(impostorView).includes(round.prompt));
+  assert.ok(!JSON.stringify(impostorView).includes(round.promptId));
+
   manager.dispose();
 });
 
-test("all ready starts authoritative countdown then discussion; no physical answer payload exists", async () => {
-  const manager = new RoomManager({ rng: () => 0, physicalCountdownMs: 2 });
+test("all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> DISCUSSION", async () => {
+  const manager = new RoomManager({
+    rng: () => 0,
+    countdownMs: 30,
+    actionMs: 30,
+    holdMs: 30,
+    promptRevealMs: 30,
+  });
   const { players, room } = start(manager);
 
   for (let index = 0; index < players.length - 1; index += 1) {
@@ -202,18 +217,28 @@ test("all ready starts authoritative countdown then discussion; no physical answ
   assert.equal(room.phase, "QUESTION");
 
   manager.handle(players.at(-1)!.conn, { t: "MARK_READY" });
-  assert.equal(room.phase, "REVEAL");
+  assert.equal(room.phase, "COUNTDOWN");
   assert.ok(room.phaseEndsAt);
 
-  await wait(8);
+  await wait(35);
+  assert.equal(room.phase, "ACTION");
+  await wait(35);
+  assert.equal(room.phase, "HOLD");
+  await wait(35);
+  assert.equal(room.phase, "PROMPT_REVEAL");
+  await wait(35);
   assert.equal(room.phase, "DISCUSSION");
+  assert.equal(room.phaseEndsAt, undefined);
   manager.dispose();
 });
 
 test("voting survives disconnect/reconnect and completes only after every participant votes", async () => {
   const manager = new RoomManager({
     rng: () => 0,
-    physicalCountdownMs: 2,
+    countdownMs: 2,
+    actionMs: 2,
+    holdMs: 2,
+    promptRevealMs: 2,
     disconnectGraceMs: 80,
   });
   const { host, players, room } = await toDiscussion(manager);
@@ -244,10 +269,11 @@ test("voting survives disconnect/reconnect and completes only after every partic
   manager.dispose();
 });
 
-test("grace expiry during a challenge redeals safely without advancing round number", async () => {
+test("grace expiry during a challenge redeals safely with same round mode", async () => {
   const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 4 });
   const { players, room } = start(manager, 4);
   const oldRound = room.round!;
+  const oldMode = oldRound.mode;
   const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
 
   manager.disconnect(target.conn);
@@ -256,6 +282,7 @@ test("grace expiry during a challenge redeals safely without advancing round num
   assert.equal(room.currentRound, 1);
   assert.notEqual(room.round, oldRound);
   assert.equal(room.round?.challengeIndex, 1);
+  assert.equal(room.round?.mode, oldMode);
   assert.equal(room.phase, "QUESTION");
   manager.dispose();
 });
@@ -263,13 +290,16 @@ test("grace expiry during a challenge redeals safely without advancing round num
 test("grace expiry after a survived challenge redeals the incomplete round safely", async () => {
   const manager = new RoomManager({
     rng: () => 0,
-    physicalCountdownMs: 2,
+    countdownMs: 2,
+    actionMs: 2,
+    holdMs: 2,
+    promptRevealMs: 2,
     disconnectGraceMs: 4,
   });
   const { host, players, room } = await toDiscussion(manager, 4);
   manager.handle(host.conn, { t: "START_VOTING" });
 
-  // Force a 1-1-1-1 top tie, so challenge 1 is survived but the round is not complete.
+  // 1-1-1-1 means the impostor cannot have the required 3-vote majority.
   manager.handle(players[0].conn, {
     t: "SUBMIT_VOTE",
     targetUid: players[1].uid,
@@ -290,6 +320,7 @@ test("grace expiry after a survived challenge redeals the incomplete round safel
   assert.equal(room.round?.roundComplete, false);
 
   const oldRound = room.round!;
+  const oldMode = oldRound.mode;
   const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
   manager.disconnect(target.conn);
   await wait(12);
@@ -298,6 +329,7 @@ test("grace expiry after a survived challenge redeals the incomplete round safel
   assert.equal(room.phase, "QUESTION");
   assert.notEqual(room.round, oldRound);
   assert.equal(room.round?.challengeIndex, 1);
+  assert.equal(room.round?.mode, oldMode);
   assert.ok(!room.players.has(target.uid));
   assert.equal(room.players.size, 3);
   assert.ok([...room.players.values()].every((player) => player.score === 0));

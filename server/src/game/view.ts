@@ -10,7 +10,10 @@ import {
   MAX_CHALLENGES_PER_ROUND,
 } from "../../../shared/constants.js";
 import { roundParticipants, type RoomState } from "./state.js";
-import { questionFor, ranking } from "./engine.js";
+import { questionFor, requiredVotesFor } from "./engine.js";
+
+const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
+const PUBLIC_PROMPT_PHASES = new Set(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
 
 function roleFor(room: RoomState, uid: string): Role {
   if (uid === room.hostUid) return "host";
@@ -22,7 +25,6 @@ function publicPlayers(room: RoomState): PublicPlayer[] {
   return [...room.players.values()].map((player) => ({
     uid: player.uid,
     name: player.name,
-    score: player.score,
     connected: player.connected,
     isHost: false,
   }));
@@ -107,16 +109,21 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
     view.reveal = revealAnswers(room);
   }
 
-  if (room.phase === "QUESTION" && round?.kind === "IMITATION") {
+  if (round?.kind === "IMITATION" && SECRET_IMITATION_PHASES.has(room.phase)) {
     const participants = roundParticipants(room);
-    view.readyProgress = {
-      submitted: round.readyUids.size,
-      total: participants.length,
-    };
+
+    if (room.phase === "QUESTION") {
+      view.readyProgress = {
+        submitted: round.readyUids.size,
+        total: participants.length,
+      };
+    }
 
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
       view.myReady = round.readyUids.has(uid);
       if (uid === round.impostorUid) {
+        // The impostor knows their role and mode, but the server intentionally
+        // omits prompt text, promptId, and prompt-derived metadata pre-reveal.
         view.isImpostor = true;
       } else {
         view.isImpostor = false;
@@ -125,11 +132,16 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
     }
   }
 
+  if (round?.kind === "IMITATION" && PUBLIC_PROMPT_PHASES.has(room.phase)) {
+    view.publicPrompt = { mode: round.mode, text: round.prompt };
+  }
+
   if (room.phase === "VOTING" && round) {
     const participants = roundParticipants(room);
     view.votesProgress = {
       submitted: round.votes.size,
       total: participants.length,
+      requiredVotes: requiredVotesFor(participants.length),
     };
 
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
@@ -137,7 +149,6 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
         .filter((player) => player.uid !== uid)
         .map((player) => ({ uid: player.uid, name: player.name }));
       view.myVoteSubmitted = round.votes.has(uid);
-      if (round.votes.has(uid)) view.myVoteTargetUid = round.votes.get(uid);
     }
   }
 
@@ -164,7 +175,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       challengeIndex: round.challengeIndex,
       maxChallenges: round.kind === "IMITATION" ? MAX_CHALLENGES_PER_ROUND : 1,
       mode: round.mode,
-      ...(revealIdentity && round.kind === "IMITATION" ? { prompt: round.prompt } : {}),
+      requiredVotes: requiredVotesFor(participants.length),
       ...(round.kind === "TEXT_PAIR"
         ? {
             normalQuestion: round.normalQuestion,
@@ -179,39 +190,19 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
               name: player.name,
               votes: tally.get(player.uid) ?? 0,
             }))
-            .filter((row) => row.votes > 0)
-            .sort((a, b) => b.votes - a.votes)
-        : [],
-      voteBreakdown: revealIdentity
-        ? [...round.votes.entries()].map(([voterUid, targetUid]) => ({
-            voterUid,
-            voterName: room.players.get(voterUid)?.name ?? "—",
-            targetUid,
-            targetName: room.players.get(targetUid)?.name ?? "—",
-            correct: targetUid === round.impostorUid,
-            voterWasImpostor: voterUid === round.impostorUid,
-            points: round.roundScores.get(voterUid) ?? 0,
-          }))
-        : [],
-      roundScores: revealIdentity
-        ? [...round.roundScores.entries()]
-            .filter(([, delta]) => delta !== 0)
-            .map(([scoreUid, delta]) => ({ uid: scoreUid, delta }))
+            .sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name, "ar"))
         : [],
     };
-    view.scoreboard = ranking(room);
   }
 
   if (room.phase === "GAME_OVER") {
-    const rows = ranking(room);
-    const topScore = rows[0]?.score;
+    const caughtRounds = room.roundOutcomes.filter((outcome) => outcome.caught).length;
+    const escapedRounds = room.roundOutcomes.filter((outcome) => !outcome.caught).length;
     view.gameOver = {
-      winners: rows
-        .filter((row) => topScore !== undefined && row.score === topScore)
-        .map(({ uid: winnerUid, name }) => ({ uid: winnerUid, name })),
-      ranking: rows,
+      totalRounds: room.totalRounds,
+      caughtRounds,
+      escapedRounds,
     };
-    view.scoreboard = rows;
   }
 
   return view;

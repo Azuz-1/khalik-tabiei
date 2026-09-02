@@ -3,6 +3,10 @@ export type GamePhase =
   | "QUESTION"
   | "ANSWERING"
   | "REVEAL"
+  | "COUNTDOWN"
+  | "ACTION"
+  | "HOLD"
+  | "PROMPT_REVEAL"
   | "DISCUSSION"
   | "VOTING"
   | "RESULT"
@@ -17,6 +21,10 @@ export interface GameModeInfo {
   icon: string;
   label: string;
   description: string;
+  roundInstructions: string[];
+  normalInstruction: string;
+  impostorInstruction: string;
+  actionLabel: string;
 }
 
 export type CategoryId =
@@ -58,7 +66,6 @@ export type ErrorCode =
 export interface PublicPlayer {
   uid: string;
   name: string;
-  score: number;
   connected: boolean;
   isHost: boolean;
 }
@@ -83,48 +90,28 @@ export interface RoundResult {
   challengeIndex: number;
   maxChallenges: number;
   mode: GameMode;
+  requiredVotes: number;
 
-  /** Revealed only when the round is over. */
-  prompt?: string;
-
+  /** Legacy TEXT_PAIR fields. The mode is not selectable in the current product. */
   normalQuestion?: string;
   impostorQuestion?: string;
   category?: CategoryId;
 
-  /** Empty while the same impostor must remain secret for another challenge. */
+  /**
+   * Anonymous aggregate tally for the challenge that ended the round.
+   * Empty while the same impostor continues to challenge 2/3.
+   */
   voteTally: Array<{
     uid: string;
     name: string;
     votes: number;
   }>;
-
-  /** Empty while the same impostor must remain secret for another challenge. */
-  voteBreakdown: Array<{
-    voterUid: string;
-    voterName: string;
-    targetUid: string;
-    targetName: string;
-    correct: boolean;
-    voterWasImpostor: boolean;
-    points: number;
-  }>;
-
-  roundScores: Array<{
-    uid: string;
-    delta: number;
-  }>;
-}
-
-export interface ScoreboardRow {
-  uid: string;
-  name: string;
-  score: number;
-  rank: number;
 }
 
 export interface GameOverInfo {
-  winners: Array<{ uid: string; name: string }>;
-  ranking: ScoreboardRow[];
+  totalRounds: number;
+  caughtRounds: number;
+  escapedRounds: number;
 }
 
 export interface ClientView {
@@ -161,6 +148,10 @@ export interface ClientView {
     mode: GameMode;
     text: string;
   };
+  publicPrompt?: {
+    mode: GameMode;
+    text: string;
+  };
   myReady?: boolean;
   readyProgress?: {
     submitted: number;
@@ -174,17 +165,16 @@ export interface ClientView {
   };
   reveal?: RevealedAnswer[];
   myVoteSubmitted?: boolean;
-  myVoteTargetUid?: string;
   votesProgress?: {
     submitted: number;
     total: number;
+    requiredVotes: number;
   };
   voteTargets?: Array<{
     uid: string;
     name: string;
   }>;
   result?: RoundResult;
-  scoreboard?: ScoreboardRow[];
   gameOver?: GameOverInfo;
 }
 

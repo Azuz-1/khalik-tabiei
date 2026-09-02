@@ -26,24 +26,45 @@ export const GAME_MODES: GameModeInfo[] = [
     icon: "🙋",
     label: "ارفع",
     description: "ارفع يدك إذا ينطبق عليك المطلوب.",
+    roundInstructions: [
+      "إذا ينطبق عليك المطلوب، ارفع يدك.",
+      "إذا ما ينطبق عليك، خل يدك تحت.",
+    ],
+    normalInstruction: "وقت «ارفعوا!» نفّذ المطلوب وثبّت حركتك.",
+    impostorInstruction: "وقت «ارفعوا!» قرر ترفع يدك أو تخليها تحت وخلك طبيعي.",
+    actionLabel: "ارفعوا! 👀",
   },
   {
     id: "POINT",
     icon: "👉",
     label: "أشر",
-    description: "أشر على واحد من الموجودين حسب المطلوب.",
+    description: "أشر على شخص واحد حسب المطلوب.",
+    roundInstructions: [
+      "وقت «أشروا!» أشر على شخص واحد تشوف أن المطلوب ينطبق عليه.",
+    ],
+    normalInstruction: "وقت «أشروا!» أشر على شخص واحد حسب المطلوب وثبّت إشارتك.",
+    impostorInstruction: "وقت «أشروا!» أشر على شخص واحد وخلك طبيعي.",
+    actionLabel: "أشروا! 👀",
   },
   {
     id: "NUMBER",
     icon: "🔢",
     label: "كم؟",
-    description: "جاوب برقم بأصابعك بنفس اللحظة.",
+    description: "جاوب من 0 إلى 5 بأصابعك بنفس اللحظة.",
+    roundInstructions: [
+      "جاوب من 0 إلى 5 بأصابعك.",
+      "صفر = قبضة مقفلة.",
+    ],
+    normalInstruction: "وقت «ورّونا!» ورّنا جوابك من 0 إلى 5 بأصابعك.",
+    impostorInstruction: "وقت «ورّونا!» ارفع من 0 إلى 5 أصابع وخلك طبيعي.",
+    actionLabel: "ورّونا! 👀",
   },
 ];
 
 export const GAME_MODE_IDS: GameMode[] = GAME_MODES.map((mode) => mode.id);
 export const DEFAULT_GAME_MODES: GameMode[] = [...GAME_MODE_IDS];
 
+/** Legacy-only constants kept for dormant TEXT_PAIR compatibility. */
 export const SCORING = {
   POINT_CORRECT_VOTE: 1,
   POINT_IMPOSTOR_SURVIVES: 2,
@@ -51,8 +72,11 @@ export const SCORING = {
 
 export const TIMERS = {
   QUESTION_TO_ANSWERING: 2_500, // legacy TEXT_PAIR
-  REVEAL_TO_DISCUSSION: 4_000,
-  PHYSICAL_COUNTDOWN: 4_200,
+  REVEAL_TO_DISCUSSION: 4_000, // legacy TEXT_PAIR
+  COUNTDOWN: 5_000,
+  ACTION: 1_000,
+  HOLD: 2_000,
+  PROMPT_REVEAL: 2_500,
   DISCONNECT_GRACE: 60_000,
 } as const;
 

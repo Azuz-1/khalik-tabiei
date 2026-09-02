@@ -14,6 +14,7 @@ export interface InternalPlayer {
   uid: string;
   name: string;
   normalizedName: string;
+  /** Retained internally for legacy compatibility; current gameplay never changes or exposes it. */
   score: number;
   connected: boolean;
   joinedAt: number;
@@ -25,10 +26,9 @@ export interface InternalPlayer {
 }
 
 /**
- * Legacy and current rounds still share one state interface because a number of
- * generic room/result helpers consume both shapes. The active IMITATION path
- * owns challenge/mode/prompt/ready fields; TEXT_PAIR owns question/answer fields.
- * TEXT_PAIR is retained for legacy content only and is not selectable today.
+ * Legacy and current rounds still share one state interface because generic
+ * room/reconnect helpers consume both shapes. TEXT_PAIR remains legacy-only and
+ * is not selectable in the current product.
  */
 export interface RoundState {
   kind: "IMITATION" | "TEXT_PAIR";
@@ -37,6 +37,7 @@ export interface RoundState {
   participantUids: string[];
 
   challengeIndex: number;
+  /** Chosen once per IMITATION round and reused by every challenge in that round. */
   mode: GameMode;
   promptId: string;
   prompt: string;
@@ -52,7 +53,14 @@ export interface RoundState {
   votes: Map<string, string>;
   resultComputed: boolean;
   groupFound?: boolean;
+  /** Retained internally as an always-zero legacy field; never serialized. */
   roundScores: Map<string, number>;
+}
+
+export interface RoundOutcome {
+  roundIndex: number;
+  caught: boolean;
+  challengeIndex: number;
 }
 
 export interface RoomState {
@@ -74,8 +82,10 @@ export interface RoomState {
   round: RoundState | null;
 
   usedPairIds: Set<string>;
+  /** Game-scoped prompt history. A mode resets only after its own pool is exhausted. */
   usedPromptIds: Set<string>;
   impostorHistory: string[];
+  roundOutcomes: RoundOutcome[];
   phaseEndsAt?: number;
   closed: boolean;
 }
@@ -99,6 +109,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     usedPairIds: new Set(),
     usedPromptIds: new Set(),
     impostorHistory: [],
+    roundOutcomes: [],
     closed: false,
   };
 }

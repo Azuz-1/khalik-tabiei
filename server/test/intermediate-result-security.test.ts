@@ -7,7 +7,7 @@ import { testUid } from "./helpers.js";
 
 const deps = { rng: () => 0, now: () => 1_000 };
 
-test("survived challenge result does not reveal impostor identity or correctness metadata", () => {
+test("survived challenge result reveals no impostor identity, tally, voter mapping, or scoring", () => {
   const room = createRoomState("ABCDE", testUid(99), 1);
 
   for (let index = 1; index <= 4; index += 1) {
@@ -28,9 +28,14 @@ test("survived challenge result does not reveal impostor identity or correctness
   room.totalRounds = 3;
   engine.startGame(room, room.hostUid, deps);
   const round = room.round!;
+  const prompt = round.prompt;
+  const promptId = round.promptId;
 
   for (const uid of round.participantUids) engine.markReady(room, uid, deps);
-  engine.startCountdown(room, 5_000, deps);
+  engine.startCountdown(room, 6_000, deps);
+  engine.toAction(room, 7_000, deps);
+  engine.toHold(room, 9_000, deps);
+  engine.revealPrompt(room, 11_500, deps);
   engine.toDiscussion(room, deps);
   engine.startVoting(room, room.hostUid, deps);
 
@@ -44,14 +49,18 @@ test("survived challenge result does not reveal impostor identity or correctness
   assert.equal(room.round!.roundComplete, false);
 
   const view = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
-  const json = JSON.stringify(view.result);
+  const json = JSON.stringify(view);
   assert.equal(view.result?.impostorUid, undefined);
   assert.equal(view.result?.impostorName, undefined);
   assert.deepEqual(view.result?.voteTally, []);
-  assert.deepEqual(view.result?.voteBreakdown, []);
-  assert.deepEqual(view.result?.roundScores, []);
+  assert.equal(view.publicPrompt?.text, prompt, "already-revealed challenge prompt stays public");
+  assert.ok(!json.includes(promptId));
   assert.ok(!json.includes("\"impostorUid\""));
   assert.ok(!json.includes("\"impostorName\""));
-  assert.ok(!json.includes("voterWasImpostor"));
-  assert.ok(!json.includes("\"correct\""));
+  assert.ok(!json.includes("voteBreakdown"));
+  assert.ok(!json.includes("voterUid"));
+  assert.ok(!json.includes("targetUid"));
+  assert.ok(!json.includes("roundScores"));
+  assert.ok(!json.includes("scoreboard"));
+  assert.ok(!json.includes("ranking"));
 });

@@ -2,17 +2,17 @@
  * End-to-end multi-client test over real WebSockets against a running server.
  *
  * Drives one shared host screen plus three player phones through the current
- * HANDS / POINT / NUMBER imitation flow and inspects raw wire messages for
- * secret-data leaks.
+ * HANDS / POINT / NUMBER game loop and inspects raw server->client frames for
+ * secret-data and vote-identity leaks.
  *
  * Run from the repository root while the server is listening on :8080:
- *   node server/test/integration.mjs
+ *   npm run test:integration
  */
 import { WebSocket } from "ws";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
 const ORIGIN = process.env.ORIGIN ?? URL.replace(/^ws/, "http").replace(/\/ws$/, "");
-const TIMEOUT_MS = 10_000;
+const TIMEOUT_MS = 15_000;
 
 let failures = 0;
 
@@ -127,6 +127,12 @@ async function waitFor(client, predicate, label, timeout = TIMEOUT_MS) {
   throw new Error(`timeout waiting for ${label}; ${client.label} phase=${client.phase()}`);
 }
 
+async function waitForAll(clients, predicate, label) {
+  await Promise.all(
+    clients.map((client) => waitFor(client, predicate, `${client.label} ${label}`)),
+  );
+}
+
 function currentRoles(players) {
   const impostors = players.filter((player) => player.view?.isImpostor === true);
   const normals = players.filter((player) => player.view?.isImpostor === false);
@@ -137,18 +143,23 @@ function currentRoles(players) {
 
 function currentPrompt(normals) {
   const prompts = normals.map((player) => player.view?.myPrompt?.text);
-  ok(prompts.every((prompt) => typeof prompt === "string" && prompt.length > 0), "normal players receive a prompt");
+  ok(
+    prompts.every((prompt) => typeof prompt === "string" && prompt.length > 0),
+    "normal players receive a private prompt",
+  );
   ok(new Set(prompts).size === 1, "normal players receive the same current prompt");
   return prompts[0];
 }
 
-function assertPrivateQuestionWire(host, impostor, normals, prompt) {
-  ok(host.view?.myPrompt === undefined, "host never receives a private prompt");
+function assertSecretWire(host, impostor, normals, prompt) {
+  ok(host.view?.myPrompt === undefined, "host receives no private prompt");
+  ok(host.view?.publicPrompt === undefined, "host receives no public prompt before reveal");
   ok(impostor.view?.isImpostor === true, "impostor knows they are the impostor");
-  ok(impostor.view?.myPrompt === undefined, "impostor receives no prompt");
-  ok(!impostor.rawText().includes(prompt), "raw impostor wire never contains the secret prompt text");
-  ok(!impostor.rawText().includes("promptId"), "raw impostor wire never contains promptId");
-  ok(!host.rawText().includes(prompt), "raw host wire never contains the private prompt text");
+  ok(impostor.view?.myPrompt === undefined, "impostor receives no private prompt");
+  ok(impostor.view?.publicPrompt === undefined, "impostor receives no public prompt before reveal");
+  ok(!impostor.rawText().includes(prompt), "raw impostor wire contains no secret prompt text");
+  ok(!impostor.rawText().includes("promptId"), "raw impostor wire contains no promptId");
+  ok(!host.rawText().includes(prompt), "raw host wire contains no secret prompt text");
 
   for (const normal of normals) {
     ok(normal.view?.myPrompt?.text === prompt, `${normal.label} has the expected private prompt`);
@@ -156,35 +167,135 @@ function assertPrivateQuestionWire(host, impostor, normals, prompt) {
   }
 }
 
-async function markReadyAndReachDiscussion(host, players, challengeIndex) {
+async function runPhysicalSequence(host, players, challengeIndex, prompt, reconnectRoles = null) {
   for (const player of players) player.send({ t: "MARK_READY" });
 
-  await waitFor(host, (client) => client.phase() === "REVEAL", `challenge ${challengeIndex} countdown`);
-  ok(typeof host.view?.room?.phaseEndsAt === "number", `challenge ${challengeIndex} exposes an authoritative countdown deadline`);
+  await waitFor(host, (client) => client.phase() === "COUNTDOWN", `challenge ${challengeIndex} countdown`);
+  const countdownSeenAt = Date.now();
+  const countdownRemaining = (host.view?.room?.phaseEndsAt ?? countdownSeenAt) - countdownSeenAt;
+  ok(
+    countdownRemaining >= 4_500 && countdownRemaining <= 5_200,
+    `challenge ${challengeIndex} authoritative countdown is approximately 5 seconds`,
+  );
+  ok(host.view?.publicPrompt === undefined, `challenge ${challengeIndex} prompt is still secret during countdown`);
 
-  await waitFor(host, (client) => client.phase() === "DISCUSSION", `challenge ${challengeIndex} discussion`);
-  ok(host.view?.room?.phaseEndsAt === undefined, `challenge ${challengeIndex} clears the countdown deadline in discussion`);
+  if (reconnectRoles) {
+    await reconnectRoles.normal.reconnect();
+    await waitFor(
+      reconnectRoles.normal,
+      (client) => client.phase() === "COUNTDOWN",
+      "normal reconnect during countdown",
+    );
+    ok(
+      reconnectRoles.normal.view?.myPrompt?.text === prompt,
+      "normal reconnect before ACTION restores the current private prompt",
+    );
+
+    await reconnectRoles.impostor.reconnect();
+    await waitFor(
+      reconnectRoles.impostor,
+      (client) => client.phase() === "COUNTDOWN",
+      "impostor reconnect during countdown",
+    );
+    ok(
+      reconnectRoles.impostor.view?.isImpostor === true,
+      "impostor reconnect before ACTION restores the role marker",
+    );
+    ok(
+      reconnectRoles.impostor.view?.myPrompt === undefined,
+      "impostor reconnect before ACTION still has no prompt",
+    );
+    ok(
+      !reconnectRoles.impostor.rawText().includes(prompt),
+      "reconnected impostor raw wire still has no secret prompt",
+    );
+    ok(
+      !reconnectRoles.impostor.rawText().includes("promptId"),
+      "reconnected impostor raw wire still has no promptId",
+    );
+  }
+
+  await waitFor(host, (client) => client.phase() === "ACTION", `challenge ${challengeIndex} ACTION`, 8_000);
+  const countdownElapsed = Date.now() - countdownSeenAt;
+  ok(
+    countdownElapsed >= 4_500,
+    `challenge ${challengeIndex} does not leave the 5-second countdown early`,
+  );
+  ok(host.view?.publicPrompt === undefined, `challenge ${challengeIndex} prompt is still secret at ACTION`);
+
+  await waitFor(host, (client) => client.phase() === "HOLD", `challenge ${challengeIndex} HOLD`, 4_000);
+  const holdSeenAt = Date.now();
+  ok(host.view?.publicPrompt === undefined, `challenge ${challengeIndex} prompt is still secret during HOLD`);
+
+  await waitFor(
+    host,
+    (client) => client.phase() === "PROMPT_REVEAL",
+    `challenge ${challengeIndex} prompt reveal`,
+    5_000,
+  );
+  const holdElapsed = Date.now() - holdSeenAt;
+  ok(holdElapsed >= 1_700, `challenge ${challengeIndex} HOLD lasts about two seconds`);
+  ok(host.view?.publicPrompt?.text === prompt, `challenge ${challengeIndex} prompt becomes public after HOLD`);
+
+  await waitForAll(
+    players,
+    (client) => client.phase() === "PROMPT_REVEAL",
+    `challenge ${challengeIndex} prompt reveal`,
+  );
+  for (const player of players) {
+    ok(
+      player.view?.publicPrompt?.text === prompt,
+      `${player.label} receives the now-public prompt after the action`,
+    );
+    ok(!player.rawText().includes("promptId"), `${player.label} never receives promptId`);
+  }
+
+  await waitFor(host, (client) => client.phase() === "DISCUSSION", `challenge ${challengeIndex} discussion`, 6_000);
+  ok(host.view?.room?.phaseEndsAt === undefined, `challenge ${challengeIndex} discussion has no timer`);
+  ok(host.view?.publicPrompt?.text === prompt, `challenge ${challengeIndex} public prompt remains available in discussion`);
 }
 
-function submitThreeWayTie(players) {
+async function voteNoMajority(host, players, challengeIndex) {
+  host.send({ t: "START_VOTING" });
+  await waitForAll(players, (client) => client.phase() === "VOTING", `challenge ${challengeIndex} voting`);
+  ok(players[0].view?.votesProgress?.requiredVotes === 2, "3 players require a 2-vote majority");
+
   const [a, b, c] = players;
   a.send({ t: "SUBMIT_VOTE", targetUid: b.uid });
   b.send({ t: "SUBMIT_VOTE", targetUid: c.uid });
   c.send({ t: "SUBMIT_VOTE", targetUid: a.uid });
+
+  await waitFor(host, (client) => client.phase() === "RESULT", `challenge ${challengeIndex} result`);
 }
 
-async function surviveChallenge(host, players, challengeIndex) {
+async function voteCatch(host, players, challengeIndex, impostor) {
   host.send({ t: "START_VOTING" });
-  await waitFor(players[0], (client) => client.phase() === "VOTING", `challenge ${challengeIndex} voting`);
+  await waitForAll(players, (client) => client.phase() === "VOTING", `challenge ${challengeIndex} voting`);
 
-  players[0].send({ t: "SUBMIT_VOTE", targetUid: players[1].uid });
-  await waitFor(host, (client) => (client.view?.votesProgress?.submitted ?? 0) >= 1, `challenge ${challengeIndex} vote progress`);
-  ok(host.view?.result === undefined, `challenge ${challengeIndex} does not expose a result mid-vote`);
-  ok(!players[2].rawText().includes("voteTally"), `challenge ${challengeIndex} does not leak a tally mid-vote`);
+  const normals = players.filter((player) => player.uid !== impostor.uid);
+  normals[0].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  normals[1].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  impostor.send({ t: "SUBMIT_VOTE", targetUid: normals[0].uid });
 
-  players[1].send({ t: "SUBMIT_VOTE", targetUid: players[2].uid });
-  players[2].send({ t: "SUBMIT_VOTE", targetUid: players[0].uid });
-  await waitFor(host, (client) => client.phase() === "RESULT", `challenge ${challengeIndex} result`);
+  await waitFor(host, (client) => client.phase() === "RESULT", `challenge ${challengeIndex} caught result`);
+}
+
+function assertNoPointsOrVoteIdentity(view, label) {
+  const json = JSON.stringify(view);
+  ok(!json.includes("scoreboard"), `${label} has no scoreboard payload`);
+  ok(!json.includes("roundScores"), `${label} has no round scoring payload`);
+  ok(!json.includes("voteBreakdown"), `${label} has no voter breakdown payload`);
+  ok(!json.includes("voterUid"), `${label} has no voter identity payload`);
+  ok(!json.includes("targetUid"), `${label} has no voter-to-target payload`);
+  ok(!json.includes("\"score\""), `${label} has no player score field`);
+}
+
+function assertFinalTally(result, playerCount) {
+  ok(result?.voteTally?.length === playerCount, "round-end tally lists every participant including zero-vote players");
+  ok(
+    result?.voteTally?.reduce((sum, row) => sum + row.votes, 0) === playerCount,
+    "round-end tally contains exactly the votes from the challenge that ended the round",
+  );
 }
 
 async function main() {
@@ -215,7 +326,7 @@ async function main() {
     (client) =>
       client.view?.room?.totalRounds === 3 &&
       client.view?.room?.selectedModes?.length === 3,
-    "new gameplay settings",
+    "game settings",
   );
   ok(
     host.view.room.selectedModes.join(",") === "HANDS,POINT,NUMBER",
@@ -223,84 +334,124 @@ async function main() {
   );
 
   host.send({ t: "START_GAME" });
-  await waitFor(host, (client) => client.phase() === "QUESTION", "challenge 1 private prompt phase");
-  await Promise.all(players.map((player) => waitFor(player, (client) => client.phase() === "QUESTION", `${player.label} challenge 1 prompt`)));
+  await waitFor(host, (client) => client.phase() === "QUESTION", "round 1 challenge 1 private phase");
+  await waitForAll(players, (client) => client.phase() === "QUESTION", "round 1 challenge 1 private phase");
 
-  console.log("\n[challenge 1] private prompt + reconnect + survived result:");
+  console.log("\n[round 1] same impostor + same mode through three challenges:");
   let { impostor, normals } = currentRoles(players);
-  const impostorUid = impostor.uid;
-  const firstPrompt = currentPrompt(normals);
-  assertPrivateQuestionWire(host, impostor, normals, firstPrompt);
+  const roundOneImpostorUid = impostor.uid;
+  const roundOneMode = host.view.challenge?.mode;
+  const roundOnePrompts = [];
 
-  const normalToReconnect = normals[0];
-  await normalToReconnect.reconnect();
-  await waitFor(normalToReconnect, (client) => client.phase() === "QUESTION", "normal private view after reconnect");
-  ok(normalToReconnect.view?.myPrompt?.text === firstPrompt, "normal reconnect restores the exact private prompt");
+  for (let challengeIndex = 1; challengeIndex <= 3; challengeIndex += 1) {
+    players.forEach((player) => player.clearMessages());
+    host.clearMessages();
 
-  await impostor.reconnect();
-  await waitFor(impostor, (client) => client.phase() === "QUESTION", "impostor private view after reconnect");
-  ok(impostor.view?.isImpostor === true, "impostor reconnect restores their private role");
-  ok(impostor.view?.myPrompt === undefined, "impostor reconnect still receives no prompt");
-  ok(!impostor.rawText().includes(firstPrompt), "reconnected impostor wire still contains no prompt text");
-  ok(!impostor.rawText().includes("promptId"), "reconnected impostor wire still contains no promptId");
+    ({ impostor, normals } = currentRoles(players));
+    const prompt = currentPrompt(normals);
+    roundOnePrompts.push(prompt);
 
-  await markReadyAndReachDiscussion(host, players, 1);
-  await surviveChallenge(host, players, 1);
+    ok(impostor.uid === roundOneImpostorUid, `challenge ${challengeIndex} keeps the same round impostor`);
+    ok(host.view.challenge?.mode === roundOneMode, `challenge ${challengeIndex} keeps the same round mode`);
+    assertSecretWire(host, impostor, normals, prompt);
 
-  const challengeOneResult = host.view.result;
-  ok(challengeOneResult?.roundComplete === false, "challenge 1 survival keeps the round open");
-  ok(challengeOneResult?.impostorUid === undefined, "challenge 1 result hides impostor uid");
-  ok(challengeOneResult?.impostorName === undefined, "challenge 1 result hides impostor name");
-  ok(challengeOneResult?.prompt === undefined, "challenge 1 result hides the previous prompt");
-  ok(challengeOneResult?.voteTally?.length === 0, "challenge 1 result hides vote tally");
-  ok(challengeOneResult?.voteBreakdown?.length === 0, "challenge 1 result hides vote details");
-  ok(challengeOneResult?.roundScores?.length === 0, "challenge 1 result hides score deltas");
+    await runPhysicalSequence(
+      host,
+      players,
+      challengeIndex,
+      prompt,
+      challengeIndex === 1 ? { normal: normals[0], impostor } : null,
+    );
+    await voteNoMajority(host, players, challengeIndex);
+
+    const result = host.view.result;
+    ok(result?.groupFound === false, `challenge ${challengeIndex} less-than-majority vote does not catch impostor`);
+
+    if (challengeIndex < 3) {
+      ok(result?.roundComplete === false, `challenge ${challengeIndex} keeps round open`);
+      ok(result?.impostorUid === undefined, `challenge ${challengeIndex} hides impostor identity`);
+      ok(result?.impostorName === undefined, `challenge ${challengeIndex} hides impostor name`);
+      ok(result?.voteTally?.length === 0, `challenge ${challengeIndex} hides vote tally`);
+      assertNoPointsOrVoteIdentity(host.view, `challenge ${challengeIndex} intermediate result`);
+
+      host.send({ t: "NEXT_ROUND" });
+      await waitFor(
+        host,
+        (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === challengeIndex + 1,
+        `round 1 challenge ${challengeIndex + 1}`,
+      );
+      await waitForAll(
+        players,
+        (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === challengeIndex + 1,
+        `round 1 challenge ${challengeIndex + 1}`,
+      );
+    } else {
+      ok(result?.roundComplete === true, "surviving challenge 3 ends round 1");
+      ok(result?.impostorUid === roundOneImpostorUid, "round 1 end reveals impostor identity");
+      assertFinalTally(result, 3);
+      assertNoPointsOrVoteIdentity(host.view, "round 1 final result");
+    }
+  }
+
+  ok(new Set(roundOnePrompts).size === 3, "round 1 challenges use three different prompts");
 
   host.send({ t: "NEXT_ROUND" });
-  await waitFor(host, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 2, "challenge 2 question phase");
-  await Promise.all(players.map((player) => waitFor(player, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 2, `${player.label} challenge 2 prompt`)));
+  await waitFor(host, (client) => client.phase() === "QUESTION" && client.view?.room?.currentRound === 2, "round 2 start");
+  await waitForAll(players, (client) => client.phase() === "QUESTION" && client.view?.room?.currentRound === 2, "round 2 start");
+  ok(host.phase() !== "GAME_OVER", "ending round 1 does not end the game");
 
-  console.log("\n[challenge 2] same impostor + new prompt:");
-  players.forEach((player) => player.clearMessages());
-  host.clearMessages();
+  console.log("\n[round 2] majority catch in challenge 1 ends round, not game:");
   ({ impostor, normals } = currentRoles(players));
-  const secondPrompt = currentPrompt(normals);
-  ok(impostor.uid === impostorUid, "the same impostor continues into challenge 2");
-  ok(secondPrompt !== firstPrompt, "challenge 2 receives a new prompt");
-  assertPrivateQuestionWire(host, impostor, normals, secondPrompt);
+  const roundTwoImpostorUid = impostor.uid;
+  const roundTwoMode = host.view.challenge?.mode;
+  const roundTwoPrompt = currentPrompt(normals);
+  ok(roundTwoImpostorUid !== roundOneImpostorUid, "round 2 gets a new fair impostor");
+  ok(roundTwoMode !== roundOneMode, "balanced shuffle changes mode between the first two rounds");
+  assertSecretWire(host, impostor, normals, roundTwoPrompt);
 
-  await markReadyAndReachDiscussion(host, players, 2);
-  await surviveChallenge(host, players, 2);
-  ok(host.view.result?.roundComplete === false, "challenge 2 survival still keeps the round open");
-  ok(host.view.result?.impostorUid === undefined, "challenge 2 still hides impostor identity");
-  ok(host.view.result?.voteTally?.length === 0, "challenge 2 still hides vote tally");
+  await runPhysicalSequence(host, players, 1, roundTwoPrompt);
+  await voteCatch(host, players, 1, impostor);
+  ok(host.view.result?.groupFound === true, "majority catches the round 2 impostor");
+  ok(host.view.result?.roundComplete === true, "catching impostor in challenge 1 ends the round immediately");
+  ok(host.view.result?.challengeIndex === 1, "round 2 ends in challenge 1/3");
+  assertFinalTally(host.view.result, 3);
+  assertNoPointsOrVoteIdentity(host.view, "round 2 final result");
 
   host.send({ t: "NEXT_ROUND" });
-  await waitFor(host, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 3, "challenge 3 question phase");
-  await Promise.all(players.map((player) => waitFor(player, (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 3, `${player.label} challenge 3 prompt`)));
+  await waitFor(host, (client) => client.phase() === "QUESTION" && client.view?.room?.currentRound === 3, "round 3 start");
+  await waitForAll(players, (client) => client.phase() === "QUESTION" && client.view?.room?.currentRound === 3, "round 3 start");
+  ok(host.phase() !== "GAME_OVER", "game continues after a challenge-1 catch when rounds remain");
 
-  console.log("\n[challenge 3] survival completes round and awards +2:");
-  players.forEach((player) => player.clearMessages());
-  host.clearMessages();
+  console.log("\n[round 3] final configured round:");
   ({ impostor, normals } = currentRoles(players));
-  const thirdPrompt = currentPrompt(normals);
-  ok(impostor.uid === impostorUid, "the same impostor continues into challenge 3");
-  ok(thirdPrompt !== secondPrompt, "challenge 3 receives another new prompt");
-  assertPrivateQuestionWire(host, impostor, normals, thirdPrompt);
+  const roundThreeImpostorUid = impostor.uid;
+  const roundThreeMode = host.view.challenge?.mode;
+  const roundThreePrompt = currentPrompt(normals);
+  ok(roundThreeImpostorUid !== roundTwoImpostorUid, "round 3 advances fairness to another impostor");
+  ok(
+    new Set([roundOneMode, roundTwoMode, roundThreeMode]).size === 3,
+    "balanced mode bag uses all three selected modes across the first three rounds",
+  );
 
-  await markReadyAndReachDiscussion(host, players, 3);
-  await surviveChallenge(host, players, 3);
+  await runPhysicalSequence(host, players, 1, roundThreePrompt);
+  await voteCatch(host, players, 1, impostor);
+  ok(host.view.result?.groupFound === true, "final round majority catches impostor");
+  assertFinalTally(host.view.result, 3);
 
-  const finalResult = host.view.result;
-  ok(finalResult?.roundComplete === true, "surviving challenge 3 completes the round");
-  ok(finalResult?.groupFound === false, "challenge 3 tie records an impostor survival");
-  ok(finalResult?.impostorUid === impostorUid, "completed round reveals the impostor");
-  ok(finalResult?.prompt === thirdPrompt, "completed round reveals the final challenge prompt");
-  ok((finalResult?.voteTally?.length ?? 0) > 0, "completed round reveals vote tally");
-  ok((finalResult?.voteBreakdown?.length ?? 0) === 3, "completed round reveals vote details");
+  host.send({ t: "NEXT_ROUND" });
+  await waitFor(host, (client) => client.phase() === "GAME_OVER", "GAME_OVER after round 3");
+  await waitForAll(players, (client) => client.phase() === "GAME_OVER", "GAME_OVER after round 3");
 
-  const impostorScore = host.view.scoreboard?.find((row) => row.uid === impostorUid)?.score;
-  ok(impostorScore === 2, "impostor receives +2 only after surviving challenge 3");
+  ok(host.view.gameOver?.totalRounds === 3, "game over summary uses configured round count");
+  ok(host.view.gameOver?.caughtRounds === 2, "game over summary counts two caught rounds");
+  ok(host.view.gameOver?.escapedRounds === 1, "game over summary counts one escaped round");
+  assertNoPointsOrVoteIdentity(host.view, "game over");
+  ok(!JSON.stringify(host.view.gameOver).includes("ranking"), "game over has no ranking");
+  ok(!JSON.stringify(host.view.gameOver).includes("winner"), "game over has no individual winner");
+
+  for (const client of [host, ...players]) {
+    ok(!client.rawText().includes("promptId"), `${client.label} never receives a promptId on the wire`);
+  }
 
   console.log("\n[cleanup]:");
   host.send({ t: "CLOSE_ROOM" });

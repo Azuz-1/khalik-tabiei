@@ -1,34 +1,48 @@
 # خلك طبيعي — Real-time Arabic Social Deception Party Game
 
 **خلك طبيعي** is a browser-based multiplayer party game for Saudi/Gulf groups
-playing together in the same room. The current game is built around three
-physical imitation modes:
+playing together in the same room. The current product has three physical modes:
 
-- **🙋 HANDS — ارفع:** normal players see a private statement and raise a hand if it applies.
-- **👉 POINT — أشر:** normal players see who to point at.
-- **🔢 NUMBER — كم؟:** normal players answer with a number using their fingers.
+- **🙋 HANDS — ارفع**
+- **👉 POINT — أشر**
+- **🔢 NUMBER — كم؟**
 
-One player is the **المتخفي**. They know that they are the impostor, but they do
-**not** receive the current prompt. Everyone gets ready on their phone, the
-shared screen runs a synchronized countdown, everyone responds physically at
-the same time, the group discusses what looked suspicious, and players vote
-secretly from their phones.
+A full **Game** contains several **Rounds**. Each Round has one fixed impostor,
+one fixed mode, and up to three **Challenges**. Every Challenge has one private
+prompt, a synchronized physical response, a public prompt reveal, discussion,
+and secret voting.
 
-A round can continue for up to **three challenges with the same impostor**. If
-the group catches the impostor, the round ends immediately. If the vote is tied
-or the unique highest vote lands on the wrong player, the impostor survives and
-moves to another challenge with a new prompt. Surviving challenge 3 ends the
-round and awards the impostor **+2**.
+The impostor knows they are the impostor and knows the mode/action, but does not
+receive the prompt before it becomes public after the physical response.
 
-**No app, no account, no email, no password.** Open the game on a TV, scan the
-QR from player phones, type a name, and play.
+There are **no player points, rankings, or individual winners** in the current
+version. At Game Over the shared screen summarizes how many rounds the group
+caught the impostor and how many rounds the impostor survived.
 
-- Player-facing UI is **Arabic + RTL**. Code, types, and technical docs are English.
-- Multiplayer is authoritative and real-time over WebSockets; there is no mock game state.
+**No app, no account, no email, no password.** Open the host screen on a TV or
+laptop, scan the QR from player phones, type a name, and play.
+
+- Player-facing UI is **Arabic + RTL**.
+- Multiplayer is authoritative and real-time over WebSockets.
 - Private prompts and roles are projected per recipient on the server.
-- The active playtest pack currently contains **30 imitation prompts**: 10 HANDS, 10 POINT, and 10 NUMBER.
-- The repository still contains **110 legacy TEXT_PAIR question pairs** across 9 categories. They are retained as legacy content for future work but are **not selectable through the current UI or protocol settings**.
-- **CHOOSE is not available in the current product.**
+- The active playtest bank contains **30 imitation prompts**: 10 HANDS, 10 POINT,
+  and 10 NUMBER.
+- The repository still contains **110 legacy TEXT_PAIR pairs** across 9
+  categories. They are retained as legacy content but are **not selectable in
+  the current UI/settings**.
+- CHOOSE is not part of the current product.
+
+---
+
+## Core terms
+
+- **GAME** — the complete session containing the configured number of Rounds.
+- **ROUND** — one fixed impostor + one fixed mode + up to 3 Challenges.
+- **CHALLENGE** — one prompt + ready + countdown + physical action + hold +
+  prompt reveal + discussion + secret vote.
+
+Catching an impostor ends the **Round**, not the **Game**. If more configured
+Rounds remain, the host advances to a new Round with a new fair impostor.
 
 ---
 
@@ -36,32 +50,259 @@ QR from player phones, type a name, and play.
 
 ### Shared host screen
 
-The TV/laptop/tablet creates the room, shows the QR and player list, lets the
-host choose any non-empty subset of HANDS / POINT / NUMBER, starts the game,
-runs the synchronized countdown, opens voting after discussion, and displays
-results and scores.
+The TV/laptop/tablet:
 
-The host screen is **not a player** and never receives the private imitation
-prompt. If the person operating the host screen wants to play, they join from a
-phone like everyone else.
+- creates the room and shows the QR/player list;
+- lets the host choose any non-empty subset of HANDS / POINT / NUMBER;
+- chooses the round count;
+- acts as the Game Director during play;
+- explains the Round's mode;
+- shows the 5-second countdown, action moment, hold, prompt reveal, discussion,
+  vote progress, Round Result, and Game Over group summary.
+
+The host screen is **not a player** and receives no private prompt before the
+prompt-reveal phase.
 
 ### Player phone
 
-Each phone is private. During a challenge:
+During the private phase:
 
-- a **normal player** receives the current mode and prompt;
-- the **impostor** receives `isImpostor: true` but receives neither prompt text nor `promptId`;
-- each player presses **جاهز**;
-- after the physical response and discussion, the phone is used for secret voting.
+- a **normal player** receives the current mode, private prompt, and action
+  instruction;
+- the **impostor** receives the mode/action and `isImpostor: true`, but receives
+  neither prompt text nor `promptId`;
+- every player presses **جاهز**.
 
-Reconnect with the same anonymous session cookie restores the same seat and the
-correct private view for the current phase.
+After Ready, the phone tells the player to look at the shared screen. There is
+no digital HANDS/POINT/NUMBER response.
+
+Reconnect with the same anonymous session restores the same seat. Before the
+action, normal reconnect restores the current private prompt while impostor
+reconnect still receives no prompt.
+
+---
+
+## Current gameplay flow
+
+1. Host creates a room and players join from phones.
+2. Host selects one, two, or all three active modes and a Round count.
+3. Server starts Round 1, chooses a fair impostor, and consumes one mode from a
+   balanced shuffled mode bag.
+4. That mode is **fixed for the entire Round**.
+5. Challenge 1 begins with a new prompt from that mode's bank.
+6. Normal players see the prompt privately. The impostor sees only their role,
+   mode, and action instruction.
+7. Everyone presses Ready.
+8. The shared screen runs:
+   - **5-second COUNTDOWN** (`5 → 4 → 3 → 2 → 1`)
+   - **ACTION** (`ارفعوا!`, `أشروا!`, or `ورّونا!`)
+   - **HOLD** for about 2 seconds (`ثبّتوا… 👀`)
+   - **PROMPT_REVEAL** (`المطلوب كان…` + the actual prompt)
+9. From PROMPT_REVEAL onward, that Challenge's prompt is public. The next
+   Challenge's prompt has not been selected/sent yet.
+10. Discussion has no timer. The host decides when to open voting.
+11. Every player votes secretly for another participant.
+12. The impostor is caught only if they receive a true majority:
+
+```text
+requiredVotes = floor(participantCount / 2) + 1
+```
+
+13. If the impostor gets the majority, the Round ends immediately.
+14. If the impostor gets less than the majority — even if another player gets a
+    majority — the impostor survives that Challenge.
+15. After Challenge 1/2 survival, the same impostor and same mode continue with
+    a new prompt.
+16. If the impostor survives Challenge 3, the Round ends as an escape.
+17. If more Rounds remain, a new Round starts with a new/fair impostor and the
+    next mode from the balanced Round-level mode bag.
+18. Only after the configured Round count is complete does the Game enter
+    `GAME_OVER`.
+
+---
+
+## Majority examples
+
+| Players | Votes required to catch impostor |
+| ---: | ---: |
+| 3 | 2 |
+| 4 | 3 |
+| 5 | 3 |
+| 6 | 4 |
+| 7 | 4 |
+| 8 | 5 |
+| 9 | 5 |
+| 10 | 6 |
+
+A unique-highest vote is **not enough** by itself. A wrong majority on a normal
+player also does not catch the impostor.
+
+---
+
+## Round results and voting privacy
+
+### Intermediate result (Challenge 1/2 survival)
+
+The result only communicates that the group did not catch the impostor and that
+the same impostor continues.
+
+It does **not** expose:
+
+- impostor identity;
+- aggregate tally;
+- voter identities;
+- voter → target mappings;
+- points, scoreboard, or ranking.
+
+The previous Challenge prompt is already public because it was revealed before
+discussion.
+
+### Round-end result
+
+When the Round actually ends, the result shows:
+
+- caught vs escaped;
+- impostor name;
+- challenge number where the Round ended;
+- an **anonymous aggregate tally** for the final Challenge only.
+
+The tally includes every participant, including zero-vote players. It contains
+only player name + votes received. The server never serializes who voted for
+whom in the current client result model.
+
+---
+
+## Game Over
+
+After the final configured Round, the shared screen shows a group summary such
+as:
+
+```text
+خلصت اللعبة 🎉
+مسكتوا المتخفي في 3 من 5 جولات 👏
+✅ انكشف: 3
+😈 نجا: 2
+```
+
+There is no points table, ranking, or individual winner.
+
+---
+
+## Mode behavior
+
+### 🙋 HANDS — ارفع
+
+- If the prompt applies to you, raise your hand.
+- Otherwise keep your hand down.
+- Hold the position until the prompt reveal.
+
+### 👉 POINT — أشر
+
+- At the action moment, point at one person you think matches the prompt.
+- Hold the point until the prompt reveal.
+
+### 🔢 NUMBER — كم؟
+
+- Show a number from 0 to 5 using your fingers.
+- `0` means a closed fist.
+- Hold the answer until the prompt reveal.
+
+---
+
+## Mode and prompt rotation
+
+### Mode selection
+
+The host may select any non-empty subset of HANDS / POINT / NUMBER.
+
+The server uses a balanced shuffled mode bag **between Rounds**. It consumes
+each selected mode before refilling when possible and avoids unnecessary repeats
+across bag boundaries.
+
+A mode is selected once at Round start and never changes inside that Round.
+
+### Prompt history
+
+`usedPromptIds` is Game-scoped. A prompt is not repeated while an unused prompt
+exists for the same mode.
+
+When one mode's entire prompt bank is exhausted, only that mode's used prompt
+ids are reset and its prompts become eligible again. A small playtest bank can
+therefore never block a long Game.
+
+---
+
+## Security model
+
+Secret-state protection is enforced at the server/wire boundary, not by React
+component hiding.
+
+- **Server-authoritative state.** The server owns room membership, phases,
+  impostor selection, mode selection, prompt selection, votes, timers, and
+  Round/Game transitions.
+- **Anonymous authenticated sessions.** `/api/session` issues a cryptographically
+  random HMAC-authenticated token in an `HttpOnly`, `SameSite=Lax` cookie
+  (`Secure` in production).
+- **Exact Origin enforcement.** WebSocket upgrades validate browser Origin
+  against configured allowed origins.
+- **Strict runtime message validation.** Unknown or malformed WebSocket messages
+  are rejected before game state mutation.
+- **Per-recipient views.** `server/src/game/view.ts` is the only projection from
+  internal secret room state to client payloads.
+- **Pre-reveal secrecy.** During QUESTION / COUNTDOWN / ACTION / HOLD, the host
+  and impostor receive no prompt text or `promptId`. Normal participants may
+  receive their own current private prompt for reconnect recovery.
+- **Public reveal boundary.** The current Challenge prompt becomes public only
+  when the authoritative server enters `PROMPT_REVEAL` after HOLD.
+- **No future prompt leak.** A later Challenge prompt is not selected/sent until
+  the host advances after the intermediate result.
+- **Vote privacy.** Current result payloads contain only an aggregate final
+  tally; voter identities and voter→target mappings are not serialized.
+- Existing connection caps, rate limiting, backpressure protection, session
+  validation, and disconnect grace behavior remain in place.
+
+### Disconnect/reconnect policy
+
+The participant set is stable during a Challenge. A transient socket drop marks
+presence but does not immediately remove the seat.
+
+If a disconnected participant reconnects inside the grace period, the current
+seat/private view is restored. If grace expires during an incomplete Round, the
+current Round is safely redealt if enough players remain. A redeal keeps the
+Round's already-selected mode so it does not consume an extra balanced-mode
+slot.
+
+---
+
+## Prompt content
+
+Active prompts live in:
+
+```text
+server/src/game/imitationPrompts.data.ts
+```
+
+The current playtest bank has 30 items:
+
+- 10 HANDS
+- 10 POINT
+- 10 NUMBER
+
+Do not add Face, CHOOSE, TEXT_PAIR UI, or runtime AI generation without a
+separate product decision.
+
+### Legacy TEXT_PAIR
+
+`server/src/game/questions.data.ts` still contains the 110 curated TEXT_PAIR
+pairs and `questions.ts` still contains their selection service. This is legacy
+content retained for future work. Current authoritative settings reject category
+activation and the current client does not expose TEXT_PAIR.
 
 ---
 
 ## Quick start
 
-Requirements: **Node.js 20.19+**. CI and the production configuration use Node 22.
+Requirements: **Node.js 20.19+**. CI uses Node 22.
 
 ```bash
 npm ci
@@ -69,187 +310,20 @@ npm run build
 npm start
 ```
 
-Open `http://localhost:8080` on the shared host screen and press **سو غرفة**.
-Player phones can open the same reachable origin or scan the QR.
+Open `http://localhost:8080` on the host screen. Player phones can open the same
+reachable origin or scan the QR.
 
-For testing from phones on the same Wi-Fi, use the host machine's LAN address
-and configure the exact public origin, for example:
-
-```bash
-PUBLIC_ORIGIN=http://192.168.1.20:8080 npm start
-```
-
-### Development mode
+Development mode:
 
 ```bash
 npm run dev
 ```
 
-This starts the server on port 8080 and Vite on port 5173 with WebSocket proxying.
-
----
-
-## Public deployment
-
-The application is a self-contained Node server with WebSocket support. It can
-run behind Render, a container host, or another reverse proxy that preserves
-WebSocket upgrades.
-
-Production requires a stable high-entropy `SESSION_SECRET` and an exact
-`PUBLIC_ORIGIN`. Rotating `SESSION_SECRET` intentionally invalidates anonymous
-browser sessions.
-
-Example container run:
-
-```bash
-docker build -t khalik .
-docker run -p 8080:8080 \
-  -e SESSION_SECRET='replace-with-at-least-32-random-bytes' \
-  -e PUBLIC_ORIGIN='https://game.example.com' \
-  khalik
-```
-
----
-
-## Current gameplay flow
-
-1. The host creates a room and players join from phones.
-2. In the lobby, the host chooses one, two, or all three active modes: HANDS,
-   POINT, NUMBER. At least one mode must remain selected.
-3. The host starts the game. The server chooses one impostor using the fairness
-   history and chooses a mode through the balanced mode bag.
-4. Normal players receive the prompt privately. The impostor is explicitly told
-   that they are the impostor but receives no prompt.
-5. Every player presses **جاهز**.
-6. When everyone is ready, the authoritative server starts the shared countdown.
-7. Everyone performs the physical response at the same time and holds it briefly.
-8. The group discusses who looked suspicious.
-9. The host opens voting. Each player votes secretly for another participant.
-10. A unique highest vote on the impostor catches them and ends the round.
-11. A tie or a unique highest vote on someone else lets the same impostor survive.
-    If this was challenge 1 or 2, the host advances to a new challenge with the
-    same impostor and a new prompt.
-12. If the impostor survives challenge 3, the round ends and they receive +2.
-
-The balanced mode bag uses every selected mode before refilling when possible
-and avoids unnecessary repeats across bag boundaries.
-
----
-
-## Game rules and scoring
-
-The game supports **3–10 players** plus the non-playing shared host screen.
-
-### Catch rule
-
-The group catches the impostor only when the impostor is the **single unique
-highest-voted player**. A tie at the top is a failed catch.
-
-### Scoring
-
-- **+1** to each normal player who voted for the impostor when the impostor is caught.
-- **0** survival points after challenge 1 or 2. The round simply continues.
-- **+2** to the impostor only if they survive **challenge 3**.
-- The impostor does not receive a correct-vote point.
-
-The highest total score after the selected number of rounds wins. Tied top
-scores produce tied winners.
-
----
-
-## Prompt content
-
-### Active imitation prompts
-
-Current active prompts live in:
-
-```text
-server/src/game/imitationPrompts.data.ts
-```
-
-Each item has an id, one of the active modes, prompt text, and optional content
-flags:
-
-```ts
-{
-  id: "H11",
-  mode: "HANDS",
-  text: "ارفع يدك إذا ...",
-  flags: ["OPTIONAL_REVIEW_FLAG"],
-}
-```
-
-Keep prompt ids unique. The server tracks used prompt ids and avoids reuse until
-the relevant pool is exhausted.
-
-### Legacy TEXT_PAIR content
-
-`server/src/game/questions.data.ts` still contains the **110 curated TEXT_PAIR
-pairs** and `questions.ts` still contains their selection service. This content
-is intentionally retained for future work, but the current authoritative
-settings reject category/TEXT_PAIR activation and the current client does not
-expose it. Do not describe or ship it as an active mode without a separate
-product decision and implementation.
-
-CHOOSE is likewise not part of the current selectable mode catalog.
-
----
-
-## Security model
-
-The game contains secret information, so secrecy is enforced at the server/wire
-boundary rather than by hiding frontend components.
-
-- **Server-authoritative state.** The server owns room membership, phase,
-  impostor selection, prompts, votes, scores, timers, and transitions.
-- **Anonymous authenticated sessions.** `/api/session` issues a cryptographically
-  random HMAC-authenticated token in an `HttpOnly`, `SameSite=Lax` cookie
-  (`Secure` in production). The browser does not read or store the credential in
-  React/localStorage.
-- **Exact Origin enforcement.** WebSocket upgrades validate the browser Origin
-  against the configured canonical/allowed origins to prevent cross-site
-  cookie-authenticated WebSocket use.
-- **Strict runtime message validation.** Client messages are checked for known
-  discriminants, exact shapes, allowed enums, lengths, ids, and arrays before
-  reaching game state.
-- **Per-recipient views.** `server/src/game/view.ts` is the security boundary
-  between internal secret state and WebSocket payloads. Normal players get the
-  current prompt only during the private prompt phase. The impostor gets their
-  role marker but no prompt or `promptId`. The host gets neither.
-- **Intermediate-result redaction.** If the impostor survives challenge 1 or 2,
-  the result deliberately hides impostor identity, the previous prompt, vote
-  tally, vote breakdown/correctness, role-linking metadata, and score deltas so
-  the next challenge does not leak who was implicitly cleared.
-- **Completed-round reveal.** Once the round actually ends, result data can
-  reveal the impostor, final challenge prompt, tally, vote breakdown, and score
-  deltas.
-- **Backend authorization.** Host-only mutations validate `hostUid` on the
-  server. UI visibility is never treated as authorization.
-- **Bounded abuse controls.** Connection counts, active rooms, session/action
-  rates, and WebSocket backpressure are bounded in memory.
-
-### Disconnect and reconnect policy
-
-A transient socket drop changes presence but preserves the player's seat during
-the disconnect grace window. Reconnecting with the same session cookie cancels
-the pending removal and restores the correct current private view.
-
-If grace expires while a round is incomplete — including an intermediate
-challenge `RESULT` — the disconnected player is removed and that incomplete
-round is cancelled/redealt from challenge 1 with no points if at least three
-players remain. If fewer than three remain, the game returns to a clean lobby.
-This prevents stale participant seats or a removed impostor from being carried
-into a later challenge.
-
-Completed results/game-over screens keep completed participants long enough to
-preserve the final result/ranking, then pending removals are pruned at the next
-safe transition.
-
 ---
 
 ## Testing
 
-Run the standard validation suite:
+Run the normal checks:
 
 ```bash
 npm run typecheck
@@ -258,39 +332,24 @@ npm run build
 npm audit --omit=dev --audit-level=high
 ```
 
-The unit/integration-style Node test suite covers mode permissions, settings
-locking, balanced mode selection, same-impostor challenge progression, scoring,
-strict wire validation, prompt secrecy, intermediate-result redaction,
-reconnect/grace handling, room membership/capacity, anonymous session security,
-Origin checks, rate limiting, and backpressure.
-
-### Real WebSocket E2E
-
-`server/test/integration.mjs` runs against a real server with **1 host + 3
-players**. Start the server, then run the E2E test:
+The real WebSocket E2E requires a running server:
 
 ```bash
+PUBLIC_ORIGIN=http://localhost:8080 \
+SESSION_SECRET='integration-test-secret-0123456789-abcdef' \
 npm start
-# in another terminal
+
 npm run test:integration
 ```
 
-The E2E covers:
+GitHub CI starts the real server automatically and runs the integration test.
+The E2E covers room creation/join, selected modes, Round-fixed modes, balanced
+Round rotation, prompt secrecy, reconnect secrecy, 5-second countdown, ACTION,
+HOLD, public prompt reveal, majority voting, Challenge continuation, Round/Game
+boundaries, anonymous aggregate tally, no-points payloads, and Game Over group
+summary.
 
-- `selectedModes` and `START_GAME`;
-- normal prompt delivery;
-- impostor `isImpostor` delivery with no prompt/`promptId`;
-- reconnect preserving normal and impostor private views;
-- `MARK_READY` and the authoritative countdown;
-- `DISCUSSION` and `VOTING`;
-- challenge 1/2 survival with identity/tally/vote details hidden;
-- same impostor continuing with a new prompt;
-- challenge 3 survival ending the round and awarding exactly +2;
-- raw impostor WebSocket traffic never containing the secret prompt or a
-  `promptId` field.
-
-CI starts a real server and runs this E2E in addition to typecheck, tests, build,
-audit, and CodeQL.
+There is currently **no lint script** in the repository package scripts.
 
 ---
 
@@ -298,69 +357,51 @@ audit, and CodeQL.
 
 ```text
 shared/
-  types.ts                  Shared wire contract and game types
-  constants.ts              Limits, active modes, scoring, timers, legacy categories
+  types.ts              Wire contract and shared types
+  constants.ts          Modes, player limits, Round options, timers
 
 server/
   src/
-    index.ts                HTTP server + WebSocket upgrade on one origin
-    config.ts               Environment and origin configuration
-    auth/session.ts         Anonymous signed session cookies / stable uid derivation
+    auth/session.ts     Anonymous HMAC session identities
     game/
-      imitationPrompts.data.ts  Active HANDS / POINT / NUMBER playtest prompts
-      questions.data.ts     110 legacy TEXT_PAIR pairs (retained, not selectable)
-      questions.ts          Legacy TEXT_PAIR selection service
-      state.ts              Internal room/round state and input sanitization
-      engine.ts             Authoritative transitions, mode balance, voting, scoring
-      view.ts               Per-recipient safe projection / secrecy boundary
-      roomManager.ts        Rooms, sockets, countdowns, reconnect/grace orchestration
-      code.ts, errors.ts
-    net/connection.ts       Authenticated WebSocket connection wrapper
-    analytics.ts            Lightweight privacy-safe events
+      imitationPrompts.data.ts  Active 30-prompt playtest bank
+      questions.data.ts         110 legacy TEXT_PAIR pairs
+      questions.ts              Legacy TEXT_PAIR selector
+      state.ts                  Internal room/round secret state
+      engine.ts                 Pure game rules and transitions
+      view.ts                   Per-recipient security projection
+      roomManager.ts            Connections, timers, reconnect, broadcasts
+    security/messages.ts        Strict runtime WebSocket validation
   test/
-    engine.test.ts          Game-engine rules
-    room-manager.test.ts    Room/reconnect/timer behavior
-    *security*.test.ts      Wire and result secrecy regressions
-    integration.mjs         Real 1-host + 3-player WebSocket E2E
+    engine.test.ts
+    room-manager.test.ts
+    view-security.test.ts
+    intermediate-result-security.test.ts
+    security.test.ts
+    integration.mjs             Real server + WebSocket E2E
 
 client/
   src/
-    screens/Home.tsx        Current game explanation and room entry
-    screens/Host.tsx        Shared-screen lobby/game/results UI
-    screens/Player.tsx      Private player prompt/ready/vote UI
-    net/socket.ts           WebSocket client/store/actions
-    components/             QR, players, result and scoreboard components
-    i18n/                   Arabic errors
-    styles.css              RTL responsive theme
+    net/socket.ts
+    screens/Home.tsx
+    screens/Host.tsx
+    screens/Player.tsx
+    components/
 ```
 
 ---
 
-## Concurrency and persistence
-
-Room mutations execute on Node's single-threaded event loop and phase checks
-make duplicate/late actions fail safely. Votes are immutable after submission,
-capacity and duplicate-name checks happen before insertion, and countdown/timer
-callbacks verify the current room/phase before transitioning.
-
-The current deployment is intentionally **single-instance and in-memory**.
-Rooms, timers, indexes, and rate-limit buckets are cleaned up, but a process
-restart destroys active rooms. There is no Redis/database persistence or
-horizontal multi-instance coordination in this version.
-
----
-
-## Environment
+## Deployment environment
 
 | Variable | Requirement |
 | --- | --- |
 | `NODE_ENV` | Set to `production` in production. |
-| `SESSION_SECRET` | Required in production; stable and at least 32 high-entropy bytes. |
-| `PUBLIC_ORIGIN` | Required in production; exact canonical `https://host` origin. |
-| `ALLOWED_ORIGINS` | Optional comma-separated additional exact origins; never `*`. |
+| `SESSION_SECRET` | Required in production; at least 32 high-entropy bytes and persistent. |
+| `PUBLIC_ORIGIN` | Required in production; exact canonical origin. |
+| `ALLOWED_ORIGINS` | Optional comma-separated additional exact origins. |
 | `PORT`, `HOST` | Optional listener settings; defaults are `8080` and `0.0.0.0`. |
-| `TRUST_PROXY` | Configure only for the intended trusted proxy topology. Render-specific IP handling uses the proxy-controlled header rather than caller-prepended XFF. |
+| `TRUST_PROXY` | Configure only for the trusted terminating proxy topology. |
 
-Production security headers include HSTS, anti-framing, nosniff, referrer and
-permissions policies. The CSP remains same-origin for scripts; existing React
-inline styles require `style-src 'unsafe-inline'`.
+The current architecture is deliberately single-instance and in-memory. A
+server restart destroys active rooms; horizontal multi-instance persistence is
+not implemented in this version.

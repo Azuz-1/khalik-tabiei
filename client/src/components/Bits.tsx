@@ -1,97 +1,41 @@
-import type { ClientView, RoundResult, ScoreboardRow } from "../../../shared/types.js";
-
-export function Scoreboard({
-  rows,
-  selfUid,
-}: {
-  rows: ScoreboardRow[];
-  selfUid?: string;
-}) {
-  return (
-    <div className="scoreboard">
-      {rows.map((row) => (
-        <div key={row.uid} className={`score-row${row.rank === 1 ? " first" : ""}`}>
-          <span className="rank">{row.rank === 1 ? "🏆" : row.rank}</span>
-          <span className="nm">
-            {row.name}
-            {row.uid === selfUid ? " (أنت)" : ""}
-          </span>
-          <span className="pts">{row.score}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+import type { ClientView, RoundResult } from "../../../shared/types.js";
 
 export function ResultBody({ result }: { result: RoundResult }) {
-  const escapedRound = !result.groupFound && result.roundComplete;
+  if (!result.roundComplete) {
+    return (
+      <div className="stack" style={{ gap: 18 }}>
+        <div className="verdict stack">
+          <div className="big escaped">ما مسكتوه 👀</div>
+          <div className="subtitle center">نفس المتخفي مكمل…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="stack" style={{ gap: 22 }}>
       <div className="verdict stack">
         <div className={`big ${result.groupFound ? "caught" : "escaped"}`}>
-          {result.groupFound
-            ? "مسكتوه! 😈"
-            : escapedRound
-              ? "عدّى الثلاث 👀"
-              : "ما مسكتوه 👀"}
+          {result.groupFound ? "✅ مسكتوا المتخفي" : "😈 المتخفي نجا"}
         </div>
-        {result.roundComplete ? (
-          <>
-            <div className="subtitle center">المتخفي كان</div>
-            <div className="impostor-name center">{result.impostorName}</div>
-          </>
-        ) : (
-          <div className="subtitle center">نفس المتخفي مكمل معكم…</div>
-        )}
+        <div className="subtitle center">المتخفي كان</div>
+        <div className="impostor-name center">{result.impostorName}</div>
+        <div className="pill-note" style={{ marginInline: "auto" }}>
+          انتهت في التحدي {result.challengeIndex}/{result.maxChallenges}
+        </div>
       </div>
 
-      {result.prompt ? (
-        <div className="qpair">
-          <div className="qrow">
-            <div className="lbl">المطلوب كان</div>
-            <div className="val">{result.prompt}</div>
+      <div className="stack" style={{ gap: 8 }}>
+        <div className="eyebrow">الأصوات في التحدي الحاسم</div>
+        {result.voteTally.map((row) => (
+          <div key={row.uid} className="row between" style={{ fontWeight: 800 }}>
+            <span>{row.name}</span>
+            <span style={{ color: "var(--violet-2)" }}>
+              {row.votes} {row.votes === 1 ? "صوت" : "أصوات"}
+            </span>
           </div>
-        </div>
-      ) : null}
-
-      {result.voteBreakdown.length > 0 ? (
-        <div className="stack" style={{ gap: 10 }}>
-          <div className="eyebrow">مين صوّت لمين؟</div>
-          {result.voteBreakdown.map((vote) => (
-            <div key={vote.voterUid} className="card" style={{ padding: 12 }}>
-              <div className="row between" style={{ gap: 12 }}>
-                <span style={{ fontWeight: 900 }}>
-                  {vote.voterName} صوّت لـ {vote.targetName}
-                </span>
-                <span className="pill-note">
-                  {vote.voterWasImpostor
-                    ? "المتخفي"
-                    : vote.correct
-                      ? vote.points > 0
-                        ? `صح ✓ +${vote.points}`
-                        : "صح ✓"
-                      : "غلط ✕"}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {result.voteTally.length > 0 ? (
-        <div className="stack" style={{ gap: 8 }}>
-          <div className="eyebrow">مجموع الأصوات</div>
-          {result.voteTally.map((row) => (
-            <div key={row.uid} className="row between" style={{ fontWeight: 800 }}>
-              <span>{row.name}</span>
-              <span style={{ color: "var(--violet-2)" }}>
-                {row.votes} {row.votes === 1 ? "صوت" : "أصوات"}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+        ))}
+      </div>
     </div>
   );
 }
