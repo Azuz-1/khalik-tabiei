@@ -42,7 +42,7 @@ export function App() {
 
   return (
     <div className="app">
-      {showConn ? <div className="conn">فيه مشكلة بالاتصال، نحاول نرجعك… 🔄</div> : null}
+      {showConn ? <div className="conn">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
 
       {view == null ? (
         <Home />
@@ -81,7 +81,7 @@ function Spectator() {
     <div className="screen center stack">
       <div className="spacer" />
       <h2 className="title">اللعبة شغّالة الحين</h2>
-      <p className="subtitle">ما تقدر تدخل لين تخلص الجولة الحالية. خلّك متابع الشاشة 👀</p>
+      <p className="subtitle">ما تقدر تدخل لين تخلص الجولة الحالية. تابع الشاشة لين تخلص.</p>
       <button className="btn btn-ghost" onClick={() => resetToHome()}>الرئيسية</button>
       <div className="spacer" />
     </div>

@@ -37,6 +37,22 @@ function modeInfo(view: ClientView): GameModeInfo | undefined {
   return view.room.availableModes.find((mode) => mode.id === view.challenge?.mode);
 }
 
+function countdownInstruction(mode?: GameModeInfo): { main: string; detail?: string } {
+  switch (mode?.id) {
+    case "HANDS":
+      return { main: "إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!»." };
+    case "POINT":
+      return { main: "عند «أشروا!»، أشر على شخص واحد." };
+    case "NUMBER":
+      return {
+        main: "عند «ارفعوا أصابعكم!»، ارفع أصابعك بالعدد اللي اخترته.",
+        detail: "من 0 إلى 5",
+      };
+    default:
+      return { main: "عند انتهاء العد، نفّذ الحركة." };
+  }
+}
+
 function HostStage({
   children,
   className = "",
@@ -56,7 +72,7 @@ function CloseRoom() {
     <div className="footer-note">
       <button
         className="link-btn"
-        onClick={() => confirm("إغلاق الغرفة للجميع؟") && actions.closeRoom()}
+        onClick={() => confirm("تقفل الغرفة على الكل؟") && actions.closeRoom()}
       >
         إغلاق الغرفة
       </button>
@@ -70,6 +86,7 @@ function HostLobby({ view }: { view: ClientView }) {
   const modes = new Set(view.room.selectedModes);
   const totalRounds = view.room.totalRounds || 5;
   const canStart = active >= MIN_PLAYERS && modes.size > 0;
+  const missingPlayers = Math.max(0, MIN_PLAYERS - active);
 
   const toggleMode = (id: GameMode) => {
     const next = new Set(modes);
@@ -84,8 +101,15 @@ function HostLobby({ view }: { view: ClientView }) {
 
   const modeSummary =
     modes.size === 1
-      ? `كل التحديات تستخدم ${view.room.availableModes.find((mode) => modes.has(mode.id))?.fullLabel ?? "هذه الطريقة"}.`
-      : "طرق اللعب تتناوب بين التحديات بشكل متوازن 🎲";
+      ? `كل التحدّيات بتكون بطريقة ${view.room.availableModes.find((mode) => modes.has(mode.id))?.fullLabel ?? "هذه الطريقة"}.`
+      : "طرق اللعب تتغيّر بين التحدّيات حسب اختياراتك.";
+
+  const startLabel =
+    missingPlayers === 0
+      ? "ابدأ اللعبة"
+      : missingPlayers === 1
+        ? "ننتظر لاعب واحد"
+        : `ننتظر ${missingPlayers} لاعبين`;
 
   return (
     <div className="screen host host-lobby-screen">
@@ -128,7 +152,7 @@ function HostLobby({ view }: { view: ClientView }) {
               </span>
             </div>
             {view.players.length === 0 ? (
-              <p className="subtitle">امسحوا الكود من جوالكم عشان تدخلون…</p>
+              <p className="subtitle">امسحوا الرمز بالجوال عشان تدخلون…</p>
             ) : (
               <Players players={view.players} canKick onKick={(uid) => actions.kick(uid)} />
             )}
@@ -181,7 +205,7 @@ function HostLobby({ view }: { view: ClientView }) {
             disabled={!canStart}
             onClick={() => actions.startGame()}
           >
-            {active < MIN_PLAYERS ? `ننتظر ${MIN_PLAYERS - active} لاعبين` : "ابدأ اللعبة"}
+            {startLabel}
           </button>
         </div>
       </div>
@@ -204,8 +228,8 @@ function HostReady({ view }: { view: ClientView }) {
       <div className="host-mode-mark">
         {mode ? `${mode.icon} ${mode.label}` : "استعدوا"}
       </div>
-      <h1 className="title host-stage-heading">شوفوا جوالاتكم 👀</h1>
-      <p className="subtitle">كل واحد يشوف دوره ويضغط جاهز</p>
+      <h1 className="title host-stage-heading">شوفوا جوالاتكم</h1>
+      <p className="subtitle">كل واحد يشوف المطلوب منه بجواله ويضغط جاهز</p>
       <div className="card host-progress-card">
         <Progress submitted={progress.submitted} total={progress.total} verb="جاهزين" />
       </div>
@@ -215,6 +239,7 @@ function HostReady({ view }: { view: ClientView }) {
 
 function HostCountdown({ view }: { view: ClientView }) {
   const [, tick] = useState(0);
+  const instruction = countdownInstruction(modeInfo(view));
 
   useEffect(() => {
     const id = window.setInterval(() => tick((value) => value + 1), 100);
@@ -228,6 +253,29 @@ function HostCountdown({ view }: { view: ClientView }) {
     <HostStage className="host-countdown-stage">
       <div className="eyebrow">استعدوا…</div>
       <div className="host-countdown-number">{seconds}</div>
+      <div
+        className="host-countdown-instruction"
+        style={{
+          width: "min(100%, 760px)",
+          fontSize: "clamp(22px, 2.8vw, 34px)",
+          fontWeight: 800,
+          lineHeight: 1.45,
+        }}
+      >
+        <div>{instruction.main}</div>
+        {instruction.detail ? (
+          <div
+            style={{
+              marginTop: 4,
+              color: "var(--muted)",
+              fontSize: "clamp(16px, 1.7vw, 22px)",
+              fontWeight: 700,
+            }}
+          >
+            {instruction.detail}
+          </div>
+        ) : null}
+      </div>
     </HostStage>
   );
 }
@@ -236,7 +284,7 @@ function HostAction({ view }: { view: ClientView }) {
   const mode = modeInfo(view);
   return (
     <HostStage className="host-action-stage">
-      <h1 className="host-action-title">{mode?.actionLabel ?? "الحين! 👀"}</h1>
+      <h1 className="host-action-title">{mode?.actionLabel ?? "الحين!"}</h1>
     </HostStage>
   );
 }
@@ -244,7 +292,7 @@ function HostAction({ view }: { view: ClientView }) {
 function HostHold() {
   return (
     <HostStage className="host-hold-stage">
-      <h1 className="host-hold-title">ثبّتوا… 👀</h1>
+      <h1 className="host-hold-title">ثبّتوا…</h1>
       <p className="subtitle host-hold-subtitle">طالعوا بعض</p>
     </HostStage>
   );
@@ -265,7 +313,7 @@ function HostDiscussion({ view }: { view: ClientView }) {
       <div className="eyebrow">{roundLabel(view)}</div>
       <div className="eyebrow host-prompt-eyebrow">المطلوب كان</div>
       <div className="host-prompt host-prompt-discussion">{view.publicPrompt?.text ?? "…"}</div>
-      <h1 className="title host-discussion-question">مين تصرفه مو طبيعي؟ 👀</h1>
+      <h1 className="title host-discussion-question">مين تصرفه مو طبيعي؟</h1>
       <button className="btn btn-primary" onClick={() => actions.startVoting()}>
         ابدأ التصويت
       </button>
@@ -284,7 +332,7 @@ function HostVoting({ view }: { view: ClientView }) {
   return (
     <HostStage className="host-voting-stage">
       <div className="eyebrow">{roundLabel(view)}</div>
-      <h1 className="title host-voting-title">صوّتوا 👀</h1>
+      <h1 className="title host-voting-title">صوّتوا</h1>
 
       <div className="vote-progress-summary">
         <strong>
@@ -308,9 +356,9 @@ function HostResult({ view }: { view: ClientView }) {
   const result = view.result;
   const next = result?.roundComplete
     ? view.room.currentRound >= view.room.totalRounds
-      ? "شوفوا ملخص اللعبة 🎉"
+      ? "شوفوا ملخص اللعبة"
       : "الجولة الجاية"
-    : `التحدي ${Math.min((result?.challengeIndex ?? 1) + 1, 3)} 👀`;
+    : `التحدّي ${Math.min((result?.challengeIndex ?? 1) + 1, 3)}`;
 
   return (
     <HostStage className="host-result-stage">
@@ -331,15 +379,15 @@ function HostGameOver({ view }: { view: ClientView }) {
       {gameOver ? (
         <>
           <p className="subtitle host-game-over-summary">
-            مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات 👏
+            مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات
           </p>
           <div className="card stack host-game-over-card">
             <div className="row between host-summary-row">
-              <span>✅ انكشف</span>
+              <span>انكشف</span>
               <span>{gameOver.caughtRounds}</span>
             </div>
             <div className="row between host-summary-row">
-              <span>😈 نجا</span>
+              <span>نجا</span>
               <span>{gameOver.escapedRounds}</span>
             </div>
           </div>

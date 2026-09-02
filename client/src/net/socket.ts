@@ -118,7 +118,7 @@ function dispatch(message: ServerMessage): void {
       set({ view: null, notice: "الغرفة مقفلة" });
       break;
     case "KICKED":
-      set({ view: null, notice: "تم إخراجك من الغرفة" });
+      set({ view: null, notice: "المضيف طلعك من الغرفة" });
       break;
     case "PONG":
       break;
