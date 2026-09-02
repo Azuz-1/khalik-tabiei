@@ -1,4 +1,35 @@
-import type { ClientView, RoundResult } from "../../../shared/types.js";
+import type {
+  ClientView,
+  RoundResult,
+  VoteTallyEntry,
+} from "../../../shared/types.js";
+
+export function VoteBoard({
+  rows,
+  live = false,
+}: {
+  rows: VoteTallyEntry[];
+  live?: boolean;
+}) {
+  return (
+    <div className="vote-board" data-count={rows.length}>
+      {rows.map((row) => (
+        <div className="vote-card" key={row.uid}>
+          <div className="vote-card-name">{row.name}</div>
+          <div className="vote-card-count">
+            <span
+              className={`vote-count-value${live ? " live" : ""}`}
+              key={live ? `${row.uid}:${row.votes}` : row.uid}
+            >
+              {row.votes}
+            </span>
+            <span className="vote-count-label">{row.votes === 1 ? "صوت" : "أصوات"}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function ResultBody({ result }: { result: RoundResult }) {
   if (!result.roundComplete) {
@@ -13,7 +44,7 @@ export function ResultBody({ result }: { result: RoundResult }) {
   }
 
   return (
-    <div className="stack" style={{ gap: 22 }}>
+    <div className="stack result-body" style={{ gap: 22 }}>
       <div className="verdict stack">
         <div className={`big ${result.groupFound ? "caught" : "escaped"}`}>
           {result.groupFound ? "✅ مسكتوا المتخفي" : "😈 المتخفي نجا"}
@@ -25,16 +56,9 @@ export function ResultBody({ result }: { result: RoundResult }) {
         </div>
       </div>
 
-      <div className="stack" style={{ gap: 8 }}>
-        <div className="eyebrow">الأصوات في التحدي الحاسم</div>
-        {result.voteTally.map((row) => (
-          <div key={row.uid} className="row between" style={{ fontWeight: 800 }}>
-            <span>{row.name}</span>
-            <span style={{ color: "var(--violet-2)" }}>
-              {row.votes} {row.votes === 1 ? "صوت" : "أصوات"}
-            </span>
-          </div>
-        ))}
+      <div className="stack result-vote-section" style={{ gap: 12 }}>
+        <div className="eyebrow center">الأصوات في التحدي الحاسم</div>
+        <VoteBoard rows={result.voteTally} />
       </div>
     </div>
   );
