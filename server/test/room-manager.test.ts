@@ -163,6 +163,7 @@ test("impostor receives no prompt in network state; normal receives current prom
   assert.ok(!JSON.stringify(impostorView).includes(round.prompt));
   assert.ok(!JSON.stringify(impostorView).includes(round.promptId));
   assert.equal(normalView.myPrompt?.text, round.prompt);
+  assert.equal(normalView.myPrompt?.mode, round.mode);
   manager.dispose();
 });
 
@@ -232,6 +233,89 @@ test("all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> DISCUSSION"
   manager.dispose();
 });
 
+test("survived challenge advances with same impostor and next balanced challenge mode", async () => {
+  const manager = new RoomManager({
+    rng: () => 0,
+    countdownMs: 2,
+    actionMs: 2,
+    holdMs: 2,
+    promptRevealMs: 2,
+  });
+  const { host, players, room } = await toDiscussion(manager);
+  const firstRound = room.round!;
+  const firstImpostor = firstRound.impostorUid;
+  const firstMode = firstRound.mode;
+  const firstPrompt = firstRound.promptId;
+  const bagBefore = room.modeBag.length;
+
+  manager.handle(host.conn, { t: "START_VOTING" });
+  manager.handle(players[0].conn, { t: "SUBMIT_VOTE", targetUid: players[1].uid });
+  manager.handle(players[1].conn, { t: "SUBMIT_VOTE", targetUid: players[2].uid });
+  manager.handle(players[2].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  assert.equal(room.phase, "RESULT");
+  assert.equal(room.round?.roundComplete, false);
+
+  manager.handle(host.conn, { t: "NEXT_ROUND" });
+  assert.equal(room.phase, "QUESTION");
+  assert.equal(room.round?.challengeIndex, 2);
+  assert.equal(room.round?.impostorUid, firstImpostor);
+  assert.notEqual(room.round?.mode, firstMode);
+  assert.notEqual(room.round?.promptId, firstPrompt);
+  assert.equal(room.modeBag.length, bagBefore - 1);
+  manager.dispose();
+});
+
+test("host sees live aggregate vote counts while player wires remain anonymous", async () => {
+  const manager = new RoomManager({
+    rng: () => 0,
+    countdownMs: 2,
+    actionMs: 2,
+    holdMs: 2,
+    promptRevealMs: 2,
+  });
+  const { host, players, room } = await toDiscussion(manager);
+  manager.handle(host.conn, { t: "START_VOTING" });
+
+  const order = [...room.round!.participantUids];
+  let hostView = lastMessage(host.socket, "STATE")!.view;
+  assert.equal(hostView.votesProgress?.submitted, 0);
+  assert.deepEqual(hostView.liveVoteTally?.map((row) => row.uid), order);
+  assert.equal(hostView.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 0);
+  assert.ok(hostView.liveVoteTally?.every((row) => row.votes === 0));
+
+  const firstTarget = players[1].uid;
+  manager.handle(players[0].conn, { t: "SUBMIT_VOTE", targetUid: firstTarget });
+  hostView = lastMessage(host.socket, "STATE")!.view;
+  assert.equal(hostView.votesProgress?.submitted, 1);
+  assert.deepEqual(hostView.liveVoteTally?.map((row) => row.uid), order);
+  assert.equal(hostView.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 1);
+  assert.equal(hostView.liveVoteTally?.find((row) => row.uid === firstTarget)?.votes, 1);
+  assert.ok(hostView.liveVoteTally?.some((row) => row.votes === 0));
+
+  const firstHostJson = JSON.stringify(hostView);
+  assert.ok(!firstHostJson.includes("voterUid"));
+  assert.ok(!firstHostJson.includes("targetUid"));
+  assert.ok(!firstHostJson.includes("voteBreakdown"));
+
+  for (const player of players) {
+    const playerView = lastMessage(player.socket, "STATE")!.view;
+    assert.equal(playerView.liveVoteTally, undefined);
+    const json = JSON.stringify(playerView);
+    assert.ok(!json.includes("voterUid"));
+    assert.ok(!json.includes("voteBreakdown"));
+  }
+
+  manager.handle(players[1].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  hostView = lastMessage(host.socket, "STATE")!.view;
+  assert.equal(hostView.votesProgress?.submitted, 2);
+  assert.deepEqual(hostView.liveVoteTally?.map((row) => row.uid), order);
+  assert.equal(hostView.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 2);
+
+  manager.handle(players[2].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  assert.equal(room.phase, "RESULT");
+  manager.dispose();
+});
+
 test("voting survives disconnect/reconnect and completes only after every participant votes", async () => {
   const manager = new RoomManager({
     rng: () => 0,
@@ -269,11 +353,12 @@ test("voting survives disconnect/reconnect and completes only after every partic
   manager.dispose();
 });
 
-test("grace expiry during a challenge redeals safely with same round mode", async () => {
+test("grace expiry during a challenge redeals safely with same current challenge mode and bag", async () => {
   const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 4 });
   const { players, room } = start(manager, 4);
   const oldRound = room.round!;
   const oldMode = oldRound.mode;
+  const bagBefore = [...room.modeBag];
   const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
 
   manager.disconnect(target.conn);
@@ -283,11 +368,12 @@ test("grace expiry during a challenge redeals safely with same round mode", asyn
   assert.notEqual(room.round, oldRound);
   assert.equal(room.round?.challengeIndex, 1);
   assert.equal(room.round?.mode, oldMode);
+  assert.deepEqual(room.modeBag, bagBefore);
   assert.equal(room.phase, "QUESTION");
   manager.dispose();
 });
 
-test("grace expiry after a survived challenge redeals the incomplete round safely", async () => {
+test("grace expiry after a survived challenge redeals incomplete round without consuming bag", async () => {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 2,
@@ -321,6 +407,7 @@ test("grace expiry after a survived challenge redeals the incomplete round safel
 
   const oldRound = room.round!;
   const oldMode = oldRound.mode;
+  const bagBefore = [...room.modeBag];
   const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
   manager.disconnect(target.conn);
   await wait(12);
@@ -330,6 +417,7 @@ test("grace expiry after a survived challenge redeals the incomplete round safel
   assert.notEqual(room.round, oldRound);
   assert.equal(room.round?.challengeIndex, 1);
   assert.equal(room.round?.mode, oldMode);
+  assert.deepEqual(room.modeBag, bagBefore);
   assert.ok(!room.players.has(target.uid));
   assert.equal(room.players.size, 3);
   assert.ok([...room.players.values()].every((player) => player.score === 0));

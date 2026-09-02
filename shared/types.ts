@@ -19,9 +19,12 @@ export type GameMode = "HANDS" | "POINT" | "NUMBER";
 export interface GameModeInfo {
   id: GameMode;
   icon: string;
+  /** Short in-game label after onboarding has explained the interaction. */
   label: string;
+  /** Clear onboarding/lobby title for first-time players. */
+  fullLabel: string;
   description: string;
-  roundInstructions: string[];
+  onboardingInstructions: string[];
   normalInstruction: string;
   impostorInstruction: string;
   actionLabel: string;
@@ -81,6 +84,13 @@ export interface CategoryInfo {
   label: string;
 }
 
+/** Aggregate votes received by one participant. Never identifies a voter. */
+export interface VoteTallyEntry {
+  uid: string;
+  name: string;
+  votes: number;
+}
+
 export interface RoundResult {
   /** Present only once the round is over; omitted after survived challenge 1/2. */
   impostorUid?: string;
@@ -101,11 +111,7 @@ export interface RoundResult {
    * Anonymous aggregate tally for the challenge that ended the round.
    * Empty while the same impostor continues to challenge 2/3.
    */
-  voteTally: Array<{
-    uid: string;
-    name: string;
-    votes: number;
-  }>;
+  voteTally: VoteTallyEntry[];
 }
 
 export interface GameOverInfo {
@@ -170,6 +176,8 @@ export interface ClientView {
     total: number;
     requiredVotes: number;
   };
+  /** Host-only during VOTING. Stable participant order; no voter identity/mapping. */
+  liveVoteTally?: VoteTallyEntry[];
   voteTargets?: Array<{
     uid: string;
     name: string;

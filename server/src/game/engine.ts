@@ -69,6 +69,7 @@ export function setSettings(
     if (!modes.length) throw new GameError("NO_MODE_SELECTED");
     room.selectedModes = modes;
     room.modeBag = [];
+    room.lastMode = undefined;
   }
 
   touch(room, deps);
@@ -99,12 +100,16 @@ function shuffle<T>(items: T[], rng: () => number): T[] {
 }
 
 /**
- * Balanced shuffle is consumed once per ROUND. A challenge never calls this
- * function, so every challenge inside a round keeps the same mode.
+ * Challenge-level balanced shuffle. Every intentional new Challenge consumes
+ * one entry. A reconnect/redeal preserves the already-selected Challenge mode
+ * and therefore never calls this function.
  */
 export function pickBalancedMode(room: RoomState, deps: EngineDeps = defaultDeps): GameMode {
   if (!room.selectedModes.length) throw new GameError("NO_MODE_SELECTED");
-  if (room.selectedModes.length === 1) return room.selectedModes[0];
+  if (room.selectedModes.length === 1) {
+    room.lastMode = room.selectedModes[0];
+    return room.selectedModes[0];
+  }
 
   if (!room.modeBag.length) {
     room.modeBag = shuffle(room.selectedModes, deps.rng);
@@ -464,12 +469,15 @@ export function nextRound(room: RoomState, uid: string, deps: EngineDeps = defau
   if (!round) throw new GameError("INVALID_PHASE");
 
   if (round.kind === "IMITATION" && !round.roundComplete) {
+    // The impostor/participants stay fixed, but an intentional next Challenge
+    // consumes the next balanced mode and gets a fresh prompt from that mode.
+    const mode = pickBalancedMode(room, deps);
     prepareChallenge(
       room,
       round.impostorUid,
       round.challengeIndex + 1,
       round.participantUids,
-      round.mode,
+      mode,
       deps,
     );
     return;
@@ -515,9 +523,9 @@ export function redealCurrentRound(room: RoomState, deps: EngineDeps = defaultDe
     return;
   }
 
-  // A disconnect redeal keeps the ROUND's already-selected mode. It may choose
-  // a new fair impostor because the participant set changed, but it must not
-  // consume another entry from the balanced mode bag.
+  // A disconnect redeal preserves the already-selected Challenge mode. It may
+  // choose a new fair impostor because the participant set changed, but it
+  // must not consume another entry from the Challenge-level mode bag.
   const mode = round.mode;
   const impostorUid = selectImpostor(room, deps);
   room.impostorHistory.push(impostorUid);

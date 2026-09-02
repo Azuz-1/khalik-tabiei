@@ -10,6 +10,7 @@ import {
 } from "../src/game/state.js";
 import * as engine from "../src/game/engine.js";
 import { buildView } from "../src/game/view.js";
+import { IMITATION_PROMPTS } from "../src/game/imitationPrompts.data.js";
 
 const NOW = () => 1_000;
 const deps = { rng: () => 0, now: NOW };
@@ -75,6 +76,14 @@ function voteCatch(room: RoomState): void {
   engine.computeResult(room, deps);
 }
 
+function assertPromptMatchesMode(room: RoomState): void {
+  const round = room.round!;
+  const prompt = IMITATION_PROMPTS.find((candidate) => candidate.id === round.promptId);
+  assert.ok(prompt, `prompt ${round.promptId} exists`);
+  assert.equal(prompt.mode, round.mode);
+  assert.equal(prompt.text, round.prompt);
+}
+
 test("host can select one, two, or all three modes", () => {
   for (const modes of [
     ["POINT"],
@@ -138,54 +147,86 @@ test("majority threshold is floor(n / 2) + 1 for 3-10 players", () => {
   }
 });
 
-test("only selected mode is used for every round when one mode is selected", () => {
+test("one selected mode repeats normally across challenges and rounds", () => {
   const room = roomWith(3);
   room.totalRounds = 3;
   engine.setSettings(room, "host", { selectedModes: ["POINT"] }, deps);
   engine.startGame(room, "host", deps);
+  const impostorUid = room.round!.impostorUid;
 
-  for (let roundIndex = 1; roundIndex <= 3; roundIndex += 1) {
+  for (let challenge = 1; challenge <= 3; challenge += 1) {
     assert.equal(room.round?.mode, "POINT");
+    assert.equal(room.round?.impostorUid, impostorUid);
+    assertPromptMatchesMode(room);
     readyToVote(room);
-    voteCatch(room);
-    if (roundIndex < 3) engine.nextRound(room, "host", deps);
+    voteNoMajority(room);
+    if (challenge < 3) engine.nextRound(room, "host", deps);
   }
+
+  assert.equal(room.round?.roundComplete, true);
+  engine.nextRound(room, "host", deps);
+  assert.equal(room.currentRound, 2);
+  assert.equal(room.round?.mode, "POINT");
 });
 
-test("mode stays fixed across challenges while prompt changes", () => {
+test("same impostor stays through a round while mode can change each challenge", () => {
   const room = roomWith(3);
   engine.startGame(room, "host", deps);
 
   const impostorUid = room.round!.impostorUid;
-  const mode = room.round!.mode;
-  const firstPromptId = room.round!.promptId;
+  const modes: GameMode[] = [];
+  const prompts: string[] = [];
 
-  readyToVote(room);
-  voteNoMajority(room);
-  assert.equal(room.round!.roundComplete, false);
-  engine.nextRound(room, "host", deps);
+  for (let challenge = 1; challenge <= 3; challenge += 1) {
+    assert.equal(room.round!.challengeIndex, challenge);
+    assert.equal(room.round!.impostorUid, impostorUid);
+    modes.push(room.round!.mode);
+    prompts.push(room.round!.promptId);
+    assertPromptMatchesMode(room);
 
-  assert.equal(room.round!.challengeIndex, 2);
-  assert.equal(room.round!.impostorUid, impostorUid);
-  assert.equal(room.round!.mode, mode);
-  assert.notEqual(room.round!.promptId, firstPromptId);
+    readyToVote(room);
+    voteNoMajority(room);
+    if (challenge < 3) engine.nextRound(room, "host", deps);
+  }
+
+  assert.deepEqual(new Set(modes), new Set(["HANDS", "POINT", "NUMBER"]));
+  assert.equal(new Set(prompts).size, 3);
 });
 
-test("balanced shuffle is consumed between rounds, not between challenges", () => {
+test("balanced mode bag is consumed per challenge and refills only after all selected modes", () => {
   const room = roomWith(3);
   room.totalRounds = 3;
   engine.startGame(room, "host", deps);
-  const roundModes: GameMode[] = [];
+  const sequence: GameMode[] = [];
 
-  for (let roundIndex = 1; roundIndex <= 3; roundIndex += 1) {
-    roundModes.push(room.round!.mode);
-    readyToVote(room);
-    voteCatch(room);
-    if (roundIndex < 3) engine.nextRound(room, "host", deps);
+  for (let roundIndex = 1; roundIndex <= 2; roundIndex += 1) {
+    for (let challenge = 1; challenge <= 3; challenge += 1) {
+      sequence.push(room.round!.mode);
+      readyToVote(room);
+      voteNoMajority(room);
+      if (challenge < 3) engine.nextRound(room, "host", deps);
+    }
+    if (roundIndex < 2) engine.nextRound(room, "host", deps);
   }
 
-  assert.equal(new Set(roundModes).size, 3);
-  assert.deepEqual(new Set(roundModes), new Set(["HANDS", "POINT", "NUMBER"]));
+  assert.deepEqual(new Set(sequence.slice(0, 3)), new Set(["HANDS", "POINT", "NUMBER"]));
+  assert.deepEqual(new Set(sequence.slice(3, 6)), new Set(["HANDS", "POINT", "NUMBER"]));
+  for (let index = 1; index < sequence.length; index += 1) {
+    assert.notEqual(sequence[index], sequence[index - 1]);
+  }
+});
+
+test("balanced bag avoids immediate repeats when alternatives exist", () => {
+  const room = roomWith(3);
+  engine.setSettings(room, "host", { selectedModes: ["HANDS", "POINT"] }, deps);
+  const sequence = Array.from({ length: 8 }, () => engine.pickBalancedMode(room, deps));
+
+  for (let index = 1; index < sequence.length; index += 1) {
+    assert.notEqual(sequence[index], sequence[index - 1]);
+  }
+  for (let index = 0; index < sequence.length; index += 2) {
+    assert.deepEqual(new Set(sequence.slice(index, index + 2)), new Set(["HANDS", "POINT"]));
+  }
 });
 
 test("normal receives private prompt while impostor wire contains neither prompt nor promptId pre-reveal", () => {
@@ -197,6 +238,7 @@ test("normal receives private prompt while impostor wire contains neither prompt
   const impostorView = buildView(room, round.impostorUid, "https://x/join/ABCDE");
 
   assert.equal(normalView.myPrompt?.text, round.prompt);
+  assert.equal(normalView.myPrompt?.mode, round.mode);
   assert.equal(normalView.isImpostor, false);
   assert.equal(impostorView.isImpostor, true);
   assert.equal(impostorView.myPrompt, undefined);
@@ -322,6 +364,7 @@ test("prompt ids do not repeat within a game until that mode pool is exhausted",
   const seen: string[] = [];
 
   while (seen.length < 11) {
+    assertPromptMatchesMode(room);
     seen.push(room.round!.promptId);
     readyToVote(room);
     voteNoMajority(room);

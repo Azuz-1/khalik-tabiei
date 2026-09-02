@@ -7,13 +7,15 @@ playing together in the same room. The current product has three physical modes:
 - **👉 POINT — أشر**
 - **🔢 NUMBER — كم؟**
 
-A full **Game** contains several **Rounds**. Each Round has one fixed impostor,
-one fixed mode, and up to three **Challenges**. Every Challenge has one private
-prompt, a synchronized physical response, a public prompt reveal, discussion,
-and secret voting.
+A full **Game** contains several **Rounds**. Each Round has one fixed impostor and
+up to three **Challenges**. Every Challenge gets one mode, one private prompt, a
+synchronized physical response, a public prompt reveal, discussion, and secret
+voting. The impostor stays the same inside the Round, while the mode may rotate
+between Challenges.
 
-The impostor knows they are the impostor and knows the mode/action, but does not
-receive the prompt before it becomes public after the physical response.
+The impostor knows they are the impostor and knows the current mode/action, but
+does not receive the prompt before it becomes public after the physical
+response.
 
 There are **no player points, rankings, or individual winners** in the current
 version. At Game Over the shared screen summarizes how many rounds the group
@@ -37,9 +39,9 @@ laptop, scan the QR from player phones, type a name, and play.
 ## Core terms
 
 - **GAME** — the complete session containing the configured number of Rounds.
-- **ROUND** — one fixed impostor + one fixed mode + up to 3 Challenges.
-- **CHALLENGE** — one prompt + ready + countdown + physical action + hold +
-  prompt reveal + discussion + secret vote.
+- **ROUND** — one fixed impostor + up to 3 Challenges.
+- **CHALLENGE** — one mode + one prompt + ready + countdown + physical action +
+  hold + prompt reveal + discussion + secret vote.
 
 Catching an impostor ends the **Round**, not the **Game**. If more configured
 Rounds remain, the host advances to a new Round with a new fair impostor.
@@ -54,11 +56,12 @@ The TV/laptop/tablet:
 
 - creates the room and shows the QR/player list;
 - lets the host choose any non-empty subset of HANDS / POINT / NUMBER;
-- chooses the round count;
+- explains each physical mode clearly in the Lobby before play;
+- chooses the Round count;
 - acts as the Game Director during play;
-- explains the Round's mode;
-- shows the 5-second countdown, action moment, hold, prompt reveal, discussion,
-  vote progress, Round Result, and Game Over group summary.
+- shows the current Challenge's short mode label, 5-second countdown, action
+  moment, hold, prompt reveal, discussion, live anonymous voting board, Round
+  Result, and Game Over group summary.
 
 The host screen is **not a player** and receives no private prompt before the
 prompt-reveal phase.
@@ -67,14 +70,14 @@ prompt-reveal phase.
 
 During the private phase:
 
-- a **normal player** receives the current mode, private prompt, and action
-  instruction;
-- the **impostor** receives the mode/action and `isImpostor: true`, but receives
-  neither prompt text nor `promptId`;
+- a **normal player** receives the current Challenge mode, private prompt, and
+  action instruction;
+- the **impostor** receives the current mode/action and `isImpostor: true`, but
+  receives neither prompt text nor `promptId`;
 - every player presses **جاهز**.
 
 After Ready, the phone tells the player to look at the shared screen. There is
-no digital HANDS/POINT/NUMBER response.
+no digital HANDS/POINT/NUMBER response and no countdown on player phones.
 
 Reconnect with the same anonymous session restores the same seat. Before the
 action, normal reconnect restores the current private prompt while impostor
@@ -86,22 +89,26 @@ reconnect still receives no prompt.
 
 1. Host creates a room and players join from phones.
 2. Host selects one, two, or all three active modes and a Round count.
-3. Server starts Round 1, chooses a fair impostor, and consumes one mode from a
-   balanced shuffled mode bag.
-4. That mode is **fixed for the entire Round**.
-5. Challenge 1 begins with a new prompt from that mode's bank.
-6. Normal players see the prompt privately. The impostor sees only their role,
-   mode, and action instruction.
-7. Everyone presses Ready.
-8. The shared screen runs:
+3. Server starts Round 1 and chooses a fair impostor.
+4. Challenge 1 consumes the next mode from the balanced Challenge-level mode
+   bag and gets a new prompt from that mode's bank.
+5. Normal players see the prompt privately. The impostor sees only their role,
+   current mode, and action instruction.
+6. Everyone presses Ready.
+7. The shared screen runs:
    - **5-second COUNTDOWN** (`5 → 4 → 3 → 2 → 1`)
    - **ACTION** (`ارفعوا!`, `أشروا!`, or `ورّونا!`)
    - **HOLD** for about 2 seconds (`ثبّتوا… 👀`)
    - **PROMPT_REVEAL** (`المطلوب كان…` + the actual prompt)
-9. From PROMPT_REVEAL onward, that Challenge's prompt is public. The next
+8. From PROMPT_REVEAL onward, that Challenge's prompt is public. The next
    Challenge's prompt has not been selected/sent yet.
-10. Discussion has no timer. The host decides when to open voting.
-11. Every player votes secretly for another participant.
+9. Discussion has no timer. The shared TV keeps the public prompt visible while
+   the group discusses. The host decides when to open voting.
+10. Every player votes secretly for another participant from their phone.
+11. During VOTING, the shared host screen deliberately shows a **live aggregate
+    tally**: every participant remains in a fixed card position while only their
+    votes-received counter changes. Late voters can see this TV state; that is an
+    intentional current playtest decision.
 12. The impostor is caught only if they receive a true majority:
 
 ```text
@@ -111,11 +118,13 @@ requiredVotes = floor(participantCount / 2) + 1
 13. If the impostor gets the majority, the Round ends immediately.
 14. If the impostor gets less than the majority — even if another player gets a
     majority — the impostor survives that Challenge.
-15. After Challenge 1/2 survival, the same impostor and same mode continue with
-    a new prompt.
+15. After Challenge 1/2 survival, the **same impostor and participants** continue,
+    but the next Challenge consumes the next balanced mode and gets a fresh
+    prompt from that mode.
 16. If the impostor survives Challenge 3, the Round ends as an escape.
-17. If more Rounds remain, a new Round starts with a new/fair impostor and the
-    next mode from the balanced Round-level mode bag.
+17. If more Rounds remain, a new Round starts with a new/fair impostor. Mode
+    rotation continues at Challenge level rather than being tied to Round
+    boundaries.
 18. Only after the configured Round count is complete does the Game enter
     `GAME_OVER`.
 
@@ -139,17 +148,37 @@ player also does not catch the impostor.
 
 ---
 
-## Round results and voting privacy
+## Voting board and privacy
+
+### Live Host/TV tally during VOTING
+
+The server keeps the authoritative internal vote map for result computation, but
+the Host receives only this kind of aggregate projection:
+
+```ts
+liveVoteTally: Array<{
+  uid: string;
+  name: string;
+  votes: number;
+}>;
+```
+
+The array stays in stable participant order so cards do not jump when counts
+change. It includes zero-vote players and updates after every submitted vote.
+Player phones do **not** receive `liveVoteTally`.
+
+The wire does not serialize `voterUid`, `voterName`, `targetUid`, `voteBreakdown`,
+`voterTarget`, or any voter → target map.
 
 ### Intermediate result (Challenge 1/2 survival)
 
-The result only communicates that the group did not catch the impostor and that
-the same impostor continues.
+Once all votes are submitted and the group did not catch the impostor, the
+intermediate Result communicates only that the same impostor continues.
 
 It does **not** expose:
 
 - impostor identity;
-- aggregate tally;
+- result tally;
 - voter identities;
 - voter → target mappings;
 - points, scoreboard, or ranking.
@@ -166,9 +195,10 @@ When the Round actually ends, the result shows:
 - challenge number where the Round ended;
 - an **anonymous aggregate tally** for the final Challenge only.
 
-The tally includes every participant, including zero-vote players. It contains
-only player name + votes received. The server never serializes who voted for
-whom in the current client result model.
+The Round-end tally reuses the same participant-card board presentation and
+stable participant ordering. It includes every participant, including zero-vote
+players. It contains only player identity + votes received, never voter
+identity/mapping.
 
 ---
 
@@ -188,24 +218,35 @@ There is no points table, ranking, or individual winner.
 
 ---
 
-## Mode behavior
+## Mode onboarding and behavior
 
-### 🙋 HANDS — ارفع
+The Home screen and Host Lobby use full labels/descriptions for first-time
+players. During active play the UI can use the shorter labels because the group
+has already learned the interactions.
+
+### 🙋 HANDS — ارفع يدك
 
 - If the prompt applies to you, raise your hand.
 - Otherwise keep your hand down.
 - Hold the position until the prompt reveal.
 
-### 👉 POINT — أشر
+Short in-game label: **🙋 ارفع**.
 
-- At the action moment, point at one person you think matches the prompt.
+### 👉 POINT — أشر على شخص
+
+- Read the prompt and choose the person you think matches it.
+- At `أشروا!`, everyone points at the same time.
 - Hold the point until the prompt reveal.
 
-### 🔢 NUMBER — كم؟
+Short in-game label: **👉 أشر**.
+
+### 🔢 NUMBER — ورّنا الرقم
 
 - Show a number from 0 to 5 using your fingers.
 - `0` means a closed fist.
-- Hold the answer until the prompt reveal.
+- At `ورّونا!`, everyone reveals the number at the same time.
+
+Short in-game label: **🔢 كم؟**.
 
 ---
 
@@ -215,13 +256,22 @@ There is no points table, ranking, or individual winner.
 
 The host may select any non-empty subset of HANDS / POINT / NUMBER.
 
-The server uses a balanced shuffled mode bag **between Rounds**. It consumes
-each selected mode before refilling when possible and avoids unnecessary repeats
-across bag boundaries.
+The server uses a balanced shuffled mode bag **per Challenge**:
 
-A mode is selected once at Round start and never changes inside that Round.
+- only selected modes enter the bag;
+- every selected mode is consumed once before refill where applicable;
+- when alternatives exist, the first mode after refill is adjusted to avoid an
+  immediate repeat of the previous Challenge mode;
+- with one selected mode, that mode naturally repeats every Challenge;
+- reconnect/disconnect redeals preserve the already-selected current Challenge
+  mode and do not consume another bag entry.
+
+The same impostor remains fixed for all Challenges in a Round regardless of
+mode changes.
 
 ### Prompt history
+
+Every Challenge receives a prompt from its current mode's bank.
 
 `usedPromptIds` is Game-scoped. A prompt is not repeated while an unused prompt
 exists for the same mode.
@@ -254,10 +304,12 @@ component hiding.
   receive their own current private prompt for reconnect recovery.
 - **Public reveal boundary.** The current Challenge prompt becomes public only
   when the authoritative server enters `PROMPT_REVEAL` after HOLD.
-- **No future prompt leak.** A later Challenge prompt is not selected/sent until
-  the host advances after the intermediate result.
-- **Vote privacy.** Current result payloads contain only an aggregate final
-  tally; voter identities and voter→target mappings are not serialized.
+- **No future prompt leak.** A later Challenge's mode/prompt is prepared only
+  when the host intentionally advances after the intermediate result.
+- **Vote privacy.** The server keeps the internal voter → target Map only for
+  authoritative computation. Host VOTING projection is aggregate-only; result
+  projection is aggregate-only; player phones never receive live aggregate
+  counts or voter identities.
 - Existing connection caps, rate limiting, backpressure protection, session
   validation, and disconnect grace behavior remain in place.
 
@@ -269,8 +321,8 @@ presence but does not immediately remove the seat.
 If a disconnected participant reconnects inside the grace period, the current
 seat/private view is restored. If grace expires during an incomplete Round, the
 current Round is safely redealt if enough players remain. A redeal keeps the
-Round's already-selected mode so it does not consume an extra balanced-mode
-slot.
+already-selected **current Challenge mode** so it does not consume an extra
+Challenge-mode bag slot.
 
 ---
 
@@ -343,11 +395,13 @@ npm run test:integration
 ```
 
 GitHub CI starts the real server automatically and runs the integration test.
-The E2E covers room creation/join, selected modes, Round-fixed modes, balanced
-Round rotation, prompt secrecy, reconnect secrecy, 5-second countdown, ACTION,
-HOLD, public prompt reveal, majority voting, Challenge continuation, Round/Game
-boundaries, anonymous aggregate tally, no-points payloads, and Game Over group
-summary.
+The E2E covers room creation/join, selected modes, same-impostor Round behavior,
+Challenge-level balanced mode rotation, mode-matched prompts, prompt secrecy,
+reconnect secrecy, 5-second countdown, ACTION, HOLD, public prompt reveal,
+untimed discussion, live Host aggregate vote updates after individual votes,
+zero-vote rows, stable tally order, absence of voter identities/mappings on the
+wire, majority voting, Challenge continuation, Round/Game boundaries,
+Round-end aggregate tally, no-points payloads, and Game Over group summary.
 
 There is currently **no lint script** in the repository package scripts.
 
@@ -386,7 +440,7 @@ client/
     screens/Home.tsx
     screens/Host.tsx
     screens/Player.tsx
-    components/
+    components/Bits.tsx         Shared Result + VoteBoard presentation
 ```
 
 ---

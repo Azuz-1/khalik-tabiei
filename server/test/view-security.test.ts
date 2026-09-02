@@ -45,6 +45,15 @@ function assertNoPrompt(
   assert.ok(!serialized.includes(promptId));
 }
 
+function assertNoVoterMapping(view: ReturnType<typeof buildView>): void {
+  const json = JSON.stringify(view);
+  assert.ok(!json.includes("voteBreakdown"));
+  assert.ok(!json.includes("voterUid"));
+  assert.ok(!json.includes("voterName"));
+  assert.ok(!json.includes("targetUid"));
+  assert.ok(!json.includes("voterTarget"));
+}
+
 function advanceToVoting(room: RoomState): void {
   const round = room.round!;
   for (const uid of round.participantUids) engine.markReady(room, uid, deps);
@@ -89,6 +98,7 @@ test("normal keeps private prompt during secret phases for reconnect recovery", 
 
   let view = buildView(room, normalUid, "https://good.example/join/ABCDE");
   assert.equal(view.myPrompt?.text, round.prompt);
+  assert.equal(view.myPrompt?.mode, round.mode);
 
   for (const uid of round.participantUids) engine.markReady(room, uid, deps);
   engine.startCountdown(room, 6_000, deps);
@@ -147,30 +157,63 @@ test("spectator/non-participant never receives a private prompt", () => {
   assertNoPrompt(view, room.round!.prompt, room.round!.promptId);
 });
 
-test("votes remain private and no voter-to-target mapping is ever serialized", () => {
+test("host live tally updates in stable participant order without voter identity", () => {
+  const room = startedRoom();
+  const round = room.round!;
+  advanceToVoting(room);
+  const [a, b, c] = round.participantUids;
+
+  let host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
+  assert.equal(host.votesProgress?.submitted, 0);
+  assert.deepEqual(host.liveVoteTally?.map((row) => row.uid), round.participantUids);
+  assert.equal(host.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 0);
+  assert.ok(host.liveVoteTally?.every((row) => row.votes === 0));
+  assertNoVoterMapping(host);
+
+  engine.submitVote(room, a, b, deps);
+  host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
+  assert.equal(host.votesProgress?.submitted, 1);
+  assert.deepEqual(host.liveVoteTally?.map((row) => row.uid), round.participantUids);
+  assert.equal(host.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 1);
+  assert.equal(host.liveVoteTally?.find((row) => row.uid === b)?.votes, 1);
+  assert.ok(host.liveVoteTally?.some((row) => row.votes === 0));
+  assertNoVoterMapping(host);
+
+  const playerAfterFirstVote = buildView(room, a, "https://good.example/join/ABCDE");
+  assert.equal(playerAfterFirstVote.myVoteSubmitted, true);
+  assert.equal(playerAfterFirstVote.liveVoteTally, undefined);
+  assertNoVoterMapping(playerAfterFirstVote);
+
+  engine.submitVote(room, b, a, deps);
+  host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
+  assert.equal(host.votesProgress?.submitted, 2);
+  assert.deepEqual(host.liveVoteTally?.map((row) => row.uid), round.participantUids);
+  assert.equal(host.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 2);
+  assertNoVoterMapping(host);
+
+  const waitingPlayer = buildView(room, c, "https://good.example/join/ABCDE");
+  assert.equal(waitingPlayer.liveVoteTally, undefined);
+  assert.ok(waitingPlayer.voteTargets?.length === 2);
+});
+
+test("votes remain private through RESULT and no voter-to-target mapping is serialized", () => {
   const room = startedRoom();
   const round = room.round!;
   advanceToVoting(room);
 
   const [a, b, c] = round.participantUids;
   engine.submitVote(room, a, b, deps);
-
-  const hostMid = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
-  assert.equal(hostMid.votesProgress?.submitted, 1);
-  assert.equal(hostMid.result, undefined);
-  assert.ok(!JSON.stringify(hostMid).includes(`\"targetUid\":\"${b}\"`));
-
   engine.submitVote(room, b, a, deps);
   engine.submitVote(room, c, a, deps);
   engine.computeResult(room, deps);
 
   const resultView = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
-  const json = JSON.stringify(resultView);
   assert.equal(resultView.result?.roundComplete, true);
   assert.equal(resultView.result?.voteTally.length, 3);
-  assert.ok(!json.includes("voteBreakdown"));
-  assert.ok(!json.includes("voterUid"));
-  assert.ok(!json.includes("targetUid"));
+  assert.deepEqual(resultView.result?.voteTally.map((row) => row.uid), round.participantUids);
+  assert.equal(resultView.liveVoteTally, undefined);
+  assertNoVoterMapping(resultView);
+  const json = JSON.stringify(resultView);
   assert.ok(!json.includes("roundScores"));
 });
 
@@ -197,9 +240,10 @@ test("survived challenge 1/2 result hides identity and tally but keeps already-p
     assert.equal(view.result?.impostorUid, undefined);
     assert.equal(view.result?.impostorName, undefined);
     assert.deepEqual(view.result?.voteTally, []);
+    assert.equal(view.liveVoteTally, undefined);
     assert.equal(view.publicPrompt?.text, prompt);
     assert.ok(!json.includes(promptId));
-    assert.ok(!json.includes("voteBreakdown"));
+    assertNoVoterMapping(view);
     assert.ok(!json.includes("scoreboard"));
   }
 });
@@ -222,8 +266,10 @@ test("round-end result exposes anonymous aggregate tally including zero-vote pla
   assert.equal(view.result?.roundComplete, true);
   assert.equal(view.result?.impostorUid, impostor);
   assert.equal(tally.length, 4);
+  assert.deepEqual(tally.map((row) => row.uid), round.participantUids);
   assert.equal(tally.reduce((sum, row) => sum + row.votes, 0), 4);
   assert.ok(tally.some((row) => row.votes === 0));
+  assertNoVoterMapping(view);
 });
 
 test("current client views expose no score, scoreboard, ranking, points, or winner payload", () => {

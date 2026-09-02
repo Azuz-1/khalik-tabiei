@@ -37,7 +37,7 @@ export interface RoundState {
   participantUids: string[];
 
   challengeIndex: number;
-  /** Chosen once per IMITATION round and reused by every challenge in that round. */
+  /** Current Challenge's selected mode; survived Challenges may rotate modes. */
   mode: GameMode;
   promptId: string;
   prompt: string;
@@ -76,6 +76,7 @@ export interface RoomState {
 
   categories: CategoryId[];
   selectedModes: GameMode[];
+  /** Balanced Challenge-level mode bag. Redeals never consume it. */
   modeBag: GameMode[];
   lastMode?: GameMode;
   players: Map<string, InternalPlayer>;
