@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { clearNotice, resetToHome, useGame } from "./net/socket.js";
 import { errorText } from "./i18n/errors.js";
+import { HostAudioLayer } from "./audio/HostAudioLayer.js";
 import { Home } from "./screens/Home.js";
 import { Host } from "./screens/Host.js";
 import { Player } from "./screens/Player.js";
@@ -47,7 +48,9 @@ export function App() {
       {view == null ? (
         <Home />
       ) : view.self.role === "host" ? (
-        <Host view={view} />
+        <HostAudioLayer view={view}>
+          <Host view={view} />
+        </HostAudioLayer>
       ) : view.self.role === "player" ? (
         <Player view={view} />
       ) : (
