@@ -3,13 +3,14 @@ import type {
   PublicPlayer,
   RevealedAnswer,
   Role,
+  VoteTallyEntry,
 } from "../../../shared/types.js";
 import {
   CATEGORIES,
   GAME_MODES,
   MAX_CHALLENGES_PER_ROUND,
 } from "../../../shared/constants.js";
-import { roundParticipants, type RoomState } from "./state.js";
+import { roundParticipants, type InternalPlayer, type RoomState } from "./state.js";
 import { questionFor, requiredVotesFor } from "./engine.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
@@ -42,6 +43,24 @@ function revealAnswers(room: RoomState): RevealedAnswer[] {
     }
   }
   return answers;
+}
+
+function aggregateVoteTally(
+  participants: InternalPlayer[],
+  votes: Map<string, string>,
+): VoteTallyEntry[] {
+  const tally = new Map(participants.map((player) => [player.uid, 0]));
+  for (const targetUid of votes.values()) {
+    tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
+  }
+
+  // Participant order is intentionally stable. Live TV cards must never jump
+  // around as vote counts change.
+  return participants.map((player) => ({
+    uid: player.uid,
+    name: player.name,
+    votes: tally.get(player.uid) ?? 0,
+  }));
 }
 
 export function buildView(room: RoomState, uid: string, joinUrl: string): ClientView {
@@ -144,6 +163,12 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       requiredVotes: requiredVotesFor(participants.length),
     };
 
+    if (role === "host") {
+      // Deliberately live for the shared TV. This is aggregate-only: the
+      // voter->target Map stays server-internal and is never projected.
+      view.liveVoteTally = aggregateVoteTally(participants, round.votes);
+    }
+
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
       view.voteTargets = participants
         .filter((player) => player.uid !== uid)
@@ -155,14 +180,8 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   if (room.phase === "RESULT" && round && round.resultComputed) {
     const participants = roundParticipants(room);
     const impostor = room.players.get(round.impostorUid);
-    const tally = new Map<string, number>();
-
-    for (const player of participants) tally.set(player.uid, 0);
-    for (const targetUid of round.votes.values()) {
-      tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
-    }
-
     const revealIdentity = round.roundComplete;
+
     view.result = {
       ...(revealIdentity
         ? {
@@ -183,15 +202,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
             category: round.category,
           }
         : {}),
-      voteTally: revealIdentity
-        ? participants
-            .map((player) => ({
-              uid: player.uid,
-              name: player.name,
-              votes: tally.get(player.uid) ?? 0,
-            }))
-            .sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name, "ar"))
-        : [],
+      voteTally: revealIdentity ? aggregateVoteTally(participants, round.votes) : [],
     };
   }
 
