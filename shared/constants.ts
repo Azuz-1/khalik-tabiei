@@ -25,10 +25,11 @@ export const GAME_MODES: GameModeInfo[] = [
     id: "HANDS",
     icon: "🙋",
     label: "ارفع",
-    description: "ارفع يدك إذا ينطبق عليك المطلوب.",
-    roundInstructions: [
-      "إذا ينطبق عليك المطلوب، ارفع يدك.",
-      "إذا ما ينطبق عليك، خل يدك تحت.",
+    fullLabel: "ارفع يدك",
+    description: "ارفعها إذا المطلوب ينطبق عليك.",
+    onboardingInstructions: [
+      "إذا ينطبق عليك المطلوب: ارفع يدك.",
+      "إذا ما ينطبق عليك: خل يدك تحت.",
     ],
     normalInstruction: "وقت «ارفعوا!» نفّذ المطلوب وثبّت حركتك.",
     impostorInstruction: "وقت «ارفعوا!» قرر ترفع يدك أو تخليها تحت وخلك طبيعي.",
@@ -38,9 +39,11 @@ export const GAME_MODES: GameModeInfo[] = [
     id: "POINT",
     icon: "👉",
     label: "أشر",
-    description: "أشر على شخص واحد حسب المطلوب.",
-    roundInstructions: [
-      "وقت «أشروا!» أشر على شخص واحد تشوف أن المطلوب ينطبق عليه.",
+    fullLabel: "أشر على شخص",
+    description: "اختر شخص وأشر عليه وقت الإشارة.",
+    onboardingInstructions: [
+      "شوف المطلوب واختر الشخص اللي تشوف إنه ينطبق عليه.",
+      "وقت «أشروا!»: الكل يأشر بنفس اللحظة.",
     ],
     normalInstruction: "وقت «أشروا!» أشر على شخص واحد حسب المطلوب وثبّت إشارتك.",
     impostorInstruction: "وقت «أشروا!» أشر على شخص واحد وخلك طبيعي.",
@@ -50,10 +53,12 @@ export const GAME_MODES: GameModeInfo[] = [
     id: "NUMBER",
     icon: "🔢",
     label: "كم؟",
-    description: "جاوب من 0 إلى 5 بأصابعك بنفس اللحظة.",
-    roundInstructions: [
+    fullLabel: "ورّنا الرقم",
+    description: "جاوب من 0 إلى 5 بأصابعك.",
+    onboardingInstructions: [
       "جاوب من 0 إلى 5 بأصابعك.",
-      "صفر = قبضة مقفلة.",
+      "قبضة مقفلة = صفر.",
+      "وقت «ورّونا!»: الكل يظهر الرقم بنفس اللحظة.",
     ],
     normalInstruction: "وقت «ورّونا!» ورّنا جوابك من 0 إلى 5 بأصابعك.",
     impostorInstruction: "وقت «ورّونا!» ارفع من 0 إلى 5 أصابع وخلك طبيعي.",
