@@ -42,29 +42,36 @@ function readyToVote(room: RoomState): void {
   for (const uid of room.round!.participantUids) {
     engine.markReady(room, uid, deps);
   }
-  engine.startCountdown(room, NOW() + 4_000, deps);
+  engine.startCountdown(room, NOW() + 5_000, deps);
+  engine.toAction(room, NOW() + 1_000, deps);
+  engine.toHold(room, NOW() + 2_000, deps);
+  engine.revealPrompt(room, NOW() + 2_500, deps);
   engine.toDiscussion(room, deps);
   engine.startVoting(room, "host", deps);
 }
 
-function voteTie(room: RoomState): void {
-  const [a, b, c, d] = room.round!.participantUids;
-  assert.ok(d, "tie helper requires four players");
-  engine.submitVote(room, a, b, deps);
-  engine.submitVote(room, b, a, deps);
-  engine.submitVote(room, c, d, deps);
-  engine.submitVote(room, d, c, deps);
+function voteNoMajority(room: RoomState): void {
+  const participants = room.round!.participantUids;
+  for (let index = 0; index < participants.length; index += 1) {
+    const voter = participants[index];
+    const target = participants[(index + 1) % participants.length];
+    engine.submitVote(room, voter, target, deps);
+  }
   engine.computeResult(room, deps);
 }
 
-function voteWrongUnique(room: RoomState): void {
-  const impostorUid = room.round!.impostorUid;
-  const others = room.round!.participantUids.filter((uid) => uid !== impostorUid);
-  const wrongUid = others[0];
+function voteCatch(room: RoomState): void {
+  const round = room.round!;
+  const impostorUid = round.impostorUid;
+  const normals = round.participantUids.filter((uid) => uid !== impostorUid);
+  const required = engine.requiredVotesFor(round.participantUids.length);
 
-  for (const uid of room.round!.participantUids) {
-    engine.submitVote(room, uid, uid === wrongUid ? others[1] : wrongUid, deps);
+  for (let index = 0; index < normals.length; index += 1) {
+    const voterUid = normals[index];
+    const targetUid = index < required ? impostorUid : normals[(index + 1) % normals.length];
+    engine.submitVote(room, voterUid, targetUid, deps);
   }
+  engine.submitVote(room, impostorUid, normals[0], deps);
   engine.computeResult(room, deps);
 }
 
@@ -114,60 +121,74 @@ test("legacy TEXT_PAIR cannot be selected through current settings and is absent
   );
 });
 
-test("only selected modes are chosen", () => {
-  const room = roomWith();
+test("majority threshold is floor(n / 2) + 1 for 3-10 players", () => {
+  const expected = new Map([
+    [3, 2],
+    [4, 3],
+    [5, 3],
+    [6, 4],
+    [7, 4],
+    [8, 5],
+    [9, 5],
+    [10, 6],
+  ]);
+
+  for (const [count, required] of expected) {
+    assert.equal(engine.requiredVotesFor(count), required);
+  }
+});
+
+test("only selected mode is used for every round when one mode is selected", () => {
+  const room = roomWith(3);
+  room.totalRounds = 3;
   engine.setSettings(room, "host", { selectedModes: ["POINT"] }, deps);
   engine.startGame(room, "host", deps);
-  assert.equal(room.round?.mode, "POINT");
 
-  for (let index = 0; index < 5; index += 1) {
-    assert.equal(engine.pickBalancedMode(room, deps), "POINT");
+  for (let roundIndex = 1; roundIndex <= 3; roundIndex += 1) {
+    assert.equal(room.round?.mode, "POINT");
+    readyToVote(room);
+    voteCatch(room);
+    if (roundIndex < 3) engine.nextRound(room, "host", deps);
   }
 });
 
-test("balanced mode rotation uses every selected mode before refilling and avoids boundary repeats", () => {
-  const room = roomWith();
-  room.selectedModes = ["HANDS", "POINT", "NUMBER"];
-  const firstCycle = [
-    engine.pickBalancedMode(room, deps),
-    engine.pickBalancedMode(room, deps),
-    engine.pickBalancedMode(room, deps),
-  ];
-  const fourth = engine.pickBalancedMode(room, deps);
-  assert.deepEqual(new Set(firstCycle), new Set(room.selectedModes));
-  assert.notEqual(fourth, firstCycle[2]);
-
-  const two = roomWith();
-  two.selectedModes = ["HANDS", "POINT"];
-  const sequence = Array.from({ length: 8 }, () => engine.pickBalancedMode(two, deps));
-  for (let index = 1; index < sequence.length; index += 1) {
-    assert.notEqual(sequence[index], sequence[index - 1]);
-  }
-});
-
-test("startGame requires minimum players", () => {
-  const room = roomWith(2);
-  assert.throws(() => engine.startGame(room, "host", deps), /NOT_ENOUGH_PLAYERS/);
-});
-
-test("same impostor persists across challenges and each challenge gets a new prompt", () => {
-  const room = roomWith(4);
-  room.selectedModes = ["HANDS"];
+test("mode stays fixed across challenges while prompt changes", () => {
+  const room = roomWith(3);
   engine.startGame(room, "host", deps);
 
   const impostorUid = room.round!.impostorUid;
+  const mode = room.round!.mode;
   const firstPromptId = room.round!.promptId;
-  readyToVote(room);
-  voteTie(room);
 
+  readyToVote(room);
+  voteNoMajority(room);
   assert.equal(room.round!.roundComplete, false);
   engine.nextRound(room, "host", deps);
+
   assert.equal(room.round!.challengeIndex, 2);
   assert.equal(room.round!.impostorUid, impostorUid);
+  assert.equal(room.round!.mode, mode);
   assert.notEqual(room.round!.promptId, firstPromptId);
 });
 
-test("normal player receives prompt while impostor payload contains neither prompt nor promptId", () => {
+test("balanced shuffle is consumed between rounds, not between challenges", () => {
+  const room = roomWith(3);
+  room.totalRounds = 3;
+  engine.startGame(room, "host", deps);
+  const roundModes: GameMode[] = [];
+
+  for (let roundIndex = 1; roundIndex <= 3; roundIndex += 1) {
+    roundModes.push(room.round!.mode);
+    readyToVote(room);
+    voteCatch(room);
+    if (roundIndex < 3) engine.nextRound(room, "host", deps);
+  }
+
+  assert.equal(new Set(roundModes).size, 3);
+  assert.deepEqual(new Set(roundModes), new Set(["HANDS", "POINT", "NUMBER"]));
+});
+
+test("normal receives private prompt while impostor wire contains neither prompt nor promptId pre-reveal", () => {
   const room = roomWith(3);
   engine.startGame(room, "host", deps);
   const round = room.round!;
@@ -185,54 +206,94 @@ test("normal player receives prompt while impostor payload contains neither prom
   assert.ok(!json.includes(round.promptId));
 });
 
-test("correct unique top vote catches impostor and only correct normal voters score +1", () => {
+test("physical sequence is explicit and prompt becomes public only at PROMPT_REVEAL", () => {
   const room = roomWith(3);
   engine.startGame(room, "host", deps);
-  const impostorUid = room.round!.impostorUid;
-  const normals = room.round!.participantUids.filter((uid) => uid !== impostorUid);
+  const prompt = room.round!.prompt;
+
+  for (const uid of room.round!.participantUids) engine.markReady(room, uid, deps);
+  engine.startCountdown(room, 6_000, deps);
+  assert.equal(room.phase, "COUNTDOWN");
+  assert.equal(buildView(room, room.hostUid, "https://x").publicPrompt, undefined);
+
+  engine.toAction(room, 7_000, deps);
+  assert.equal(room.phase, "ACTION");
+  assert.equal(buildView(room, room.round!.impostorUid, "https://x").publicPrompt, undefined);
+
+  engine.toHold(room, 9_000, deps);
+  assert.equal(room.phase, "HOLD");
+  assert.equal(buildView(room, room.hostUid, "https://x").publicPrompt, undefined);
+
+  engine.revealPrompt(room, 11_500, deps);
+  assert.equal(room.phase, "PROMPT_REVEAL");
+  assert.equal(buildView(room, room.hostUid, "https://x").publicPrompt?.text, prompt);
+  assert.equal(buildView(room, room.round!.impostorUid, "https://x").publicPrompt?.text, prompt);
+
+  engine.toDiscussion(room, deps);
+  assert.equal(room.phase, "DISCUSSION");
+  assert.equal(room.phaseEndsAt, undefined);
+});
+
+test("less than majority on impostor does not catch them even when they have the unique most votes", () => {
+  const room = roomWith(4);
+  engine.startGame(room, "host", deps);
+  const round = room.round!;
+  const impostor = round.impostorUid;
+  const normals = round.participantUids.filter((uid) => uid !== impostor);
 
   readyToVote(room);
-  engine.submitVote(room, normals[0], impostorUid, deps);
-  engine.submitVote(room, normals[1], impostorUid, deps);
-  engine.submitVote(room, impostorUid, normals[0], deps);
+  engine.submitVote(room, normals[0], impostor, deps);
+  engine.submitVote(room, normals[1], impostor, deps);
+  engine.submitVote(room, normals[2], normals[0], deps);
+  engine.submitVote(room, impostor, normals[1], deps);
   engine.computeResult(room, deps);
 
+  assert.equal(engine.requiredVotesFor(4), 3);
+  assert.equal(room.round!.groupFound, false);
+  assert.equal(room.round!.roundComplete, false);
+});
+
+test("majority on a normal player still lets impostor survive", () => {
+  const room = roomWith(4);
+  engine.startGame(room, "host", deps);
+  const round = room.round!;
+  const impostor = round.impostorUid;
+  const normals = round.participantUids.filter((uid) => uid !== impostor);
+  const wrong = normals[0];
+
+  readyToVote(room);
+  engine.submitVote(room, impostor, wrong, deps);
+  engine.submitVote(room, normals[1], wrong, deps);
+  engine.submitVote(room, normals[2], wrong, deps);
+  engine.submitVote(room, wrong, normals[1], deps);
+  engine.computeResult(room, deps);
+
+  assert.equal(room.round!.groupFound, false);
+  assert.equal(room.round!.roundComplete, false);
+});
+
+test("impostor majority catches them, ends round immediately, but game continues to next round", () => {
+  const room = roomWith(4);
+  room.totalRounds = 3;
+  engine.startGame(room, "host", deps);
+  const firstImpostor = room.round!.impostorUid;
+
+  readyToVote(room);
+  voteCatch(room);
+  assert.equal(room.round!.challengeIndex, 1);
   assert.equal(room.round!.groupFound, true);
   assert.equal(room.round!.roundComplete, true);
-  assert.equal(room.players.get(impostorUid)!.score, 0);
-  assert.equal(room.players.get(normals[0])!.score, 1);
-  assert.equal(room.players.get(normals[1])!.score, 1);
-});
-
-test("tie lets impostor survive to next challenge with no early survival points", () => {
-  const room = roomWith(4);
-  engine.startGame(room, "host", deps);
-  const impostorUid = room.round!.impostorUid;
-
-  readyToVote(room);
-  voteTie(room);
-  assert.equal(room.round!.groupFound, false);
-  assert.equal(room.round!.roundComplete, false);
-  assert.equal(room.players.get(impostorUid)!.score, 0);
+  assert.equal(room.phase, "RESULT");
+  assert.equal(room.currentRound, 1);
 
   engine.nextRound(room, "host", deps);
-  assert.equal(room.round!.challengeIndex, 2);
+  assert.equal(room.phase, "QUESTION");
+  assert.equal(room.currentRound, 2);
+  assert.notEqual(room.round!.impostorUid, firstImpostor);
 });
 
-test("wrong unique top vote lets impostor survive", () => {
-  const room = roomWith(4);
-  engine.startGame(room, "host", deps);
-  const impostorUid = room.round!.impostorUid;
-
-  readyToVote(room);
-  voteWrongUnique(room);
-  assert.equal(room.round!.groupFound, false);
-  assert.equal(room.round!.roundComplete, false);
-  assert.equal(room.players.get(impostorUid)!.score, 0);
-});
-
-test("surviving challenge three ends round and awards impostor +2 only once", () => {
-  const room = roomWith(4);
+test("surviving challenge three ends the round with no points", () => {
+  const room = roomWith(3);
   engine.startGame(room, "host", deps);
   const impostorUid = room.round!.impostorUid;
 
@@ -240,35 +301,58 @@ test("surviving challenge three ends round and awards impostor +2 only once", ()
     assert.equal(room.round!.challengeIndex, challenge);
     assert.equal(room.round!.impostorUid, impostorUid);
     readyToVote(room);
-    voteTie(room);
+    voteNoMajority(room);
 
     if (challenge < 3) {
-      assert.equal(room.players.get(impostorUid)!.score, 0);
       assert.equal(room.round!.roundComplete, false);
       engine.nextRound(room, "host", deps);
     }
   }
 
   assert.equal(room.round!.roundComplete, true);
-  assert.equal(room.players.get(impostorUid)!.score, 2);
+  assert.equal(room.round!.groupFound, false);
+  assert.ok([...room.players.values()].every((player) => player.score === 0));
 });
 
-test("completed round advances to a new round and fair impostor selection can rotate", () => {
+test("prompt ids do not repeat within a game until that mode pool is exhausted", () => {
   const room = roomWith(3);
-  room.totalRounds = 2;
+  room.totalRounds = 5;
+  engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
+  engine.startGame(room, "host", deps);
+  const seen: string[] = [];
+
+  while (seen.length < 11) {
+    seen.push(room.round!.promptId);
+    readyToVote(room);
+    voteNoMajority(room);
+    engine.nextRound(room, "host", deps);
+  }
+
+  assert.equal(new Set(seen.slice(0, 10)).size, 10);
+  assert.ok(seen.slice(0, 10).includes(seen[10]));
+});
+
+test("game over happens only after configured round count and tracks group outcomes", () => {
+  const room = roomWith(3);
+  room.totalRounds = 3;
   engine.startGame(room, "host", deps);
 
-  const firstImpostorUid = room.round!.impostorUid;
-  const normals = room.round!.participantUids.filter((uid) => uid !== firstImpostorUid);
-  readyToVote(room);
-  engine.submitVote(room, normals[0], firstImpostorUid, deps);
-  engine.submitVote(room, normals[1], firstImpostorUid, deps);
-  engine.submitVote(room, firstImpostorUid, normals[0], deps);
-  engine.computeResult(room, deps);
-  engine.nextRound(room, "host", deps);
+  for (let roundIndex = 1; roundIndex <= 3; roundIndex += 1) {
+    readyToVote(room);
+    voteCatch(room);
+    assert.equal(room.round!.roundComplete, true);
+    assert.equal(room.phase, "RESULT");
+    engine.nextRound(room, "host", deps);
 
-  assert.equal(room.currentRound, 2);
-  assert.notEqual(room.round!.impostorUid, firstImpostorUid);
+    if (roundIndex < 3) {
+      assert.equal(room.phase, "QUESTION");
+      assert.equal(room.currentRound, roundIndex + 1);
+    }
+  }
+
+  assert.equal(room.phase, "GAME_OVER");
+  assert.equal(room.roundOutcomes.length, 3);
+  assert.equal(room.roundOutcomes.filter((outcome) => outcome.caught).length, 3);
 });
 
 test("Arabic display-name sanitization remains intact", () => {

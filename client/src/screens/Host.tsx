@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import type { ClientView, GameMode } from "../../../shared/types.js";
+import type { ClientView, GameMode, GameModeInfo } from "../../../shared/types.js";
 import { MIN_PLAYERS, ROUND_OPTIONS } from "../../../shared/constants.js";
 import { actions } from "../net/socket.js";
 import { Qr } from "../components/Qr.js";
 import { Players, Progress } from "../components/Players.js";
-import { ResultBody, Scoreboard, roundLabel } from "../components/Bits.js";
+import { ResultBody, roundLabel } from "../components/Bits.js";
 
 export function Host({ view }: { view: ClientView }) {
   switch (view.room.phase) {
@@ -12,8 +12,14 @@ export function Host({ view }: { view: ClientView }) {
       return <HostLobby view={view} />;
     case "QUESTION":
       return <HostReady view={view} />;
-    case "REVEAL":
+    case "COUNTDOWN":
       return <HostCountdown view={view} />;
+    case "ACTION":
+      return <HostAction view={view} />;
+    case "HOLD":
+      return <HostHold />;
+    case "PROMPT_REVEAL":
+      return <HostPromptReveal view={view} />;
     case "DISCUSSION":
       return <HostDiscussion view={view} />;
     case "VOTING":
@@ -25,6 +31,10 @@ export function Host({ view }: { view: ClientView }) {
     default:
       return <HostReady view={view} />;
   }
+}
+
+function modeInfo(view: ClientView): GameModeInfo | undefined {
+  return view.room.availableModes.find((mode) => mode.id === view.challenge?.mode);
 }
 
 function CloseRoom() {
@@ -61,7 +71,7 @@ function HostLobby({ view }: { view: ClientView }) {
   const modeSummary =
     modes.size === 1
       ? `مختار: ${view.room.availableModes.find((mode) => modes.has(mode.id))?.label ?? ""} فقط`
-      : "اللعبة بتنويع بينهم 🎲";
+      : "كل جولة تاخذ مود واحد بالتناوب المتوازن 🎲";
 
   return (
     <div className="screen host">
@@ -106,11 +116,7 @@ function HostLobby({ view }: { view: ClientView }) {
             {view.players.length === 0 ? (
               <p className="subtitle">امسحوا الكود من جوالكم عشان تدخلون…</p>
             ) : (
-              <Players
-                players={view.players}
-                canKick
-                onKick={(uid) => actions.kick(uid)}
-              />
+              <Players players={view.players} canKick onKick={(uid) => actions.kick(uid)} />
             )}
           </div>
 
@@ -154,9 +160,7 @@ function HostLobby({ view }: { view: ClientView }) {
             disabled={!canStart}
             onClick={() => actions.startGame()}
           >
-            {active < MIN_PLAYERS
-              ? `ننتظر ${MIN_PLAYERS - active} لاعبين`
-              : "ابدأ اللعبة"}
+            {active < MIN_PLAYERS ? `ننتظر ${MIN_PLAYERS - active} لاعبين` : "ابدأ اللعبة"}
           </button>
         </div>
       </div>
@@ -171,22 +175,40 @@ function HostReady({ view }: { view: ClientView }) {
     submitted: 0,
     total: view.players.length,
   };
+  const mode = modeInfo(view);
+  const firstChallenge = (view.challenge?.index ?? 1) === 1;
 
   return (
     <div className="screen host center stack">
       <div className="spacer" />
       <div className="eyebrow">{roundLabel(view)}</div>
-      <h1 className="title">شوفوا جوالاتكم 👀</h1>
-      <p className="subtitle">كل واحد يشوف سره ويضغط جاهز</p>
-      <div
-        className="card"
-        style={{ maxWidth: 520, marginInline: "auto", width: "100%" }}
-      >
-        <Progress
-          submitted={progress.submitted}
-          total={progress.total}
-          verb="جاهزين"
-        />
+      <h1 className="title" style={{ fontSize: "clamp(44px,8vw,88px)" }}>
+        {mode ? `${mode.icon} ${mode.label}` : "استعدوا"}
+      </h1>
+
+      {mode ? (
+        firstChallenge ? (
+          <div className="stack" style={{ gap: 8, maxWidth: 720, marginInline: "auto" }}>
+            {mode.roundInstructions.map((instruction) => (
+              <p key={instruction} className="subtitle" style={{ margin: 0 }}>
+                {instruction}
+              </p>
+            ))}
+            <span className="pill-note" style={{ marginInline: "auto" }}>
+              هذا المود ثابت طول الجولة
+            </span>
+          </div>
+        ) : (
+          <p className="subtitle">نفس المود مستمر — {mode.description}</p>
+        )
+      ) : null}
+
+      <h2 className="title" style={{ fontSize: "clamp(28px,5vw,48px)", marginTop: 18 }}>
+        شوفوا جوالاتكم 👀
+      </h2>
+      <p className="subtitle">كل واحد يشوف دوره ويضغط جاهز</p>
+      <div className="card" style={{ maxWidth: 520, marginInline: "auto", width: "100%" }}>
+        <Progress submitted={progress.submitted} total={progress.total} verb="جاهزين" />
       </div>
       <div className="spacer" />
     </div>
@@ -202,22 +224,64 @@ function HostCountdown({ view }: { view: ClientView }) {
   }, []);
 
   const remaining = Math.max(0, (view.room.phaseEndsAt ?? Date.now()) - Date.now());
-  const seconds = Math.ceil(Math.max(0, remaining - 900) / 1_000);
-  const action =
-    view.challenge?.mode === "POINT"
-      ? "أشر!"
-      : view.challenge?.mode === "NUMBER"
-        ? "ورّونا!"
-        : "الحين!";
+  const seconds = Math.max(1, Math.min(5, Math.ceil(remaining / 1_000)));
 
   return (
     <div className="screen host center stack">
       <div className="spacer" />
-      <div className="eyebrow">{roundLabel(view)}</div>
-      <h1 className="title" style={{ fontSize: "clamp(64px,15vw,160px)" }}>
-        {remaining <= 900 ? action : Math.max(1, Math.min(3, seconds))}
+      <div className="eyebrow">استعدوا…</div>
+      <div
+        className="title"
+        style={{ fontSize: "clamp(140px,34vw,360px)", lineHeight: 0.95, margin: 0 }}
+      >
+        {seconds}
+      </div>
+      <div className="spacer" />
+    </div>
+  );
+}
+
+function HostAction({ view }: { view: ClientView }) {
+  const mode = modeInfo(view);
+  return (
+    <div className="screen host center stack">
+      <div className="spacer" />
+      <h1 className="title" style={{ fontSize: "clamp(72px,16vw,180px)" }}>
+        {mode?.actionLabel ?? "الحين! 👀"}
       </h1>
-      <p className="subtitle">نفّذوا بنفس اللحظة وثبّتوا الحركة شوي</p>
+      <div className="spacer" />
+    </div>
+  );
+}
+
+function HostHold() {
+  return (
+    <div className="screen host center stack">
+      <div className="spacer" />
+      <h1 className="title" style={{ fontSize: "clamp(64px,13vw,150px)" }}>
+        ثبّتوا… 👀
+      </h1>
+      <p className="subtitle" style={{ fontSize: "clamp(24px,4vw,42px)" }}>
+        طالعوا بعض
+      </p>
+      <div className="spacer" />
+    </div>
+  );
+}
+
+function HostPromptReveal({ view }: { view: ClientView }) {
+  return (
+    <div className="screen host center stack">
+      <div className="spacer" />
+      <div className="eyebrow" style={{ fontSize: "clamp(18px,3vw,30px)" }}>
+        المطلوب كان…
+      </div>
+      <h1
+        className="title"
+        style={{ fontSize: "clamp(42px,8vw,92px)", maxWidth: 980, marginInline: "auto" }}
+      >
+        {view.publicPrompt?.text ?? "…"}
+      </h1>
       <div className="spacer" />
     </div>
   );
@@ -228,8 +292,18 @@ function HostDiscussion({ view }: { view: ClientView }) {
     <div className="screen host center stack">
       <div className="spacer" />
       <div className="eyebrow">{roundLabel(view)}</div>
-      <h1 className="title">مين تصرفه مو طبيعي؟ 👀</h1>
-      <p className="subtitle">تناقشوا شوي… وبعدين افتحوا التصويت</p>
+      <div className="eyebrow" style={{ marginTop: 8 }}>
+        المطلوب كان
+      </div>
+      <div
+        className="title"
+        style={{ fontSize: "clamp(34px,6vw,68px)", maxWidth: 980, marginInline: "auto" }}
+      >
+        {view.publicPrompt?.text ?? "…"}
+      </div>
+      <h1 className="title" style={{ fontSize: "clamp(36px,7vw,76px)", marginTop: 18 }}>
+        مين تصرفه مو طبيعي؟ 👀
+      </h1>
       <button
         className="btn btn-primary"
         style={{ maxWidth: 480 }}
@@ -244,24 +318,19 @@ function HostDiscussion({ view }: { view: ClientView }) {
 }
 
 function HostVoting({ view }: { view: ClientView }) {
-  const progress = view.votesProgress ?? { submitted: 0, total: 0 };
+  const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
 
   return (
     <div className="screen host center stack">
       <div className="spacer" />
       <div className="eyebrow">{roundLabel(view)}</div>
       <h1 className="title">صوّتوا من جوالكم 🤫</h1>
-      <div
-        className="card"
-        style={{ maxWidth: 520, marginInline: "auto", width: "100%" }}
-      >
-        <Progress
-          submitted={progress.submitted}
-          total={progress.total}
-          verb="صوّتوا"
-        />
+      <div className="card" style={{ maxWidth: 520, marginInline: "auto", width: "100%" }}>
+        <Progress submitted={progress.submitted} total={progress.total} verb="صوّتوا" />
       </div>
-      <p className="subtitle">مين تحسّونه المتخفي؟</p>
+      <p className="subtitle">
+        يحتاج المتخفي {progress.requiredVotes} أصوات أو أكثر عشان ينكشف
+      </p>
       <div className="spacer" />
     </div>
   );
@@ -271,54 +340,53 @@ function HostResult({ view }: { view: ClientView }) {
   const result = view.result;
   const next = result?.roundComplete
     ? view.room.currentRound >= view.room.totalRounds
-      ? "النتيجة النهائية 🏁"
+      ? "شوفوا ملخص اللعبة 🎉"
       : "الجولة الجاية"
     : `التحدي ${Math.min((result?.challengeIndex ?? 1) + 1, 3)} 👀`;
 
   return (
-    <div className="screen host stack">
-      <div className="host-grid">
-        <div className="card">{result ? <ResultBody result={result} /> : null}</div>
-        <div className="stack">
-          <h2 className="title center">الترتيب</h2>
-          {view.scoreboard ? <Scoreboard rows={view.scoreboard} /> : null}
-          <button className="btn btn-primary" onClick={() => actions.nextRound()}>
-            {next}
-          </button>
-        </div>
+    <div className="screen host center stack">
+      <div className="spacer" />
+      <div className="card" style={{ maxWidth: 720, width: "100%", marginInline: "auto" }}>
+        {result ? <ResultBody result={result} /> : null}
       </div>
+      <button
+        className="btn btn-primary"
+        style={{ maxWidth: 520 }}
+        onClick={() => actions.nextRound()}
+      >
+        {next}
+      </button>
+      <div className="spacer" />
     </div>
   );
 }
 
 function HostGameOver({ view }: { view: ClientView }) {
   const gameOver = view.gameOver;
-  const tied = (gameOver?.winners.length ?? 0) > 1;
 
   return (
     <div className="screen host stack center">
+      <div className="spacer" />
       <h1 className="brand">خلصت اللعبة 🎉</h1>
       {gameOver ? (
         <>
-          <p className="subtitle">{tied ? "تعادل! 🔥" : "الفائز"}</p>
-          <div
-            className="impostor-name"
-            style={{ fontSize: "clamp(40px,7vw,92px)" }}
-          >
-            {gameOver.winners.map((winner) => winner.name).join("، ")} {tied ? "🔥" : "🏆"}
-          </div>
-          <div
-            className="card"
-            style={{ maxWidth: 560, marginInline: "auto", width: "100%" }}
-          >
-            <Scoreboard rows={gameOver.ranking} />
+          <p className="subtitle" style={{ fontSize: "clamp(24px,4vw,42px)" }}>
+            مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات 👏
+          </p>
+          <div className="card stack" style={{ maxWidth: 560, marginInline: "auto", width: "100%" }}>
+            <div className="row between" style={{ fontSize: 22, fontWeight: 900 }}>
+              <span>✅ انكشف</span>
+              <span>{gameOver.caughtRounds}</span>
+            </div>
+            <div className="row between" style={{ fontSize: 22, fontWeight: 900 }}>
+              <span>😈 نجا</span>
+              <span>{gameOver.escapedRounds}</span>
+            </div>
           </div>
         </>
       ) : null}
-      <div
-        className="row"
-        style={{ maxWidth: 560, marginInline: "auto", width: "100%" }}
-      >
+      <div className="row" style={{ maxWidth: 560, marginInline: "auto", width: "100%" }}>
         <button className="btn btn-primary" onClick={() => actions.rematch()}>
           العبوا مرة ثانية
         </button>
@@ -326,6 +394,7 @@ function HostGameOver({ view }: { view: ClientView }) {
           الرئيسية
         </button>
       </div>
+      <div className="spacer" />
     </div>
   );
 }

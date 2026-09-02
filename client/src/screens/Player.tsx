@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { ClientView } from "../../../shared/types.js";
+import type { ClientView, GameModeInfo } from "../../../shared/types.js";
 import { actions } from "../net/socket.js";
-import { ResultBody, Scoreboard, roundLabel } from "../components/Bits.js";
+import { ResultBody, roundLabel } from "../components/Bits.js";
 import { Players } from "../components/Players.js";
 
 export function Player({ view }: { view: ClientView }) {
@@ -10,8 +10,12 @@ export function Player({ view }: { view: ClientView }) {
       return <PlayerLobby view={view} />;
     case "QUESTION":
       return <PlayerPrompt view={view} />;
-    case "REVEAL":
-      return <PlayerHold view={view} />;
+    case "COUNTDOWN":
+    case "ACTION":
+    case "HOLD":
+      return <PlayerWatchScreen />;
+    case "PROMPT_REVEAL":
+      return <PlayerPromptReveal view={view} />;
     case "DISCUSSION":
       return <PlayerDiscussion view={view} />;
     case "VOTING":
@@ -21,7 +25,7 @@ export function Player({ view }: { view: ClientView }) {
     case "GAME_OVER":
       return <PlayerGameOver view={view} />;
     default:
-      return <PlayerPrompt view={view} />;
+      return <PlayerWatchScreen />;
   }
 }
 
@@ -35,8 +39,12 @@ function LeaveLink() {
   );
 }
 
+function modeInfo(view: ClientView): GameModeInfo | undefined {
+  return view.room.availableModes.find((candidate) => candidate.id === view.challenge?.mode);
+}
+
 function modeTitle(view: ClientView): string {
-  const mode = view.room.availableModes.find((candidate) => candidate.id === view.challenge?.mode);
+  const mode = modeInfo(view);
   return mode ? `${mode.icon} ${mode.label}` : "";
 }
 
@@ -79,7 +87,10 @@ function PlayerLobby({ view }: { view: ClientView }) {
 }
 
 function PlayerPrompt({ view }: { view: ClientView }) {
-  const ready = view.myReady;
+  const ready = view.myReady === true;
+  const mode = modeInfo(view);
+
+  if (ready) return <PlayerWatchScreen />;
 
   return (
     <div className="screen">
@@ -92,36 +103,48 @@ function PlayerPrompt({ view }: { view: ClientView }) {
         {view.isImpostor ? (
           <>
             <div className="q-text">أنت المتخفي 👀</div>
-            <p className="subtitle center">
+            <p className="subtitle center" style={{ marginBottom: 0 }}>
               ما تعرف المطلوب.
-              <br />
-              راقب الباقين وخلك طبيعي.
+            </p>
+            <p className="subtitle center" style={{ marginTop: 0 }}>
+              {mode?.impostorInstruction ?? "راقب الباقين وخلك طبيعي."}
             </p>
           </>
         ) : (
-          <div className="q-text">{view.myPrompt?.text ?? "…"}</div>
+          <>
+            <div className="q-text">{view.myPrompt?.text ?? "…"}</div>
+            <p className="subtitle center" style={{ marginBottom: 0 }}>
+              {mode?.normalInstruction}
+            </p>
+          </>
         )}
       </div>
-      <button
-        className="btn btn-primary"
-        disabled={ready}
-        onClick={() => actions.markReady()}
-      >
-        {ready ? "جاهز ✓" : "جاهز"}
+      <button className="btn btn-primary" onClick={() => actions.markReady()}>
+        جاهز
       </button>
-      {ready ? <p className="helper center">خل عينك على الشاشة الكبيرة</p> : null}
       <div className="spacer" />
     </div>
   );
 }
 
-function PlayerHold({ view }: { view: ClientView }) {
+function PlayerWatchScreen() {
   return (
     <div className="screen center stack">
       <div className="spacer" />
-      <div className="eyebrow">{roundLabel(view)}</div>
-      <h1 className="title">عيونكم على بعض 👀</h1>
-      <p className="subtitle">نفّذ اللي عندك مع العد على الشاشة وثبّته شوي</p>
+      <h1 className="title" style={{ fontSize: "clamp(38px,11vw,58px)" }}>
+        طالع الشاشة 👀
+      </h1>
+      <div className="spacer" />
+    </div>
+  );
+}
+
+function PlayerPromptReveal({ view }: { view: ClientView }) {
+  return (
+    <div className="screen center stack">
+      <div className="spacer" />
+      <div className="eyebrow">المطلوب كان…</div>
+      <div className="q-text">{view.publicPrompt?.text ?? "…"}</div>
       <div className="spacer" />
     </div>
   );
@@ -135,11 +158,14 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
       </div>
       <div className="spacer" />
       <div className="q-card stack">
-        <span className="eyebrow">السالفة الحين بينكم 👀</span>
+        <span className="eyebrow">المطلوب كان</span>
         <div className="q-text" style={{ fontSize: "clamp(22px,6vw,30px)" }}>
-          مين تصرفه مو طبيعي؟
+          {view.publicPrompt?.text ?? "…"}
         </div>
       </div>
+      <h2 className="title center" style={{ fontSize: "clamp(28px,8vw,42px)" }}>
+        مين تصرفه مو طبيعي؟ 👀
+      </h2>
       <p className="subtitle center">تناقشوا… وبعدها المضيف يفتح التصويت</p>
       <div className="spacer" />
       <LeaveLink />
@@ -150,9 +176,9 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
 function PlayerVote({ view }: { view: ClientView }) {
   const [picked, setPicked] = useState<string | null>(null);
   const targets = view.voteTargets ?? [];
+  const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
 
   if (view.myVoteSubmitted) {
-    const progress = view.votesProgress ?? { submitted: 0, total: 0 };
     return (
       <div className="screen">
         <div className="spacer" />
@@ -172,6 +198,9 @@ function PlayerVote({ view }: { view: ClientView }) {
       <div className="center stack">
         <div className="eyebrow">{roundLabel(view)}</div>
         <h1 className="title">مين تحس المتخفي؟</h1>
+        <p className="helper">
+          يحتاج المتخفي {progress.requiredVotes} أصوات أو أكثر عشان ينكشف
+        </p>
       </div>
       <div className="vote-list">
         {targets.map((target) => (
@@ -199,23 +228,12 @@ function PlayerVote({ view }: { view: ClientView }) {
 }
 
 function PlayerResult({ view }: { view: ClientView }) {
-  const myDelta =
-    view.result?.roundScores.find((row) => row.uid === view.self.uid)?.delta ?? 0;
-
   return (
     <div className="screen">
+      <div className="spacer" />
       {view.result ? (
         <div className="card">
           <ResultBody result={view.result} />
-        </div>
-      ) : null}
-      {myDelta > 0 ? <div className="ok-badge">+{myDelta} لك 🎯</div> : null}
-      {view.scoreboard ? (
-        <div className="card">
-          <div className="code-label" style={{ marginBottom: 10 }}>
-            الترتيب
-          </div>
-          <Scoreboard rows={view.scoreboard} selfUid={view.self.uid} />
         </div>
       ) : null}
       <p className="subtitle center">
@@ -223,44 +241,41 @@ function PlayerResult({ view }: { view: ClientView }) {
           ? "ننتظر المضيف للجولة الجاية…"
           : "نفس المتخفي مكمل… ننتظر التحدي الجاي 👀"}
       </p>
+      <div className="spacer" />
     </div>
   );
 }
 
 function PlayerGameOver({ view }: { view: ClientView }) {
   const gameOver = view.gameOver;
-  const mine = gameOver?.ranking.find((row) => row.uid === view.self.uid);
-  const tied = (gameOver?.winners.length ?? 0) > 1;
 
   return (
     <div className="screen">
+      <div className="spacer" />
       <div className="center stack">
         <h1 className="brand" style={{ fontSize: "clamp(34px,11vw,56px)" }}>
           خلصت اللعبة 🎉
         </h1>
         {gameOver ? (
-          <div
-            className="impostor-name"
-            style={{ fontSize: "clamp(28px,8vw,44px)" }}
-          >
-            {tied ? "تعادل! 🔥 " : "الفائز: "}
-            {gameOver.winners.map((winner) => winner.name).join("، ")}
-            {tied ? "" : " 🏆"}
-          </div>
+          <>
+            <p className="subtitle">
+              مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات 👏
+            </p>
+            <div className="card stack" style={{ width: "100%" }}>
+              <div className="row between" style={{ fontWeight: 900 }}>
+                <span>✅ انكشف</span>
+                <span>{gameOver.caughtRounds}</span>
+              </div>
+              <div className="row between" style={{ fontWeight: 900 }}>
+                <span>😈 نجا</span>
+                <span>{gameOver.escapedRounds}</span>
+              </div>
+            </div>
+          </>
         ) : null}
-        {mine ? (
-          <p className="subtitle">
-            ترتيبك: {mine.rank} — {mine.score} نقطة
-          </p>
-        ) : null}
+        <p className="subtitle center">ننتظر المضيف يبدأ لعبة جديدة أو يقفل الغرفة</p>
       </div>
-
-      {gameOver ? (
-        <div className="card">
-          <Scoreboard rows={gameOver.ranking} selfUid={view.self.uid} />
-        </div>
-      ) : null}
-      <p className="subtitle center">ننتظر المضيف يبدأ لعبة جديدة أو يقفل الغرفة</p>
+      <div className="spacer" />
       <LeaveLink />
     </div>
   );

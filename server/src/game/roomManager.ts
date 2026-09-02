@@ -25,15 +25,17 @@ interface Deps {
   rng: () => number;
   now: () => number;
   disconnectGraceMs: number;
-  questionToAnsweringMs: number;
-  revealToDiscussionMs: number;
-  physicalCountdownMs: number;
+  countdownMs: number;
+  actionMs: number;
+  holdMs: number;
+  promptRevealMs: number;
   maxRooms: number;
   maxConnectionsPerUid: number;
 }
 
 const IDLE_ROOM_MS = 30 * 60 * 1_000;
 const GC_INTERVAL_MS = 60_000;
+const IMITATION_STAGE_TIMER = "imitation-stage";
 const SAFE_REMOVAL_PHASES = new Set(["LOBBY", "GAME_OVER"]);
 
 export class RoomManager {
@@ -49,9 +51,10 @@ export class RoomManager {
       rng: deps.rng ?? Math.random,
       now: deps.now ?? Date.now,
       disconnectGraceMs: deps.disconnectGraceMs ?? TIMERS.DISCONNECT_GRACE,
-      questionToAnsweringMs: deps.questionToAnsweringMs ?? TIMERS.QUESTION_TO_ANSWERING,
-      revealToDiscussionMs: deps.revealToDiscussionMs ?? TIMERS.REVEAL_TO_DISCUSSION,
-      physicalCountdownMs: deps.physicalCountdownMs ?? TIMERS.PHYSICAL_COUNTDOWN,
+      countdownMs: deps.countdownMs ?? TIMERS.COUNTDOWN,
+      actionMs: deps.actionMs ?? TIMERS.ACTION,
+      holdMs: deps.holdMs ?? TIMERS.HOLD,
+      promptRevealMs: deps.promptRevealMs ?? TIMERS.PROMPT_REVEAL,
       maxRooms: deps.maxRooms ?? MAX_ACTIVE_ROOMS,
       maxConnectionsPerUid: deps.maxConnectionsPerUid ?? MAX_CONNECTIONS_PER_UID,
     };
@@ -311,16 +314,40 @@ export class RoomManager {
   private markReady(uid: string): void {
     this.withRoom(uid, (room) => {
       const { allReady } = engine.markReady(room, uid, this.deps);
-      if (allReady) {
-        const endsAt = this.deps.now() + this.deps.physicalCountdownMs;
-        engine.startCountdown(room, endsAt, this.deps);
-        this.schedule(room, "physical-countdown", this.deps.physicalCountdownMs, () => {
-          if (room.phase !== "REVEAL") return;
-          engine.toDiscussion(room, this.deps);
-          this.broadcast(room);
-        });
-      }
+      if (allReady) this.beginPhysicalSequence(room);
       this.broadcast(room);
+    });
+  }
+
+  private beginPhysicalSequence(room: RoomState): void {
+    const endsAt = this.deps.now() + this.deps.countdownMs;
+    engine.startCountdown(room, endsAt, this.deps);
+
+    this.schedule(room, IMITATION_STAGE_TIMER, this.deps.countdownMs, () => {
+      if (room.phase !== "COUNTDOWN") return;
+      const actionEndsAt = this.deps.now() + this.deps.actionMs;
+      engine.toAction(room, actionEndsAt, this.deps);
+      this.broadcast(room);
+
+      this.schedule(room, IMITATION_STAGE_TIMER, this.deps.actionMs, () => {
+        if (room.phase !== "ACTION") return;
+        const holdEndsAt = this.deps.now() + this.deps.holdMs;
+        engine.toHold(room, holdEndsAt, this.deps);
+        this.broadcast(room);
+
+        this.schedule(room, IMITATION_STAGE_TIMER, this.deps.holdMs, () => {
+          if (room.phase !== "HOLD") return;
+          const revealEndsAt = this.deps.now() + this.deps.promptRevealMs;
+          engine.revealPrompt(room, revealEndsAt, this.deps);
+          this.broadcast(room);
+
+          this.schedule(room, IMITATION_STAGE_TIMER, this.deps.promptRevealMs, () => {
+            if (room.phase !== "PROMPT_REVEAL") return;
+            engine.toDiscussion(room, this.deps);
+            this.broadcast(room);
+          });
+        });
+      });
     });
   }
 
@@ -393,8 +420,8 @@ export class RoomManager {
 
     // A survived challenge result is not the end of the round: the same hidden
     // impostor would otherwise carry a stale disconnected seat into the next
-    // challenge. Expiry here cancels the incomplete round and redeals from
-    // challenge 1 with no points, matching the mid-challenge disconnect policy.
+    // challenge. Expiry here cancels the incomplete round and redeals challenge
+    // 1 with the same round mode if enough players remain.
     if (
       room.phase === "RESULT" &&
       room.round?.kind === "IMITATION" &&
@@ -435,7 +462,7 @@ export class RoomManager {
       return;
     }
 
-    this.cancelTimer(room.code, "physical-countdown");
+    this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
     if (activePlayers(room).length < room.minPlayers) {
       engine.abortToLobby(room, this.deps);
     } else {
