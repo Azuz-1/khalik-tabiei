@@ -141,14 +141,27 @@ function currentRoles(players) {
   return { impostor: impostors[0], normals };
 }
 
-function currentPrompt(normals) {
+function currentPrompt(normals, expectedMode) {
   const prompts = normals.map((player) => player.view?.myPrompt?.text);
   ok(
     prompts.every((prompt) => typeof prompt === "string" && prompt.length > 0),
     "normal players receive a private prompt",
   );
   ok(new Set(prompts).size === 1, "normal players receive the same current prompt");
+  ok(
+    normals.every((player) => player.view?.myPrompt?.mode === expectedMode),
+    "normal private prompt is tagged with the current Challenge mode",
+  );
   return prompts[0];
+}
+
+function assertNoVoterMappingWire(client, label) {
+  const raw = client.rawText();
+  ok(!raw.includes("voterUid"), `${label} wire contains no voterUid field`);
+  ok(!raw.includes("voterName"), `${label} wire contains no voterName field`);
+  ok(!raw.includes("targetUid"), `${label} wire contains no voter-to-target field`);
+  ok(!raw.includes("voteBreakdown"), `${label} wire contains no voteBreakdown`);
+  ok(!raw.includes("voterTarget"), `${label} wire contains no voterTarget field`);
 }
 
 function assertSecretWire(host, impostor, normals, prompt) {
@@ -255,26 +268,71 @@ async function runPhysicalSequence(host, players, challengeIndex, prompt, reconn
   ok(host.view?.publicPrompt?.text === prompt, `challenge ${challengeIndex} public prompt remains available in discussion`);
 }
 
-async function voteNoMajority(host, players, challengeIndex) {
+function tallySum(view) {
+  return view?.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0) ?? -1;
+}
+
+async function voteNoMajority(host, players, challengeIndex, inspectLive = false) {
   host.send({ t: "START_VOTING" });
+  await waitFor(host, (client) => client.phase() === "VOTING", `challenge ${challengeIndex} host voting`);
   await waitForAll(players, (client) => client.phase() === "VOTING", `challenge ${challengeIndex} voting`);
   ok(players[0].view?.votesProgress?.requiredVotes === 2, "3 players require a 2-vote majority");
 
+  const stableOrder = players.map((player) => player.uid);
+  if (inspectLive) {
+    ok(host.view?.liveVoteTally?.length === 3, "host live tally includes all players before any vote");
+    ok(tallySum(host.view) === 0, "host live tally starts at zero");
+    ok(
+      host.view?.liveVoteTally?.map((row) => row.uid).join(",") === stableOrder.join(","),
+      "host live voting cards start in stable participant order",
+    );
+  }
+
   const [a, b, c] = players;
   a.send({ t: "SUBMIT_VOTE", targetUid: b.uid });
-  b.send({ t: "SUBMIT_VOTE", targetUid: c.uid });
-  c.send({ t: "SUBMIT_VOTE", targetUid: a.uid });
+  await waitFor(host, (client) => client.phase() === "VOTING" && client.view?.votesProgress?.submitted === 1, "host live tally after vote 1");
+  if (inspectLive) {
+    ok(tallySum(host.view) === 1, "host live tally sum is 1 after the first vote");
+    ok(host.view?.liveVoteTally?.find((row) => row.uid === b.uid)?.votes === 1, "first vote increments only its aggregate target counter");
+    ok(host.view?.liveVoteTally?.some((row) => row.votes === 0), "host live tally keeps zero-vote players visible");
+    ok(
+      host.view?.liveVoteTally?.map((row) => row.uid).join(",") === stableOrder.join(","),
+      "host player card order is unchanged after the first vote",
+    );
+    assertNoVoterMappingWire(host, "host live voting");
+    await waitFor(a, (client) => client.view?.myVoteSubmitted === true, "first player vote acknowledgement");
+    ok(a.view?.myVoteSubmitted === true, "player phone clearly records submitted vote");
+    for (const player of players) {
+      ok(player.view?.liveVoteTally === undefined, `${player.label} phone does not receive live tally`);
+      assertNoVoterMappingWire(player, `${player.label} voting`);
+    }
+  }
 
+  b.send({ t: "SUBMIT_VOTE", targetUid: c.uid });
+  await waitFor(host, (client) => client.phase() === "VOTING" && client.view?.votesProgress?.submitted === 2, "host live tally after vote 2");
+  if (inspectLive) {
+    ok(tallySum(host.view) === 2, "host live tally sum is 2 after the second vote");
+    ok(
+      host.view?.liveVoteTally?.map((row) => row.uid).join(",") === stableOrder.join(","),
+      "host player card order remains stable after the second vote",
+    );
+    assertNoVoterMappingWire(host, "host after second vote");
+  }
+
+  c.send({ t: "SUBMIT_VOTE", targetUid: a.uid });
   await waitFor(host, (client) => client.phase() === "RESULT", `challenge ${challengeIndex} result`);
 }
 
 async function voteCatch(host, players, challengeIndex, impostor) {
   host.send({ t: "START_VOTING" });
+  await waitFor(host, (client) => client.phase() === "VOTING", `challenge ${challengeIndex} host voting`);
   await waitForAll(players, (client) => client.phase() === "VOTING", `challenge ${challengeIndex} voting`);
 
   const normals = players.filter((player) => player.uid !== impostor.uid);
   normals[0].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  await waitFor(host, (client) => client.phase() === "VOTING" && client.view?.votesProgress?.submitted === 1, "catch vote 1");
   normals[1].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  await waitFor(host, (client) => client.phase() === "VOTING" && client.view?.votesProgress?.submitted === 2, "catch vote 2");
   impostor.send({ t: "SUBMIT_VOTE", targetUid: normals[0].uid });
 
   await waitFor(host, (client) => client.phase() === "RESULT", `challenge ${challengeIndex} caught result`);
@@ -290,11 +348,15 @@ function assertNoPointsOrVoteIdentity(view, label) {
   ok(!json.includes("\"score\""), `${label} has no player score field`);
 }
 
-function assertFinalTally(result, playerCount) {
+function assertFinalTally(result, playerCount, stableOrder) {
   ok(result?.voteTally?.length === playerCount, "round-end tally lists every participant including zero-vote players");
   ok(
     result?.voteTally?.reduce((sum, row) => sum + row.votes, 0) === playerCount,
     "round-end tally contains exactly the votes from the challenge that ended the round",
+  );
+  ok(
+    result?.voteTally?.map((row) => row.uid).join(",") === stableOrder.join(","),
+    "round-end vote board keeps stable participant order",
   );
 }
 
@@ -337,10 +399,10 @@ async function main() {
   await waitFor(host, (client) => client.phase() === "QUESTION", "round 1 challenge 1 private phase");
   await waitForAll(players, (client) => client.phase() === "QUESTION", "round 1 challenge 1 private phase");
 
-  console.log("\n[round 1] same impostor + same mode through three challenges:");
+  console.log("\n[round 1] same impostor + challenge-level balanced mode rotation:");
   let { impostor, normals } = currentRoles(players);
   const roundOneImpostorUid = impostor.uid;
-  const roundOneMode = host.view.challenge?.mode;
+  const roundOneModes = [];
   const roundOnePrompts = [];
 
   for (let challengeIndex = 1; challengeIndex <= 3; challengeIndex += 1) {
@@ -348,11 +410,18 @@ async function main() {
     host.clearMessages();
 
     ({ impostor, normals } = currentRoles(players));
-    const prompt = currentPrompt(normals);
+    const currentMode = host.view.challenge?.mode;
+    const prompt = currentPrompt(normals, currentMode);
+    roundOneModes.push(currentMode);
     roundOnePrompts.push(prompt);
 
     ok(impostor.uid === roundOneImpostorUid, `challenge ${challengeIndex} keeps the same round impostor`);
-    ok(host.view.challenge?.mode === roundOneMode, `challenge ${challengeIndex} keeps the same round mode`);
+    if (challengeIndex > 1) {
+      ok(
+        roundOneModes[challengeIndex - 1] !== roundOneModes[challengeIndex - 2],
+        `challenge ${challengeIndex} changes mode instead of immediately repeating`,
+      );
+    }
     assertSecretWire(host, impostor, normals, prompt);
 
     await runPhysicalSequence(
@@ -362,7 +431,7 @@ async function main() {
       prompt,
       challengeIndex === 1 ? { normal: normals[0], impostor } : null,
     );
-    await voteNoMajority(host, players, challengeIndex);
+    await voteNoMajority(host, players, challengeIndex, challengeIndex === 1);
 
     const result = host.view.result;
     ok(result?.groupFound === false, `challenge ${challengeIndex} less-than-majority vote does not catch impostor`);
@@ -371,7 +440,7 @@ async function main() {
       ok(result?.roundComplete === false, `challenge ${challengeIndex} keeps round open`);
       ok(result?.impostorUid === undefined, `challenge ${challengeIndex} hides impostor identity`);
       ok(result?.impostorName === undefined, `challenge ${challengeIndex} hides impostor name`);
-      ok(result?.voteTally?.length === 0, `challenge ${challengeIndex} hides vote tally`);
+      ok(result?.voteTally?.length === 0, `challenge ${challengeIndex} hides result tally`);
       assertNoPointsOrVoteIdentity(host.view, `challenge ${challengeIndex} intermediate result`);
 
       host.send({ t: "NEXT_ROUND" });
@@ -388,11 +457,16 @@ async function main() {
     } else {
       ok(result?.roundComplete === true, "surviving challenge 3 ends round 1");
       ok(result?.impostorUid === roundOneImpostorUid, "round 1 end reveals impostor identity");
-      assertFinalTally(result, 3);
+      assertFinalTally(result, 3, players.map((player) => player.uid));
       assertNoPointsOrVoteIdentity(host.view, "round 1 final result");
     }
   }
 
+  ok(new Set(roundOneModes).size === 3, "first three Challenges consume all three selected modes before refill");
+  ok(
+    ["HANDS", "POINT", "NUMBER"].every((mode) => roundOneModes.includes(mode)),
+    "round 1 Challenge modes are exactly the three selected modes",
+  );
   ok(new Set(roundOnePrompts).size === 3, "round 1 challenges use three different prompts");
 
   host.send({ t: "NEXT_ROUND" });
@@ -404,9 +478,12 @@ async function main() {
   ({ impostor, normals } = currentRoles(players));
   const roundTwoImpostorUid = impostor.uid;
   const roundTwoMode = host.view.challenge?.mode;
-  const roundTwoPrompt = currentPrompt(normals);
+  const roundTwoPrompt = currentPrompt(normals, roundTwoMode);
   ok(roundTwoImpostorUid !== roundOneImpostorUid, "round 2 gets a new fair impostor");
-  ok(roundTwoMode !== roundOneMode, "balanced shuffle changes mode between the first two rounds");
+  ok(
+    roundTwoMode !== roundOneModes.at(-1),
+    "refilled Challenge mode bag avoids an immediate repeat across the bag boundary",
+  );
   assertSecretWire(host, impostor, normals, roundTwoPrompt);
 
   await runPhysicalSequence(host, players, 1, roundTwoPrompt);
@@ -414,7 +491,7 @@ async function main() {
   ok(host.view.result?.groupFound === true, "majority catches the round 2 impostor");
   ok(host.view.result?.roundComplete === true, "catching impostor in challenge 1 ends the round immediately");
   ok(host.view.result?.challengeIndex === 1, "round 2 ends in challenge 1/3");
-  assertFinalTally(host.view.result, 3);
+  assertFinalTally(host.view.result, 3, players.map((player) => player.uid));
   assertNoPointsOrVoteIdentity(host.view, "round 2 final result");
 
   host.send({ t: "NEXT_ROUND" });
@@ -426,17 +503,14 @@ async function main() {
   ({ impostor, normals } = currentRoles(players));
   const roundThreeImpostorUid = impostor.uid;
   const roundThreeMode = host.view.challenge?.mode;
-  const roundThreePrompt = currentPrompt(normals);
+  const roundThreePrompt = currentPrompt(normals, roundThreeMode);
   ok(roundThreeImpostorUid !== roundTwoImpostorUid, "round 3 advances fairness to another impostor");
-  ok(
-    new Set([roundOneMode, roundTwoMode, roundThreeMode]).size === 3,
-    "balanced mode bag uses all three selected modes across the first three rounds",
-  );
+  ok(roundThreeMode !== roundTwoMode, "Challenge-level bag does not repeat round 2 mode immediately");
 
   await runPhysicalSequence(host, players, 1, roundThreePrompt);
   await voteCatch(host, players, 1, impostor);
   ok(host.view.result?.groupFound === true, "final round majority catches impostor");
-  assertFinalTally(host.view.result, 3);
+  assertFinalTally(host.view.result, 3, players.map((player) => player.uid));
 
   host.send({ t: "NEXT_ROUND" });
   await waitFor(host, (client) => client.phase() === "GAME_OVER", "GAME_OVER after round 3");
@@ -451,6 +525,7 @@ async function main() {
 
   for (const client of [host, ...players]) {
     ok(!client.rawText().includes("promptId"), `${client.label} never receives a promptId on the wire`);
+    assertNoVoterMappingWire(client, `${client.label} final accumulated`);
   }
 
   console.log("\n[cleanup]:");
