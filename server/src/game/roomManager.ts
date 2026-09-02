@@ -337,7 +337,7 @@ export class RoomManager {
 
         this.schedule(room, IMITATION_STAGE_TIMER, this.deps.holdMs, () => {
           if (room.phase !== "HOLD") return;
-        const revealEndsAt = this.deps.now() + this.deps.promptRevealMs;
+          const revealEndsAt = this.deps.now() + this.deps.promptRevealMs;
           engine.revealPrompt(room, revealEndsAt, this.deps);
           this.broadcast(room);
 
