@@ -23,7 +23,7 @@ export function Qr({ url, size = 320 }: { url: string; size?: number }) {
   if (!src) return <div className="qr-wrap" style={{ width: size, height: size }} />;
   return (
     <div className="qr-wrap">
-      <img src={src} alt="QR" />
+      <img src={src} alt="رمز دخول الغرفة" />
     </div>
   );
 }

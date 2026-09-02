@@ -45,8 +45,7 @@ export function Home() {
         <div className="center stack home-hero">
           <h1 className="brand">خلك طبيعي</h1>
           <p className="subtitle">
-            واحد منكم هو المتخفي. يعرف دوره، لكن ما يعرف المطلوب ويحاول يقلّدكم
-            وقت الحركة بدون ما ينكشف.
+            واحد منكم متخفي وما يعرف المطلوب. امسكوه قبل لا يخلّص التحدّيات.
           </p>
         </div>
 
@@ -56,7 +55,7 @@ export function Home() {
             disabled={disabled}
             onClick={() => actions.createRoom()}
           >
-            سو غرفة
+            سوّ غرفة
           </button>
           <button
             className="btn btn-ghost"
@@ -69,7 +68,7 @@ export function Home() {
             ادخل غرفة
           </button>
           <p className="helper" style={{ margin: 0 }}>
-            بدون تحميل وبدون تسجيل
+            بدون تحميل ولا تسجيل
           </p>
         </div>
 
@@ -77,7 +76,7 @@ export function Home() {
           <div className="center stack" style={{ gap: 6 }}>
             <div className="eyebrow">طرق اللعب</div>
             <h2 className="title" id="mode-explainer-title">
-              قبل تبدأ، اعرف وش تسوي كل علامة
+              اعرف طرق اللعب قبل تبدأ
             </h2>
           </div>
           <div className="mode-explainer-grid">
@@ -101,19 +100,19 @@ export function Home() {
           <div className="eyebrow">وش السالفة؟</div>
           <div className="stack" style={{ gap: 10 }}>
             <p className="subtitle" style={{ margin: 0 }}>
-              ١. المضيف يختار طرق اللعب، وكل تحدي يأخذ طريقة من الاختيارات بالتناوب المتوازن.
+              ١. المضيف يختار طرق اللعب، وكل تحدّي ياخذ طريقة من اختياراته.
             </p>
             <p className="subtitle" style={{ margin: 0 }}>
-              ٢. الباقين يشوفون المهمة في الجوال. المتخفي يعرف أنه المتخفي، لكنه ما يشوف المطلوب.
+              ٢. كل اللاعبين يشوفون المطلوب بجوالهم، إلا المتخفي. هو يعرف إنه المتخفي، بس ما يعرف المطلوب.
             </p>
             <p className="subtitle" style={{ margin: 0 }}>
-              ٣. عند العد تنفذون الحركة كلّكم بنفس اللحظة، تثبّتونها شوي، وبعدها ينكشف المطلوب وتناقشون.
+              ٣. وقت العد، الكل يطالع الشاشة وينفذ الحركة بنفس اللحظة.
             </p>
             <p className="subtitle" style={{ margin: 0 }}>
-              ٤. تحتاجون أكثر من نصف الأصوات على المتخفي عشان ينكشف. عندكم حتى ٣ تحديات بنفس المتخفي، لكن طريقة اللعب ممكن تتغير بينهم.
+              ٤. بعدها ينكشف المطلوب، تتناقشون، وتصوّتون.
             </p>
             <p className="subtitle" style={{ margin: 0 }}>
-              ٥. إذا انكشف أو خلصت تحدياته، تبدأ جولة جديدة بمتخفي جديد. اللعبة تستمر لين يخلص عدد الجولات.
+              ٥. إذا أكثر من نصف اللاعبين صوّتوا على المتخفي، ينكشف. إذا نجا، يكمل للتحدّي اللي بعده، وإذا انتهت الجولة تبدأ جولة جديدة.
             </p>
           </div>
         </div>

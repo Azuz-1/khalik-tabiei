@@ -102,7 +102,7 @@ function PlayerPrompt({ view }: { view: ClientView }) {
         <span className="eyebrow">{modeTitle(view)}</span>
         {view.isImpostor ? (
           <>
-            <div className="q-text">أنت المتخفي 👀</div>
+            <div className="q-text">أنت المتخفي</div>
             <p className="subtitle center" style={{ marginBottom: 0 }}>
               ما تعرف المطلوب.
             </p>
@@ -112,6 +112,7 @@ function PlayerPrompt({ view }: { view: ClientView }) {
           </>
         ) : (
           <>
+            <span className="eyebrow">المطلوب</span>
             <div className="q-text">{view.myPrompt?.text ?? "…"}</div>
             <p className="subtitle center" style={{ marginBottom: 0 }}>
               {mode?.normalInstruction}
@@ -132,7 +133,7 @@ function PlayerWatchScreen() {
     <div className="screen center stack">
       <div className="spacer" />
       <h1 className="title" style={{ fontSize: "clamp(38px,11vw,58px)" }}>
-        طالع الشاشة 👀
+        طالع الشاشة
       </h1>
       <div className="spacer" />
     </div>
@@ -164,9 +165,9 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
         </div>
       </div>
       <h2 className="title center" style={{ fontSize: "clamp(28px,8vw,42px)" }}>
-        مين تصرفه مو طبيعي؟ 👀
+        مين تصرفه مو طبيعي؟
       </h2>
-      <p className="subtitle center">تناقشوا… وبعدها المضيف يفتح التصويت</p>
+      <p className="subtitle center">تناقشوا، وبعدها المضيف يفتح التصويت</p>
       <div className="spacer" />
       <LeaveLink />
     </div>
@@ -183,7 +184,7 @@ function PlayerVote({ view }: { view: ClientView }) {
       <div className="screen">
         <div className="spacer" />
         <div className="center stack">
-          <div className="ok-badge">تم تسجيل صوتك 🤫</div>
+          <div className="ok-badge">تم تسجيل صوتك</div>
           <p className="subtitle">
             ننتظر الباقين… <span className="num-ltr">{progress.submitted}/{progress.total}</span>
           </p>
@@ -197,9 +198,9 @@ function PlayerVote({ view }: { view: ClientView }) {
     <div className="screen">
       <div className="center stack">
         <div className="eyebrow">{roundLabel(view)}</div>
-        <h1 className="title">مين تحس المتخفي؟</h1>
+        <h1 className="title">مين تحس إنه المتخفي؟</h1>
         <p className="helper">
-          يحتاج المتخفي {progress.requiredVotes} أصوات أو أكثر عشان ينكشف
+          يحتاج المتخفي {progress.requiredVotes} أصوات عشان ينكشف
         </p>
       </div>
       <div className="vote-list">
@@ -239,7 +240,7 @@ function PlayerResult({ view }: { view: ClientView }) {
       <p className="subtitle center">
         {view.result?.roundComplete
           ? "ننتظر المضيف للجولة الجاية…"
-          : "نفس المتخفي مكمل… ننتظر التحدي الجاي 👀"}
+          : "نفس المتخفي مكمل… ننتظر التحدّي الجاي"}
       </p>
       <div className="spacer" />
     </div>
@@ -259,15 +260,15 @@ function PlayerGameOver({ view }: { view: ClientView }) {
         {gameOver ? (
           <>
             <p className="subtitle">
-              مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات 👏
+              مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات
             </p>
             <div className="card stack" style={{ width: "100%" }}>
               <div className="row between" style={{ fontWeight: 900 }}>
-                <span>✅ انكشف</span>
+                <span>انكشف</span>
                 <span>{gameOver.caughtRounds}</span>
               </div>
               <div className="row between" style={{ fontWeight: 900 }}>
-                <span>😈 نجا</span>
+                <span>نجا</span>
                 <span>{gameOver.escapedRounds}</span>
               </div>
             </div>
