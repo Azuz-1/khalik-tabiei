@@ -1,0 +1,35 @@
+.host-audio-toggle {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  inset-inline-end: 18px;
+  z-index: 40;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 108, 240, 0.28);
+  border-radius: 999px;
+  background: rgba(13, 8, 25, 0.72);
+  color: #fff;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 28px -18px rgba(0, 0, 0, 0.8);
+  opacity: 0.82;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.host-audio-toggle:hover,
+.host-audio-toggle:focus-visible {
+  opacity: 1;
+  border-color: rgba(168, 85, 247, 0.68);
+}
+
+.host-audio-toggle:focus-visible {
+  outline: 3px solid rgba(168, 85, 247, 0.28);
+  outline-offset: 3px;
+}

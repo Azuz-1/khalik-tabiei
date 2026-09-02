@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { ClientView, GameMode, GameModeInfo } from "../../../shared/types.js";
 import { MIN_PLAYERS, ROUND_OPTIONS } from "../../../shared/constants.js";
+import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { actions } from "../net/socket.js";
 import { Qr } from "../components/Qr.js";
 import { Players, Progress } from "../components/Players.js";
@@ -246,8 +247,7 @@ function HostCountdown({ view }: { view: ClientView }) {
     return () => clearInterval(id);
   }, []);
 
-  const remaining = Math.max(0, (view.room.phaseEndsAt ?? Date.now()) - Date.now());
-  const seconds = Math.max(1, Math.min(5, Math.ceil(remaining / 1_000)));
+  const seconds = visibleCountdownSecond(view.room.phaseEndsAt, Date.now()) ?? 1;
 
   return (
     <HostStage className="host-countdown-stage">
