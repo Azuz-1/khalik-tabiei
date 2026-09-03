@@ -1,4 +1,5 @@
 import type { GameMode } from "../../../shared/types.js";
+import { EXTRA_IMITATION_PROMPTS } from "./imitationPrompts.extra.js";
 
 export interface ImitationPrompt {
   id: string;
@@ -7,7 +8,7 @@ export interface ImitationPrompt {
   flags?: string[];
 }
 
-export const IMITATION_PROMPTS: ImitationPrompt[] = [
+export const BASE_IMITATION_PROMPTS: ImitationPrompt[] = [
   { id: "H01", mode: "HANDS", text: "ارفع يدك إذا سبق ورجعت تتأكد إنك قفلت الباب أو السيارة." },
   { id: "H02", mode: "HANDS", text: "ارفع يدك إذا قلت «أنا بالطريق» وأنت للحين بالبيت." },
   { id: "H03", mode: "HANDS", text: "ارفع يدك إذا تفضل الشاي على القهوة." },
@@ -38,4 +39,9 @@ export const IMITATION_PROMPTS: ImitationPrompt[] = [
   { id: "N08", mode: "NUMBER", text: "من 0 إلى 5، قد إيش تصبر في الزحمة؟" },
   { id: "N09", mode: "NUMBER", text: "من آخر 5 أيام، كم يوم أكلت من برا؟" },
   { id: "N10", mode: "NUMBER", text: "من 0 إلى 5، قد إيش أنت شخص يخطط للسفر بدري؟" },
+];
+
+export const IMITATION_PROMPTS: ImitationPrompt[] = [
+  ...BASE_IMITATION_PROMPTS,
+  ...EXTRA_IMITATION_PROMPTS,
 ];
