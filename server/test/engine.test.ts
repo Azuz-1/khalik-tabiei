@@ -356,7 +356,7 @@ test("surviving challenge three ends the round with no points", () => {
   assert.ok([...room.players.values()].every((player) => player.score === 0));
 });
 
-test("prompt ids do not repeat within a game until that mode pool is exhausted", () => {
+test("prompt ids do not repeat within a game while unused prompts remain", () => {
   const room = roomWith(3);
   room.totalRounds = 5;
   engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
@@ -371,8 +371,7 @@ test("prompt ids do not repeat within a game until that mode pool is exhausted",
     engine.nextRound(room, "host", deps);
   }
 
-  assert.equal(new Set(seen.slice(0, 10)).size, 10);
-  assert.ok(seen.slice(0, 10).includes(seen[10]));
+  assert.equal(new Set(seen).size, seen.length);
 });
 
 test("game over happens only after configured round count and tracks group outcomes", () => {
