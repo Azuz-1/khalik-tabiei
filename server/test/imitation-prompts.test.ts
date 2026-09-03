@@ -170,7 +170,7 @@ test("prompt picker uses the combined bank and resets only after full mode exhau
   const handsPool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === "HANDS");
   assert.equal(handsPool.length, 110);
   const finalPrompt = handsPool[handsPool.length - 1];
-  assert.ok(finalPrompt.id.startsWith("H0"), "expected final HANDS prompt to come from extra pack");
+  assert.match(finalPrompt.id, /^H\d{3}$/, "expected final HANDS prompt to come from extra pack");
 
   room.usedPromptIds = new Set(handsPool.slice(0, -1).map((prompt) => prompt.id));
   completeSurvivedChallenge(room);
