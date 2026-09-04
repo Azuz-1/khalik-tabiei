@@ -293,8 +293,16 @@ export class RoomManager {
       return;
     }
 
-    if (!SAFE_REMOVAL_PHASES.has(room.phase)) throw new GameError("INVALID_PHASE");
+    const gameWasActive = !SAFE_REMOVAL_PHASES.has(room.phase);
+    if (gameWasActive) this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+
     this.removePlayer(room, uid);
+
+    // An explicit leave is intentional and should never silently redeal a new
+    // impostor inside what the group thinks is the same game. Return the
+    // remaining group to the Lobby so the reset is visible and deliberate.
+    if (gameWasActive) engine.abortToLobby(room, this.deps);
+
     this.broadcast(room);
     this.sendIdleToUid(uid);
   }
@@ -385,10 +393,14 @@ export class RoomManager {
   private kick(hostUid: string, targetUid: string): void {
     this.withRoom(hostUid, (room) => {
       if (room.hostUid !== hostUid) throw new GameError("NOT_HOST");
-      if (room.phase !== "LOBBY") throw new GameError("INVALID_PHASE");
       if (!room.players.has(targetUid)) throw new GameError("NOT_PLAYER");
 
+      const gameWasActive = !SAFE_REMOVAL_PHASES.has(room.phase);
+      if (gameWasActive) this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+
       this.removePlayer(room, targetUid);
+      if (gameWasActive) engine.abortToLobby(room, this.deps);
+
       for (const conn of this.connsByUid.get(targetUid) ?? []) {
         conn.send({ t: "KICKED" });
       }
