@@ -48,25 +48,35 @@ const ACTION_LIMITS: Partial<Record<ClientMessage["t"], [number, number]>> = {
   CREATE_ROOM: [3, 60_000],
   JOIN_ROOM: [10, 60_000],
   SET_SETTINGS: [30, 60_000],
-  SUBMIT_ANSWER: [5, 60_000],
-  SUBMIT_VOTE: [5, 60_000],
-  NEXT_ROUND: [10, 60_000],
+  SUBMIT_ANSWER: [10, 60_000],
+  // A 10-round game can legitimately ask one player for up to 30 votes.
+  // Engine phase/duplicate guards remain authoritative, so this limiter is
+  // only an abuse backstop and must never block normal multi-challenge play.
+  SUBMIT_VOTE: [40, 60_000],
+  NEXT_ROUND: [30, 60_000],
   KICK_PLAYER: [20, 60_000],
 };
 
 export class AbuseGuard {
-  private readonly connection: FixedWindowLimiter;
-  private readonly session: FixedWindowLimiter;
+  // Shared Wi-Fi/NAT is the normal deployment shape for this party game.
+  // Keep a high coarse per-IP shield, then apply tighter limits per signed
+  // anonymous session once a verified uid is available.
+  private readonly connectionIp: FixedWindowLimiter;
+  private readonly connectionIdentity: FixedWindowLimiter;
+  private readonly sessionIp: FixedWindowLimiter;
+  private readonly sessionIdentity: FixedWindowLimiter;
   private readonly generic: FixedWindowLimiter;
   private readonly httpFallback: FixedWindowLimiter;
   private readonly actions = new Map<ClientMessage["t"], FixedWindowLimiter>();
   private readonly cleanupTimer: NodeJS.Timeout;
 
   constructor(now: () => number = Date.now) {
-    this.connection = new FixedWindowLimiter(30, 60_000, 20_000, now);
-    this.session = new FixedWindowLimiter(60, 60_000, 20_000, now);
+    this.connectionIp = new FixedWindowLimiter(300, 60_000, 20_000, now);
+    this.connectionIdentity = new FixedWindowLimiter(60, 60_000, 20_000, now);
+    this.sessionIp = new FixedWindowLimiter(300, 60_000, 20_000, now);
+    this.sessionIdentity = new FixedWindowLimiter(120, 60_000, 20_000, now);
     this.generic = new FixedWindowLimiter(80, 10_000, 20_000, now);
-    this.httpFallback = new FixedWindowLimiter(120, 60_000, 20_000, now);
+    this.httpFallback = new FixedWindowLimiter(240, 60_000, 20_000, now);
     for (const [type, [limit, windowMs]] of Object.entries(ACTION_LIMITS)) {
       this.actions.set(type as ClientMessage["t"], new FixedWindowLimiter(limit, windowMs, 20_000, now));
     }
@@ -74,12 +84,14 @@ export class AbuseGuard {
     this.cleanupTimer.unref?.();
   }
 
-  allowConnection(ip: string): boolean {
-    return this.connection.allow(ip);
+  allowConnection(ip: string, identity?: string): boolean {
+    if (!this.connectionIp.allow(ip)) return false;
+    return identity ? this.connectionIdentity.allow(identity) : true;
   }
 
-  allowSession(ip: string): boolean {
-    return this.session.allow(ip);
+  allowSession(ip: string, identity?: string): boolean {
+    if (!this.sessionIp.allow(ip)) return false;
+    return identity ? this.sessionIdentity.allow(identity) : true;
   }
 
   allowMessage(identity: string, type?: ClientMessage["t"]): boolean {
@@ -93,8 +105,10 @@ export class AbuseGuard {
   }
 
   cleanup(): void {
-    this.connection.cleanup();
-    this.session.cleanup();
+    this.connectionIp.cleanup();
+    this.connectionIdentity.cleanup();
+    this.sessionIp.cleanup();
+    this.sessionIdentity.cleanup();
     this.generic.cleanup();
     this.httpFallback.cleanup();
     for (const limiter of this.actions.values()) limiter.cleanup();
