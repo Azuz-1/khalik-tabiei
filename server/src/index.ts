@@ -56,8 +56,9 @@ export function createGameServer() {
 
   app.get("/api/session", (req, res) => {
     const ip = clientIp(req, config.clientIpMode);
+    const existingSession = readAnonymousSession(req, config.sessionSecret);
     res.setHeader("Cache-Control", "no-store");
-    if (!abuse.allowSession(ip)) {
+    if (!abuse.allowSession(ip, existingSession?.uid)) {
       res.status(429).json({ ok: false, code: "RATE_LIMITED" });
       return;
     }
@@ -88,13 +89,15 @@ export function createGameServer() {
     if (pathname !== "/ws") return rejectUpgrade(socket, 404, "Not Found");
 
     const ip = clientIp(req, config.clientIpMode);
-    if (!abuse.allowConnection(ip)) return rejectUpgrade(socket, 429, "Too Many Requests");
     const rawOrigin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin;
     if (!isAllowedWebSocketOrigin(rawOrigin, config.allowedOrigins, config.production)) {
       return rejectUpgrade(socket, 403, "Forbidden");
     }
     const session = readAnonymousSession(req, config.sessionSecret);
     if (!session) return rejectUpgrade(socket, 401, "Unauthorized");
+    if (!abuse.allowConnection(ip, session.uid)) {
+      return rejectUpgrade(socket, 429, "Too Many Requests");
+    }
     const origin = config.publicOrigin ??
       (rawOrigin ? canonicalOrigin(rawOrigin) : `http://localhost:${config.port}`);
     if (!origin) return rejectUpgrade(socket, 403, "Forbidden");
@@ -126,7 +129,7 @@ export function createGameServer() {
           conn.closePolicy("duplicate authentication");
           return;
         }
-        if (!abuse.allowSession(conn.ip)) {
+        if (!abuse.allowSession(conn.ip, context.uid)) {
           conn.send({ t: "ERROR", code: "RATE_LIMITED" });
           return;
         }
