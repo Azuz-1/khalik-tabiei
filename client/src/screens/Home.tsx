@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { unlockAudio } from "../audio/gameAudio.js";
 import { actions, useGame } from "../net/socket.js";
 import { errorText } from "../i18n/errors.js";
 import {
@@ -53,7 +54,13 @@ export function Home() {
           <button
             className="btn btn-primary"
             disabled={disabled}
-            onClick={() => actions.createRoom()}
+            onClick={() => {
+              // This click is the earliest guaranteed Host gesture. Unlocking
+              // here lets Lobby join cues work even if players enter before
+              // the Host touches the newly-created room screen again.
+              void unlockAudio();
+              actions.createRoom();
+            }}
           >
             سوّ غرفة
           </button>
