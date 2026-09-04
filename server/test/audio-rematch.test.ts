@@ -45,6 +45,60 @@ test("rematch resets per-game result dedupe so the same caught result can sound 
   assert.deepEqual(eventTypes(controller, snapshot({ phase: "RESULT", currentRound: 1, result: caught })), []);
 });
 
+test("disconnect redeal clears current-round result dedupe when challenge index resets", () => {
+  const controller = new HostAudioEventController();
+  const survived = { groupFound: false, roundComplete: false, challengeIndex: 1 };
+
+  // Challenge 1 survives and its result cue is correctly remembered.
+  controller.update(snapshot({ phase: "VOTING", currentRound: 1, challengeIndex: 1 }));
+  assert.deepEqual(
+    eventTypes(
+      controller,
+      snapshot({ phase: "RESULT", currentRound: 1, challengeIndex: 1, result: survived }),
+    ),
+    ["challengeSurvived"],
+  );
+
+  // Normal progression reaches Challenge 2.
+  controller.update(snapshot({ phase: "QUESTION", currentRound: 1, challengeIndex: 2 }));
+  controller.update(snapshot({ phase: "COUNTDOWN", currentRound: 1, challengeIndex: 2 }));
+
+  // A player grace-expiry redeal resets the same Round back to Challenge 1.
+  controller.update(snapshot({ phase: "QUESTION", currentRound: 1, challengeIndex: 1 }));
+  controller.update(snapshot({ phase: "VOTING", currentRound: 1, challengeIndex: 1 }));
+
+  // The redealt Challenge 1 is a new attempt, so its result cue must play again.
+  assert.deepEqual(
+    eventTypes(
+      controller,
+      snapshot({ phase: "RESULT", currentRound: 1, challengeIndex: 1, result: survived }),
+    ),
+    ["challengeSurvived"],
+  );
+});
+
+test("same-challenge disconnect redeal also permits a fresh result cue", () => {
+  const controller = new HostAudioEventController();
+  const survived = { groupFound: false, roundComplete: false, challengeIndex: 1 };
+
+  controller.update(snapshot({ phase: "VOTING", challengeIndex: 1 }));
+  assert.deepEqual(
+    eventTypes(controller, snapshot({ phase: "RESULT", challengeIndex: 1, result: survived })),
+    ["challengeSurvived"],
+  );
+
+  // A later Challenge-1 attempt can be redealt from an active phase back to
+  // QUESTION without changing round/challenge numbers.
+  controller.update(snapshot({ phase: "COUNTDOWN", challengeIndex: 1 }));
+  controller.update(snapshot({ phase: "QUESTION", challengeIndex: 1 }));
+  controller.update(snapshot({ phase: "VOTING", challengeIndex: 1 }));
+
+  assert.deepEqual(
+    eventTypes(controller, snapshot({ phase: "RESULT", challengeIndex: 1, result: survived })),
+    ["challengeSurvived"],
+  );
+});
+
 test("escaped result still de-duplicates within one game", () => {
   const controller = new HostAudioEventController();
   const escaped = { groupFound: false, roundComplete: true, challengeIndex: 3 };
