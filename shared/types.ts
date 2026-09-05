@@ -70,6 +70,8 @@ export type ErrorCode =
 export interface PublicPlayer {
   uid: string;
   name: string;
+  /** Stable numeric identity for the occupied seat; color/status remains supplementary. */
+  seatNumber: number;
   connected: boolean;
   isHost: boolean;
 }

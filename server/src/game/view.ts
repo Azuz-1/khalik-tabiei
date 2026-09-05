@@ -13,8 +13,24 @@ function roleFor(room: RoomState, uid: string): Role {
   return "spectator";
 }
 
+/** Pure stable fallback for legacy/internal test players that predate explicit seat assignment. */
+function stableSeatNumber(uid: string): number {
+  let hash = 2166136261;
+  for (const char of uid) {
+    hash ^= char.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 900_000 + 100_000;
+}
+
 function publicPlayers(room: RoomState): PublicPlayer[] {
-  return [...room.players.values()].map((player) => ({ uid: player.uid, name: player.name, connected: player.connected, isHost: false }));
+  return [...room.players.values()].map((player) => ({
+    uid: player.uid,
+    name: player.name,
+    seatNumber: player.seatNumber ?? stableSeatNumber(player.uid),
+    connected: player.connected,
+    isHost: false,
+  }));
 }
 
 function revealAnswers(room: RoomState): RevealedAnswer[] {

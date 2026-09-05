@@ -1,6 +1,6 @@
 import type { PublicPlayer } from "../../../shared/types.js";
 
-/** Live player chips. In host lobby, the host can kick players. */
+/** Live player chips. Seat number is visible; connection color is supplementary. */
 export function Players({
   players,
   selfUid,
@@ -14,16 +14,18 @@ export function Players({
 }) {
   return (
     <div className="players">
-      {players.map((p) => (
-        <span key={p.uid} className={`chip${p.connected ? "" : " off"}`}>
-          <span className="dot" />
-          {p.name}
-          {p.uid === selfUid ? " (أنت)" : ""}
+      {players.map((player) => (
+        <span key={player.uid} className={`chip${player.connected ? "" : " off"}`}>
+          <span className="seat-badge" aria-label={`مقعد ${player.seatNumber}`}>{player.seatNumber}</span>
+          <span className="dot" aria-hidden="true" />
+          <span>{player.name}{player.uid === selfUid ? " (أنت)" : ""}</span>
+          <span className="sr-only">{player.connected ? "متصل" : "منقطع"}</span>
           {canKick && onKick ? (
             <button
+              type="button"
               className="kick"
-              aria-label={`إخراج ${p.name}`}
-              onClick={() => onKick(p.uid)}
+              aria-label={`إخراج ${player.name} من مقعد ${player.seatNumber}`}
+              onClick={() => onKick(player.uid)}
             >
               ✕
             </button>
@@ -38,11 +40,9 @@ export function Progress({ submitted, total, verb }: { submitted: number; total:
   const pct = total > 0 ? Math.round((submitted / total) * 100) : 0;
   return (
     <div className="progress-big stack">
-      <div className="num">
-        {submitted} <span style={{ color: "var(--muted)" }}>/ {total}</span>
-      </div>
+      <div className="num">{submitted} <span style={{ color: "var(--muted)" }}>/ {total}</span></div>
       <div className="subtitle center">{verb}</div>
-      <div className="bar">
+      <div className="bar" role="progressbar" aria-label={verb} aria-valuemin={0} aria-valuemax={total} aria-valuenow={submitted}>
         <i style={{ width: `${pct}%` }} />
       </div>
     </div>
