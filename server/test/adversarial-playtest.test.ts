@@ -163,80 +163,132 @@ test("player drop and reconnect during COUNTDOWN keeps the exact challenge synch
   manager.dispose();
 });
 
-test("grace expiry during ACTION cancels the stale stage timer before redeal", async () => {
+test("player disconnect never auto-removes the seat or silently redeals the impostor", async () => {
   const manager = new RoomManager({
     rng: () => 0,
-    countdownMs: 2,
-    actionMs: 70,
-    holdMs: 70,
-    promptRevealMs: 70,
-    disconnectGraceMs: 12,
+    disconnectGraceMs: 10,
   });
   const { host, players, room } = setup(manager, 4);
   startGame(manager, host, 3);
-  for (const player of players) manager.handle(player.conn, { t: "MARK_READY" });
-  await waitForPhase(room, "ACTION");
 
-  const oldRound = room.round!;
-  const oldMode = oldRound.mode;
-  const leaving = players.find((player) => player.uid !== oldRound.impostorUid)!;
+  const roundBefore = room.round!;
+  const leaving = players.find((player) => player.uid !== roundBefore.impostorUid)!;
+  const promptId = roundBefore.promptId;
+  const impostorUid = roundBefore.impostorUid;
+
   manager.disconnect(leaving.conn);
+  await wait(30);
 
-  await wait(25);
   assert.equal(room.phase, "QUESTION");
-  assert.equal(room.players.has(leaving.uid), false);
-  assert.notEqual(room.round, oldRound);
-  assert.equal(room.round!.challengeIndex, 1);
-  assert.equal(room.round!.mode, oldMode);
-  assert.notEqual(room.round!.promptId, oldRound.promptId);
-
-  // If the old ACTION timer was not cancelled, it would move this fresh deal
-  // into HOLD later without anybody pressing Ready.
-  await wait(80);
-  assert.equal(room.phase, "QUESTION");
-  assert.equal(room.round!.readyUids.size, 0);
+  assert.equal(room.round, roundBefore);
+  assert.equal(room.round!.promptId, promptId);
+  assert.equal(room.round!.impostorUid, impostorUid);
+  assert.equal(room.players.has(leaving.uid), true);
+  assert.equal(room.players.get(leaving.uid)?.connected, false);
+  assert.equal(room.round!.participantUids.includes(leaving.uid), true);
 
   const hostView = lastMessage(host.socket, "STATE")!.view;
-  assert.equal(hostView.publicPrompt, undefined);
-  assert.equal(hostView.myPrompt, undefined);
+  assert.equal(hostView.players.find((player) => player.uid === leaving.uid)?.connected, false);
   manager.dispose();
 });
 
-test("vote-stage disconnect expiry clears stale votes and live tally before redeal", async () => {
+test("Host can remove a slow normal player in QUESTION and continue the same challenge", () => {
+  const manager = new RoomManager({ rng: () => 0, countdownMs: 40 });
+  const { host, players, room } = setup(manager, 4);
+  startGame(manager, host, 3);
+
+  const roundBefore = room.round!;
+  const slow = players.find((player) => player.uid !== roundBefore.impostorUid)!;
+  const promptId = roundBefore.promptId;
+  const impostorUid = roundBefore.impostorUid;
+
+  for (const player of players) {
+    if (player.uid !== slow.uid) manager.handle(player.conn, { t: "MARK_READY" });
+  }
+  assert.equal(room.phase, "QUESTION");
+
+  manager.handle(host.conn, { t: "KICK_PLAYER", uid: slow.uid });
+
+  assert.equal(room.players.has(slow.uid), false);
+  assert.equal(room.round, roundBefore);
+  assert.equal(room.round!.promptId, promptId);
+  assert.equal(room.round!.impostorUid, impostorUid);
+  assert.equal(room.round!.participantUids.includes(slow.uid), false);
+  assert.equal(room.phase, "COUNTDOWN");
+  manager.dispose();
+});
+
+test("Host can remove a missing normal voter and finish VOTING without a redeal", async () => {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 2,
     actionMs: 2,
     holdMs: 2,
     promptRevealMs: 2,
-    disconnectGraceMs: 12,
   });
   const { host, players, room } = setup(manager, 4);
   startGame(manager, host, 3);
   await advanceToDiscussion(manager, room, players);
   manager.handle(host.conn, { t: "START_VOTING" });
 
-  manager.handle(players[0].conn, {
-    t: "SUBMIT_VOTE",
-    targetUid: players[1].uid,
-  });
-  assert.equal(room.round!.votes.size, 1);
-  assert.equal(lastMessage(host.socket, "STATE")!.view.votesProgress?.submitted, 1);
+  const roundBefore = room.round!;
+  const slow = players.find((player) => player.uid !== roundBefore.impostorUid)!;
+  const remaining = players.filter((player) => player.uid !== slow.uid);
+  const firstNormal = remaining.find((player) => player.uid !== roundBefore.impostorUid)!;
 
-  const leaving = players[2];
-  manager.disconnect(leaving.conn);
-  await wait(25);
+  for (const player of remaining) {
+    manager.handle(player.conn, {
+      t: "SUBMIT_VOTE",
+      targetUid: player.uid === roundBefore.impostorUid ? firstNormal.uid : roundBefore.impostorUid,
+    });
+  }
+  assert.equal(room.phase, "VOTING");
+  assert.equal(room.round!.votes.size, 3);
 
-  assert.equal(room.phase, "QUESTION");
+  manager.handle(host.conn, { t: "KICK_PLAYER", uid: slow.uid });
+
+  assert.equal(room.round, roundBefore);
+  assert.equal(room.round!.impostorUid, roundBefore.impostorUid);
+  assert.equal(room.round!.participantUids.includes(slow.uid), false);
+  assert.equal(room.phase, "RESULT");
+  assert.equal(room.round!.groupFound, true);
+  manager.dispose();
+});
+
+test("removing the current impostor is an explicit Lobby reset, never a hidden redeal", () => {
+  const manager = new RoomManager({ rng: () => 0 });
+  const { host, room } = setup(manager, 4);
+  startGame(manager, host, 3);
+
+  const impostorUid = room.round!.impostorUid;
+  manager.handle(host.conn, { t: "KICK_PLAYER", uid: impostorUid });
+
+  assert.equal(room.players.has(impostorUid), false);
+  assert.equal(room.phase, "LOBBY");
+  assert.equal(room.currentRound, 0);
+  assert.equal(room.round, null);
+  assert.equal(room.impostorHistory.length, 0);
+  manager.dispose();
+});
+
+test("a normal player's explicit leave does not change the hidden impostor", () => {
+  const manager = new RoomManager({ rng: () => 0, countdownMs: 40 });
+  const { host, players, room } = setup(manager, 4);
+  startGame(manager, host, 3);
+
+  const roundBefore = room.round!;
+  const leaving = players.find((player) => player.uid !== roundBefore.impostorUid)!;
+  const impostorUid = roundBefore.impostorUid;
+  const promptId = roundBefore.promptId;
+
+  manager.handle(leaving.conn, { t: "LEAVE_ROOM" });
+
   assert.equal(room.players.has(leaving.uid), false);
-  assert.equal(room.round!.votes.size, 0);
-  assert.equal(room.round!.resultComputed, false);
-  assert.equal(room.round!.participantUids.length, 3);
-
-  const hostView = lastMessage(host.socket, "STATE")!.view;
-  assert.equal(hostView.liveVoteTally, undefined);
-  assert.equal(hostView.votesProgress, undefined);
-  assert.equal(hostView.publicPrompt, undefined);
+  assert.equal(room.phase, "QUESTION");
+  assert.equal(room.round, roundBefore);
+  assert.equal(room.round!.impostorUid, impostorUid);
+  assert.equal(room.round!.promptId, promptId);
+  assert.equal(room.round!.participantUids.includes(leaving.uid), false);
   manager.dispose();
 });
 
