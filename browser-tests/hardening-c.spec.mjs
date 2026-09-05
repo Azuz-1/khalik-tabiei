@@ -65,12 +65,14 @@ test("Host and Player rendered flows stay accessible at 3, 6, and 10 players", a
     const stableChip = host.page.locator(".chip", { hasText: stablePlayerName });
     const stableSeat = (await stableChip.locator(".seat-badge").textContent())?.trim();
 
+    // The dedicated offline banner is intentionally in-game only. In the Lobby,
+    // verify the authoritative disconnected state through player management.
     await players[4].context.close();
-    await expect(host.page.locator(".offline-player-banner")).toContainText("لاعب5");
     await host.page.locator("button.floating-players").click();
     const manager = host.page.getByRole("dialog", { name: "اللاعبين" });
     await expect(manager).toBeVisible();
     await expect(manager.locator(".manager-player-row").first()).toContainText("لاعب5");
+    await expect(manager.locator(".manager-player-row").first()).toContainText("منقطع");
     await expect(host.page.locator("[data-game-surface]")).toHaveAttribute("inert", "");
 
     const offlineRow = manager.locator(".manager-player-row", { hasText: "لاعب5" });
@@ -107,7 +109,7 @@ test("Unicode names, stale confirmations, Player leave, focus restoration, and r
     await duplicate.goto(`/join/${host.code}`);
     await duplicate.getByLabel("اسمك").fill("سالم\u200b");
     await duplicate.getByRole("button", { name: "دخول الغرفة" }).click();
-    await expect(duplicate.getByText("فيه لاعب بنفس الاسم، غيّره شوي")).toBeVisible();
+    await expect(duplicate.getByRole("alert")).toHaveText("فيه لاعب بنفس الاسم، غيّره شوي");
 
     const invisibleContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
     playerContexts.push(invisibleContext);
