@@ -79,6 +79,8 @@ export interface RoomState {
   updatedAt: number;
   /** Product activity only. Heartbeats, reconnects, broadcasts, rejected actions and settings spam do not extend this. */
   meaningfulAt: number;
+  /** Internal action-dedupe context. Incremented only when a new match actually starts. */
+  matchGeneration: number;
   minPlayers: number;
   maxPlayers: number;
   totalRounds: number;
@@ -113,6 +115,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     createdAt: now,
     updatedAt: now,
     meaningfulAt: now,
+    matchGeneration: 0,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
     totalRounds: 0,
