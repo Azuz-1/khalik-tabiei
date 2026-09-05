@@ -94,7 +94,8 @@ test("mixed rejected settings update is atomic", () => {
       playStyle: "INDIVIDUAL",
       categories: ["food"],
     }, { now: () => 999, rng: () => 0 }),
-    /BAD_REQUEST/,
+    (error: unknown) =>
+      typeof error === "object" && error !== null && "code" in error && error.code === "BAD_REQUEST",
   );
   assert.equal(room.totalRounds, 5);
   assert.deepEqual(room.selectedModes, ["HANDS", "POINT"]);
