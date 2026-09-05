@@ -52,13 +52,14 @@ test("draining manager rejects new room admission, start, and rematch actions", 
 });
 
 test("font serving is local-only and production runtime is compiled/non-root", async () => {
-  const [html, main, headers, clientPackage, dockerfile, serverPackage] = await Promise.all([
+  const [html, main, headers, clientPackage, dockerfile, serverPackage, renderBlueprint] = await Promise.all([
     readFile(new URL("../../client/index.html", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/main.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/security/headers.ts", import.meta.url), "utf8"),
     readFile(new URL("../../client/package.json", import.meta.url), "utf8"),
     readFile(new URL("../../Dockerfile", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../../render.yaml", import.meta.url), "utf8"),
   ]);
   assert.equal(html.includes("fonts.googleapis.com"), false);
   assert.equal(html.includes("fonts.gstatic.com"), false);
@@ -71,6 +72,10 @@ test("font serving is local-only and production runtime is compiled/non-root", a
   assert.ok(dockerfile.includes("USER node"));
   assert.ok(dockerfile.includes('CMD ["node", "server/dist/server/src/index.js"]'));
   assert.equal(JSON.parse(serverPackage).scripts.start, "node dist/server/src/index.js");
+  assert.ok(renderBlueprint.includes("runtime: docker"));
+  assert.ok(renderBlueprint.includes("healthCheckPath: /readyz"));
+  assert.ok(renderBlueprint.includes("maxShutdownDelaySeconds: 15"));
+  assert.equal(renderBlueprint.includes("healthCheckPath: /healthz"), false);
 });
 
 test("legacy TEXT_PAIR content remains isolated from the 330 active imitation prompts", async () => {
