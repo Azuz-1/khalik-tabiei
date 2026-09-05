@@ -126,7 +126,6 @@ test("player drop and reconnect during COUNTDOWN keeps the exact challenge synch
     actionMs: 5,
     holdMs: 5,
     promptRevealMs: 5,
-    disconnectGraceMs: 120,
   });
   const { host, players, room } = setup(manager, 4);
   startGame(manager, host, 3);
@@ -164,10 +163,7 @@ test("player drop and reconnect during COUNTDOWN keeps the exact challenge synch
 });
 
 test("player disconnect never auto-removes the seat or silently redeals the impostor", async () => {
-  const manager = new RoomManager({
-    rng: () => 0,
-    disconnectGraceMs: 10,
-  });
+  const manager = new RoomManager({ rng: () => 0 });
   const { host, players, room } = setup(manager, 4);
   startGame(manager, host, 3);
 
@@ -299,7 +295,7 @@ test("host reconnect inside grace keeps the running sequence and room alive", as
     actionMs: 5,
     holdMs: 5,
     promptRevealMs: 5,
-    disconnectGraceMs: 100,
+    hostDisconnectGraceMs: 100,
   });
   const { host, players, room } = setup(manager, 3);
   startGame(manager, host, 3);
