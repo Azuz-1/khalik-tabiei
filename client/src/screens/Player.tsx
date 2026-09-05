@@ -29,16 +29,6 @@ export function Player({ view }: { view: ClientView }) {
   }
 }
 
-function LeaveLink() {
-  return (
-    <div className="footer-note">
-      <button className="link-btn" onClick={() => actions.leaveRoom()}>
-        مغادرة الغرفة
-      </button>
-    </div>
-  );
-}
-
 function modeInfo(view: ClientView): GameModeInfo | undefined {
   return view.room.availableModes.find((candidate) => candidate.id === view.challenge?.mode);
 }
@@ -81,7 +71,6 @@ function PlayerLobby({ view }: { view: ClientView }) {
       </div>
 
       <div className="spacer" />
-      <LeaveLink />
     </div>
   );
 }
@@ -169,7 +158,6 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
       </h2>
       <p className="subtitle center">تناقشوا، وبعدها المضيف يفتح التصويت</p>
       <div className="spacer" />
-      <LeaveLink />
     </div>
   );
 }
@@ -277,7 +265,6 @@ function PlayerGameOver({ view }: { view: ClientView }) {
         <p className="subtitle center">ننتظر المضيف يبدأ لعبة جديدة أو يقفل الغرفة</p>
       </div>
       <div className="spacer" />
-      <LeaveLink />
     </div>
   );
 }
