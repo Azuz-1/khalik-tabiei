@@ -2,6 +2,7 @@
 import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import express from "express";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
@@ -18,7 +19,11 @@ import { GameError } from "./game/errors.js";
 import { totalPairs } from "./game/questions.js";
 
 const sourceDir = dirname(fileURLToPath(import.meta.url));
-const clientDist = join(sourceDir, "..", "..", "client", "dist");
+const clientDistCandidates = [
+  join(sourceDir, "..", "..", "client", "dist"),
+  join(sourceDir, "..", "..", "..", "..", "client", "dist"),
+];
+const clientDist = clientDistCandidates.find((candidate) => existsSync(candidate)) ?? clientDistCandidates[0]!;
 
 interface UpgradeContext { uid: string; origin: string; ip: string; lease: CapacityLease }
 
@@ -47,6 +52,9 @@ export function createGameServer() {
   const contexts = new WeakMap<WebSocket, UpgradeContext>();
   const connections = new WeakMap<WebSocket, Connection>();
   const violations = new WeakMap<Connection, number>();
+  let draining = false;
+  let drainDeadlineMs: number | undefined;
+  let drainTimer: NodeJS.Timeout | undefined;
 
   app.disable("x-powered-by");
   app.use(securityHeaders(config.production, config.publicOrigin));
@@ -56,7 +64,17 @@ export function createGameServer() {
     res.json({ ok: true });
   });
 
+  app.get("/readyz", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(draining ? 503 : 200).json({ ok: !draining, draining, ...(drainDeadlineMs ? { deadlineMs: drainDeadlineMs } : {}) });
+  });
+
   app.get("/api/session", (req, res) => {
+    if (draining) {
+      res.setHeader("Cache-Control", "no-store");
+      res.status(503).json({ ok: false, code: "SERVER_RESTARTING", ...(drainDeadlineMs ? { deadlineMs: drainDeadlineMs } : {}) });
+      return;
+    }
     const ip = clientIp(req, config.clientIpMode);
     const existingSession = readAnonymousSession(req, config.sessionSecret);
     res.setHeader("Cache-Control", "no-store");
@@ -82,6 +100,7 @@ export function createGameServer() {
     try { pathname = new URL(req.url ?? "", "http://localhost").pathname; }
     catch { return rejectUpgrade(socket, 400, "Bad Request"); }
     if (pathname !== "/ws") return rejectUpgrade(socket, 404, "Not Found");
+    if (draining) return rejectUpgrade(socket, 503, "Service Restarting");
 
     const ip = clientIp(req, config.clientIpMode);
     const rawOrigin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin;
@@ -136,6 +155,14 @@ export function createGameServer() {
       }
 
       if (msg.t === "HELLO") {
+        // An upgrade may have completed immediately before draining began. Do
+        // not let a delayed HELLO turn that transport into a newly admitted
+        // authenticated connection after readiness has already gone false.
+        if (draining) {
+          conn.send({ t: "ERROR", code: "SERVER_RESTARTING", ...(msg.rid ? { rid: msg.rid } : {}) });
+          conn.closePolicy("server draining");
+          return;
+        }
         if (conn.uid !== null) {
           conn.send({ t: "ERROR", code: "BAD_REQUEST", ...(msg.rid ? { rid: msg.rid } : {}) });
           conn.closePolicy("duplicate authentication");
@@ -192,23 +219,57 @@ export function createGameServer() {
   }, config.heartbeatMs);
   heartbeat.unref?.();
 
+  const finishDrain = () => {
+    if (!draining) return;
+    if (drainTimer) { clearTimeout(drainTimer); drainTimer = undefined; }
+    for (const ws of wss.clients) {
+      if (ws.readyState === 0 || ws.readyState === 1) ws.close(1012, "service restarting");
+    }
+    server.close();
+    const force = setTimeout(() => { for (const ws of wss.clients) ws.terminate(); }, 1_000);
+    force.unref?.();
+  };
+
+  const beginDrain = (graceMs = config.drainTimeoutMs): number => {
+    if (draining && drainDeadlineMs) return drainDeadlineMs;
+    draining = true;
+    drainDeadlineMs = Date.now() + Math.max(1, graceMs);
+    manager.setDraining(true);
+    for (const ws of wss.clients) {
+      const conn = connections.get(ws);
+      if (conn) conn.send({ t: "SERVER_RESTARTING", deadlineMs: drainDeadlineMs });
+    }
+    drainTimer = setTimeout(finishDrain, Math.max(1, graceMs));
+    return drainDeadlineMs;
+  };
+
   let disposed = false;
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     clearInterval(heartbeat);
+    if (drainTimer) clearTimeout(drainTimer);
     abuse.dispose();
     manager.dispose();
     for (const ws of wss.clients) ws.terminate();
   };
   server.on("close", dispose);
-  return { app, server, wss, manager, dispose, capacity };
+  return { app, server, wss, manager, dispose, capacity, beginDrain, finishDrain, isReady: () => !draining };
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 if (isMain) {
   const runtime = createGameServer();
   runtime.server.listen(config.port, config.host, () => {
-    console.log(`«خلك طبيعي» listening on port ${config.port} (${totalPairs()} question pairs)`);
+    console.log(`«خلك طبيعي» listening on port ${config.port} (${totalPairs()} legacy question pairs)`);
   });
+  let signalHandled = false;
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (signalHandled) return;
+    signalHandled = true;
+    const deadlineMs = runtime.beginDrain(config.drainTimeoutMs);
+    console.log(`${signal}: draining until ${new Date(deadlineMs).toISOString()}`);
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }

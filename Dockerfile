@@ -1,22 +1,30 @@
-# Build the client, then run the self-contained Node + WebSocket server that
-# serves it. One image, one port.
-FROM node:22-slim
+FROM node:22-slim AS build
 
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY client/package.json ./client/
-
-# Install all workspace deps (dev deps needed to build the client).
 RUN npm ci
 
 COPY . .
-
-# Build the React client to client/dist.
 RUN npm run build
+
+FROM node:22-slim AS runtime
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY server/package.json ./server/
+COPY client/package.json ./client/
+RUN npm ci --omit=dev --workspace @khalik/server --include-workspace-root=false \
+  && npm cache clean --force
+
+COPY --from=build /app/server/dist ./server/dist
+COPY --from=build /app/client/dist ./client/dist
+COPY --from=build /app/client/THIRD_PARTY_NOTICES ./client/THIRD_PARTY_NOTICES
 
 ENV PORT=8080
 ENV NODE_ENV=production
 EXPOSE 8080
 
-CMD ["npm", "start"]
+USER node
+CMD ["node", "server/dist/server/src/index.js"]

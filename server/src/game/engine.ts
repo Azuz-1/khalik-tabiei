@@ -18,6 +18,7 @@ import {
   type SealedParticipant,
 } from "./state.js";
 import { IMITATION_PROMPTS, type ImitationPrompt } from "./imitationPrompts.data.js";
+import type { PromptFamily } from "./promptMetadata.js";
 import { pickPair } from "./questions.js";
 import { aggregateVoteTally } from "./votes.js";
 
@@ -179,6 +180,18 @@ export function pickBalancedMode(room: RoomState, deps: EngineDeps = defaultDeps
   return mode;
 }
 
+export function choosePromptCandidate(
+  candidates: ImitationPrompt[],
+  previousFamily: PromptFamily | undefined,
+  rng: () => number,
+): ImitationPrompt {
+  if (!candidates.length) throw new GameError("INTERNAL", "no prompt candidates");
+  const spaced = previousFamily ? candidates.filter((prompt) => prompt.family !== previousFamily) : candidates;
+  const selectionPool = spaced.length ? spaced : candidates;
+  const index = Math.min(Math.floor(rng() * selectionPool.length), selectionPool.length - 1);
+  return selectionPool[index]!;
+}
+
 function pickPrompt(room: RoomState, mode: GameMode, deps: EngineDeps): ImitationPrompt {
   const pool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === mode);
   let candidates = pool.filter((prompt) => !room.usedPromptIds.has(prompt.id));
@@ -192,8 +205,12 @@ function pickPrompt(room: RoomState, mode: GameMode, deps: EngineDeps): Imitatio
 
   if (!candidates.length) throw new GameError("INTERNAL", `no prompts for ${mode}`);
 
-  const index = Math.min(Math.floor(deps.rng() * candidates.length), candidates.length - 1);
-  const prompt = candidates[index];
+  const previousFamily = room.round?.promptId
+    ? IMITATION_PROMPTS.find((prompt) => prompt.id === room.round?.promptId)?.family
+    : undefined;
+  // Topic spacing is best-effort only. It never bypasses exact game-scoped
+  // no-repeat history; when only one family remains, selection falls back.
+  const prompt = choosePromptCandidate(candidates, previousFamily, deps.rng);
   room.usedPromptIds.add(prompt.id);
   return prompt;
 }

@@ -11,7 +11,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,7 +32,7 @@ jobs:
           trap cleanup EXIT
 
           for attempt in {1..40}; do
-            if curl --fail --silent http://localhost:8080/api/session >/dev/null; then
+            if curl --fail --silent http://localhost:8080/readyz >/dev/null; then
               break
             fi
             if ! kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -42,14 +42,44 @@ jobs:
             sleep 0.25
           done
 
-          curl --fail --silent http://localhost:8080/api/session >/dev/null
+          curl --fail --silent http://localhost:8080/readyz >/dev/null
           npm run test:integration
         env:
           PUBLIC_ORIGIN: http://localhost:8080
           SESSION_SECRET: integration-test-secret-0123456789-abcdef
-      - run: npm audit --omit=dev --audit-level=high
+      - name: Production dependency audit
+        run: npm audit --omit=dev
         env:
           NODE_ENV: development
+      - name: Full dependency audit
+        run: npm audit
+        env:
+          NODE_ENV: development
+      - name: Build production container
+        run: docker build -t khalik-tabiei:ci .
+      - name: Inspect and smoke-test production container
+        run: |
+          test "$(docker image inspect --format '{{.Config.User}}' khalik-tabiei:ci)" = "node"
+          docker run --rm --entrypoint sh khalik-tabiei:ci -c 'test ! -e node_modules/tsx && test ! -e node_modules/typescript'
+          CID=$(docker run -d --rm -p 18080:8080 \
+            -e PUBLIC_ORIGIN=https://example.invalid \
+            -e SESSION_SECRET=container-smoke-secret-0123456789-abcdef \
+            khalik-tabiei:ci)
+          cleanup() { docker stop "$CID" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for attempt in {1..40}; do
+            if curl --fail --silent http://localhost:18080/readyz >/dev/null; then
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' "$CID" 2>/dev/null | grep -q true; then
+              docker logs "$CID"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          curl --fail --silent http://localhost:18080/healthz >/dev/null
+          curl --fail --silent http://localhost:18080/readyz >/dev/null
+          docker logs "$CID"
 
   browser:
     needs: validate
@@ -73,7 +103,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: stage-c-browser-failure
+          name: stage-d-browser-failure
           path: |
             playwright-report
             test-results/browser
