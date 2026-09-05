@@ -16,13 +16,12 @@ export type GamePhase =
 export type Role = "host" | "player" | "spectator";
 export type GameMode = "HANDS" | "POINT" | "NUMBER";
 export type PlayStyle = "TEAM" | "INDIVIDUAL";
+export type RequestId = string;
 
 export interface GameModeInfo {
   id: GameMode;
   icon: string;
-  /** Short in-game label after onboarding has explained the interaction. */
   label: string;
-  /** Clear onboarding/lobby title for first-time players. */
   fullLabel: string;
   description: string;
   onboardingInstructions: string[];
@@ -47,6 +46,7 @@ export type ErrorCode =
   | "ROOM_FULL"
   | "ROOM_CLOSED"
   | "ROOM_NOT_IN_LOBBY"
+  | "ROOM_LOCKED"
   | "DUPLICATE_NAME"
   | "INVALID_NAME"
   | "NOT_HOST"
@@ -85,7 +85,6 @@ export interface CategoryInfo {
   label: string;
 }
 
-/** Aggregate votes received by one participant. Never identifies a voter. */
 export interface VoteTallyEntry {
   uid: string;
   name: string;
@@ -97,12 +96,10 @@ export interface ScoreEntry {
   name: string;
   score: number;
   rank: number;
-  /** Present only on a completed round result, never during an intermediate Challenge. */
   roundDelta?: number;
 }
 
 export interface RoundResult {
-  /** Present only once the round is over; omitted after survived challenge 1/2. */
   impostorUid?: string;
   impostorName?: string;
   groupFound: boolean;
@@ -111,16 +108,9 @@ export interface RoundResult {
   maxChallenges: number;
   mode: GameMode;
   requiredVotes: number;
-
-  /** Legacy TEXT_PAIR fields. The mode is not selectable in the current product. */
   normalQuestion?: string;
   impostorQuestion?: string;
   category?: CategoryId;
-
-  /**
-   * Anonymous aggregate tally for the challenge that ended the round.
-   * Empty while the same impostor continues to challenge 2/3.
-   */
   voteTally: VoteTallyEntry[];
 }
 
@@ -151,6 +141,7 @@ export interface ClientView {
       reason: "HOST_DISCONNECTED";
       originalPhase: GamePhase;
     };
+    admissionLocked: boolean;
     playStyle: PlayStyle;
     selectedModes: GameMode[];
     availableModes: GameModeInfo[];
@@ -161,7 +152,8 @@ export interface ClientView {
   };
   players: PublicPlayer[];
   settingsEditable?: boolean;
-  /** Host-only warning shown before NEXT_ROUND would abandon/reset the match. */
+  /** Host-only list. A blocked signed anonymous identity is not a physical-person ban. */
+  blockedPlayers?: Array<{ uid: string; name: string }>;
   nextRoundWarning?: string;
   challenge?: {
     mode: GameMode;
@@ -169,74 +161,58 @@ export interface ClientView {
     max: number;
   };
   isImpostor?: boolean;
-  myPrompt?: {
-    mode: GameMode;
-    text: string;
-  };
-  publicPrompt?: {
-    mode: GameMode;
-    text: string;
-  };
+  myPrompt?: { mode: GameMode; text: string };
+  publicPrompt?: { mode: GameMode; text: string };
   myReady?: boolean;
-  readyProgress?: {
-    submitted: number;
-    total: number;
-  };
+  readyProgress?: { submitted: number; total: number };
   myQuestion?: string;
   myAnswerSubmitted?: boolean;
-  answersProgress?: {
-    submitted: number;
-    total: number;
-  };
+  answersProgress?: { submitted: number; total: number };
   reveal?: RevealedAnswer[];
   myVoteSubmitted?: boolean;
-  votesProgress?: {
-    submitted: number;
-    total: number;
-    requiredVotes: number;
-  };
-  /** Host-only during VOTING. Stable participant order; no voter identity/mapping. */
+  votesProgress?: { submitted: number; total: number; requiredVotes: number };
   liveVoteTally?: VoteTallyEntry[];
-  voteTargets?: Array<{
-    uid: string;
-    name: string;
-  }>;
+  voteTargets?: Array<{ uid: string; name: string }>;
   result?: RoundResult;
   gameOver?: GameOverInfo;
-  /** INDIVIDUAL only; exposed only when a round is complete or at GAME_OVER. */
   scoreboard?: ScoreEntry[];
 }
 
+type RequestMeta = { rid?: RequestId };
+
 export type ClientMessage =
-  | { t: "HELLO" }
-  | { t: "CREATE_ROOM" }
-  | { t: "JOIN_ROOM"; code: string; name: string }
-  | { t: "LEAVE_ROOM" }
-  | {
+  | ({ t: "HELLO"; protocolVersion?: 2 } & RequestMeta)
+  | ({ t: "CREATE_ROOM" } & RequestMeta)
+  | ({ t: "JOIN_ROOM"; code: string; name: string } & RequestMeta)
+  | ({ t: "LEAVE_ROOM" } & RequestMeta)
+  | ({
       t: "SET_SETTINGS";
       totalRounds?: number;
       categories?: CategoryId[];
       selectedModes?: GameMode[];
       playStyle?: PlayStyle;
-    }
-  | { t: "START_GAME" }
-  | { t: "MARK_READY" }
-  | { t: "SUBMIT_ANSWER"; answer: string }
-  | { t: "START_VOTING" }
-  | { t: "SUBMIT_VOTE"; targetUid: string }
-  | { t: "NEXT_ROUND" }
-  | { t: "KICK_PLAYER"; uid: string }
-  | { t: "CLOSE_ROOM" }
-  | { t: "REMATCH" }
-  | { t: "PING" };
+    } & RequestMeta)
+  | ({ t: "SET_ADMISSION"; locked: boolean } & RequestMeta)
+  | ({ t: "UNBLOCK_PLAYER"; uid: string } & RequestMeta)
+  | ({ t: "START_GAME" } & RequestMeta)
+  | ({ t: "MARK_READY" } & RequestMeta)
+  | ({ t: "SUBMIT_ANSWER"; answer: string } & RequestMeta)
+  | ({ t: "START_VOTING" } & RequestMeta)
+  | ({ t: "SUBMIT_VOTE"; targetUid: string } & RequestMeta)
+  | ({ t: "NEXT_ROUND" } & RequestMeta)
+  | ({ t: "KICK_PLAYER"; uid: string } & RequestMeta)
+  | ({ t: "CLOSE_ROOM" } & RequestMeta)
+  | ({ t: "REMATCH" } & RequestMeta)
+  | { t: "PING"; sampleId?: string; clientMonoMs?: number };
 
 export type ServerMessage =
-  | { t: "HELLO_OK"; uid: string }
+  | { t: "HELLO_OK"; uid: string; protocolVersion?: 2; serverMs?: number }
   | { t: "STATE"; view: ClientView }
-  | { t: "ERROR"; code: ErrorCode; message?: string }
+  | { t: "ACK"; rid: RequestId }
+  | { t: "ERROR"; code: ErrorCode; message?: string; rid?: RequestId }
   | { t: "ROOM_CLOSED"; reason?: string }
   | { t: "KICKED" }
-  | { t: "PONG" };
+  | { t: "PONG"; sampleId?: string; serverMs?: number };
 
 export type AnalyticsEvent =
   | "room_created"
