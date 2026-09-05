@@ -25,7 +25,7 @@ import {
 interface Deps {
   rng: () => number;
   now: () => number;
-  disconnectGraceMs: number;
+  hostDisconnectGraceMs: number;
   countdownMs: number;
   actionMs: number;
   holdMs: number;
@@ -37,6 +37,7 @@ interface Deps {
 const IDLE_ROOM_MS = 30 * 60 * 1_000;
 const GC_INTERVAL_MS = 60_000;
 const IMITATION_STAGE_TIMER = "imitation-stage";
+const HOST_DISCONNECT_TIMER = "host-disconnect";
 const SAFE_REMOVAL_PHASES = new Set(["LOBBY", "GAME_OVER"]);
 
 export class RoomManager {
@@ -51,7 +52,7 @@ export class RoomManager {
     this.deps = {
       rng: deps.rng ?? Math.random,
       now: deps.now ?? Date.now,
-      disconnectGraceMs: deps.disconnectGraceMs ?? TIMERS.DISCONNECT_GRACE,
+      hostDisconnectGraceMs: deps.hostDisconnectGraceMs ?? TIMERS.HOST_DISCONNECT_GRACE,
       countdownMs: deps.countdownMs ?? TIMERS.COUNTDOWN,
       actionMs: deps.actionMs ?? TIMERS.ACTION,
       holdMs: deps.holdMs ?? TIMERS.HOLD,
@@ -96,9 +97,9 @@ export class RoomManager {
       player.disconnectedAt = undefined;
       player.connected = true;
       player.lastSeen = this.deps.now();
-      this.cancelTimer(room.code, this.disconnectTimerKey(uid));
     } else if (uid === room.hostUid) {
-      this.cancelTimer(room.code, this.disconnectTimerKey(uid));
+      room.hostConnected = true;
+      this.cancelTimer(room.code, HOST_DISCONNECT_TIMER);
     }
 
     room.updatedAt = this.deps.now();
@@ -118,6 +119,8 @@ export class RoomManager {
     connections?.delete(conn);
     if (connections?.size === 0) this.connsByUid.delete(uid);
 
+    // Multiple tabs/screens can share the same signed Host identity. Do not
+    // mark the Host disconnected while any authenticated room connection lives.
     if (!roomCode || this.hasRoomConnection(uid, roomCode)) return;
 
     const room = this.rooms.get(roomCode);
@@ -125,8 +128,11 @@ export class RoomManager {
     room.updatedAt = this.deps.now();
 
     if (uid === room.hostUid) {
-      this.schedule(room, this.disconnectTimerKey(uid), this.deps.disconnectGraceMs, () => {
+      room.hostConnected = false;
+      this.broadcast(room);
+      this.schedule(room, HOST_DISCONNECT_TIMER, this.deps.hostDisconnectGraceMs, () => {
         if (
+          !room.hostConnected &&
           !this.hasRoomConnection(uid, room.code) &&
           this.uidToRoomCode.get(uid) === room.code
         ) {
@@ -147,7 +153,7 @@ export class RoomManager {
     // Phone sleep, a closed tab, or a flaky Wi-Fi hop is not an intentional
     // leave. Keep the seat, hidden role, prompt assignment, and current round
     // intact until this same signed session reconnects or the Host explicitly
-    // removes the player. This prevents surprise redeals/impostor changes.
+    // removes the player. Player disconnects have no expiry/redeal timer.
     this.broadcast(room);
   }
 
@@ -249,7 +255,6 @@ export class RoomManager {
       existing.disconnectedAt = undefined;
       existing.connected = true;
       existing.lastSeen = this.deps.now();
-      this.cancelTimer(code, this.disconnectTimerKey(uid));
       this.attachAll(uid, code);
       this.broadcast(room);
       return;
@@ -420,10 +425,11 @@ export class RoomManager {
       round.participantUids = round.participantUids.filter((participantUid) => participantUid !== uid);
       round.readyUids.delete(uid);
       round.answers.delete(uid);
+      // A submitted ballot is committed. Remove only this player's own vote;
+      // votes from remaining voters that targeted this now-removed normal seat
+      // stay submitted and become wasted ballots. They never count for the
+      // impostor, and the voter is never asked to vote again.
       round.votes.delete(uid);
-      for (const [voterUid, targetUid] of [...round.votes]) {
-        if (targetUid === uid) round.votes.delete(voterUid);
-      }
     }
 
     this.removePlayer(room, uid);
@@ -546,7 +552,6 @@ export class RoomManager {
   private removePlayer(room: RoomState, uid: string): void {
     room.players.delete(uid);
     room.updatedAt = this.deps.now();
-    this.cancelTimer(room.code, this.disconnectTimerKey(uid));
     if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
     this.detachAll(uid, room.code);
   }
@@ -574,10 +579,6 @@ export class RoomManager {
       if (!this.rooms.has(code)) return code;
     }
     throw new GameError("INTERNAL", "could not allocate room code");
-  }
-
-  private disconnectTimerKey(uid: string): string {
-    return `disconnect:${uid}`;
   }
 
   private schedule(room: RoomState, key: string, ms: number, fn: () => void): void {
