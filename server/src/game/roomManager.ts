@@ -35,7 +35,7 @@ interface Deps {
 
 interface CachedRequest {
   fingerprint: string;
-  contexts: string[];
+  context: string;
   expiresAt: number;
   ok: boolean;
   error?: { code: ErrorCode; message?: string };
@@ -165,7 +165,7 @@ export class RoomManager {
     if (rid) {
       const cached = this.cachedRequest(uid, rid);
       if (cached) {
-        if (cached.fingerprint !== fingerprint || !cached.contexts.includes(contextBefore)) {
+        if (cached.fingerprint !== fingerprint || cached.context !== contextBefore) {
           conn.send({ t: "ERROR", code: "BAD_REQUEST", message: "request id reused outside its original action context", rid });
           return false;
         }
@@ -178,10 +178,9 @@ export class RoomManager {
     try {
       this.dispatch(conn, message);
       if (rid) {
-        const contextAfter = this.requestContext(uid, message);
         this.rememberRequest(uid, rid, {
           fingerprint,
-          contexts: [...new Set([contextBefore, contextAfter])],
+          context: this.requestContext(uid, message),
           expiresAt: this.deps.now() + this.deps.requestRetentionMs,
           ok: true,
         });
@@ -194,10 +193,9 @@ export class RoomManager {
         : { code: "INTERNAL" as const, message: undefined };
       if (!isGameError(error)) console.error("unexpected error handling", message.t, error);
       if (rid) {
-        const contextAfter = this.requestContext(uid, message);
         this.rememberRequest(uid, rid, {
           fingerprint,
-          contexts: [...new Set([contextBefore, contextAfter])],
+          context: this.requestContext(uid, message),
           expiresAt: this.deps.now() + this.deps.requestRetentionMs,
           ok: false,
           error: result,
@@ -334,6 +332,7 @@ export class RoomManager {
   private startGame(uid: string): void {
     this.withRoom(uid, (room) => {
       engine.startGame(room, uid, this.deps);
+      room.matchGeneration += 1;
       this.markMeaningful(room);
       track("game_started", { rounds: room.totalRounds, modes: room.selectedModes.length, players: activePlayers(room).length });
       this.broadcast(room);
@@ -683,7 +682,7 @@ export class RoomManager {
 
   private requestContext(uid: string, message: ClientMessage): string {
     const room = this.roomOf(uid);
-    if (room) return `${room.code}:r${room.currentRound}:${room.phase}`;
+    if (room) return `${room.code}:g${room.matchGeneration}:r${room.currentRound}:${room.phase}`;
     return message.t === "JOIN_ROOM" ? `join:${normalizeCode(message.code)}` : "outside-room";
   }
 
