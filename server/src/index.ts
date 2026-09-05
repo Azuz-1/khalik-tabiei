@@ -112,10 +112,10 @@ export function createGameServer() {
     connections.set(ws, conn);
     conn.startAuthenticationTimeout(config.authTimeoutMs);
 
-    const violate = (code: "BAD_REQUEST" | "RATE_LIMITED") => {
+    const violate = (code: "BAD_REQUEST" | "RATE_LIMITED", rid?: string) => {
       const strikes = (violations.get(conn) ?? 0) + 1;
       violations.set(conn, strikes);
-      conn.send({ t: "ERROR", code });
+      conn.send({ t: "ERROR", code, ...(rid ? { rid } : {}) });
       if (strikes >= 3) conn.closePolicy("sustained abuse");
     };
 
@@ -123,7 +123,7 @@ export function createGameServer() {
       // Reject oversized input before UTF-8 conversion / JSON parsing.
       if (rawDataBytes(data) > config.maxMessageBytes) {
         violate("BAD_REQUEST");
-        if (ws.readyState === ws.OPEN) ws.close(1009, "message too large");
+        if (ws.readyState === 1) ws.close(1009, "message too large");
         return;
       }
       const msg = parseClientMessage(data, config.maxMessageBytes);
@@ -134,28 +134,30 @@ export function createGameServer() {
 
       if (msg.t === "HELLO") {
         if (conn.uid !== null) {
-          conn.send({ t: "ERROR", code: "BAD_REQUEST" });
+          conn.send({ t: "ERROR", code: "BAD_REQUEST", ...(msg.rid ? { rid: msg.rid } : {}) });
           conn.closePolicy("duplicate authentication");
           return;
         }
-        if (!abuse.allowSession(conn.ip, context.uid)) return violate("RATE_LIMITED");
+        if (!abuse.allowSession(conn.ip, context.uid)) return violate("RATE_LIMITED", msg.rid);
         conn.authenticate(context.uid);
         try { manager.register(conn); }
         catch (error) {
           const code = error instanceof GameError ? error.code : "INTERNAL";
-          conn.send({ t: "ERROR", code });
+          conn.send({ t: "ERROR", code, ...(msg.rid ? { rid: msg.rid } : {}) });
           conn.closePolicy("connection rejected");
         }
         return;
       }
 
       if (!conn.uid) {
-        conn.send({ t: "ERROR", code: "UNAUTHORIZED" });
+        conn.send({ t: "ERROR", code: "UNAUTHORIZED", ...(msg.rid ? { rid: msg.rid } : {}) });
         return;
       }
-      if (!abuse.allowMessage(conn.uid, msg.t)) return violate("RATE_LIMITED");
+      if (!abuse.allowMessage(conn.uid, msg.t)) {
+        return violate("RATE_LIMITED", "rid" in msg ? msg.rid : undefined);
+      }
       if (msg.t === "CREATE_ROOM" && !abuse.allowRoomCreation(conn.ip, conn.uid)) {
-        conn.send({ t: "ERROR", code: "RATE_LIMITED", ...(msg.rid ? { rid: msg.rid } : {}) });
+        violate("RATE_LIMITED", msg.rid);
         return;
       }
       manager.handle(conn, msg);
