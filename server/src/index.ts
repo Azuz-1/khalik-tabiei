@@ -155,6 +155,14 @@ export function createGameServer() {
       }
 
       if (msg.t === "HELLO") {
+        // An upgrade may have completed immediately before draining began. Do
+        // not let a delayed HELLO turn that transport into a newly admitted
+        // authenticated connection after readiness has already gone false.
+        if (draining) {
+          conn.send({ t: "ERROR", code: "SERVER_RESTARTING", ...(msg.rid ? { rid: msg.rid } : {}) });
+          conn.closePolicy("server draining");
+          return;
+        }
         if (conn.uid !== null) {
           conn.send({ t: "ERROR", code: "BAD_REQUEST", ...(msg.rid ? { rid: msg.rid } : {}) });
           conn.closePolicy("duplicate authentication");
