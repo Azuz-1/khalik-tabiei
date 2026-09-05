@@ -1,13 +1,14 @@
 /** Same-origin HTTP + authoritative cookie-authenticated WebSocket server. */
-import { createServer, type IncomingMessage } from "node:http";
+import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import express from "express";
-import { WebSocketServer, type WebSocket } from "ws";
+import { WebSocketServer, type RawData, type WebSocket } from "ws";
 import { config } from "./config.js";
 import { RoomManager } from "./game/roomManager.js";
 import { Connection } from "./net/connection.js";
+import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
 import { ensureAnonymousSession, readAnonymousSession } from "./auth/session.js";
 import { canonicalOrigin, isAllowedWebSocketOrigin } from "./security/origin.js";
 import { parseClientMessage } from "./security/messages.js";
@@ -19,11 +20,7 @@ import { totalPairs } from "./game/questions.js";
 const sourceDir = dirname(fileURLToPath(import.meta.url));
 const clientDist = join(sourceDir, "..", "..", "client", "dist");
 
-interface UpgradeContext {
-  uid: string;
-  origin: string;
-  ip: string;
-}
+interface UpgradeContext { uid: string; origin: string; ip: string; lease: CapacityLease }
 
 function rejectUpgrade(socket: Duplex, status: number, reason: string): void {
   if (!socket.writable) {
@@ -31,20 +28,25 @@ function rejectUpgrade(socket: Duplex, status: number, reason: string): void {
     return;
   }
   const body = `${reason}\n`;
-  socket.write(
-    `HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`,
-  );
+  socket.write(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
   socket.destroy();
+}
+
+function rawDataBytes(data: RawData): number {
+  if (Array.isArray(data)) return data.reduce((sum, part) => sum + part.byteLength, 0);
+  return data.byteLength;
 }
 
 export function createGameServer() {
   const app = express();
-  const manager = new RoomManager();
+  const manager = new RoomManager({ emptyLobbyExpiryMs: config.emptyLobbyExpiryMs });
   const abuse = new AbuseGuard();
+  const capacity = new ConnectionCapacity(config.maxConcurrentSockets, config.maxConcurrentSocketsPerIp);
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true, maxPayload: config.maxMessageBytes });
   const contexts = new WeakMap<WebSocket, UpgradeContext>();
   const connections = new WeakMap<WebSocket, Connection>();
+  const violations = new WeakMap<Connection, number>();
 
   app.disable("x-powered-by");
   app.use(securityHeaders(config.production, config.publicOrigin));
@@ -69,11 +71,7 @@ export function createGameServer() {
   app.use(express.static(clientDist));
   app.get("*", (req, res) => {
     const ip = clientIp(req, config.clientIpMode);
-    if (!abuse.allowHttpFallback(ip)) {
-      res.status(429).type("text/plain").send("Too Many Requests");
-      return;
-    }
-    // The path is a fixed server-owned build artifact, never request-derived.
+    if (!abuse.allowHttpFallback(ip)) return void res.status(429).type("text/plain").send("Too Many Requests");
     res.sendFile(join(clientDist, "index.html"), (error) => {
       if (error && !res.headersSent) res.status(503).send("Client build unavailable.");
     });
@@ -81,31 +79,33 @@ export function createGameServer() {
 
   server.on("upgrade", (req, socket, head) => {
     let pathname = "";
-    try {
-      pathname = new URL(req.url ?? "", "http://localhost").pathname;
-    } catch {
-      return rejectUpgrade(socket, 400, "Bad Request");
-    }
+    try { pathname = new URL(req.url ?? "", "http://localhost").pathname; }
+    catch { return rejectUpgrade(socket, 400, "Bad Request"); }
     if (pathname !== "/ws") return rejectUpgrade(socket, 404, "Not Found");
 
     const ip = clientIp(req, config.clientIpMode);
     const rawOrigin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin;
-    if (!isAllowedWebSocketOrigin(rawOrigin, config.allowedOrigins, config.production)) {
-      return rejectUpgrade(socket, 403, "Forbidden");
-    }
+    if (!isAllowedWebSocketOrigin(rawOrigin, config.allowedOrigins, config.production)) return rejectUpgrade(socket, 403, "Forbidden");
     const session = readAnonymousSession(req, config.sessionSecret);
     if (!session) return rejectUpgrade(socket, 401, "Unauthorized");
-    if (!abuse.allowConnection(ip, session.uid)) {
-      return rejectUpgrade(socket, 429, "Too Many Requests");
+    if (!abuse.allowConnection(ip, session.uid)) return rejectUpgrade(socket, 429, "Too Many Requests");
+    const lease = capacity.acquire(ip);
+    if (!lease) return rejectUpgrade(socket, 503, "Capacity Reached");
+    const origin = config.publicOrigin ?? (rawOrigin ? canonicalOrigin(rawOrigin) : `http://localhost:${config.port}`);
+    if (!origin) {
+      lease.release();
+      return rejectUpgrade(socket, 403, "Forbidden");
     }
-    const origin = config.publicOrigin ??
-      (rawOrigin ? canonicalOrigin(rawOrigin) : `http://localhost:${config.port}`);
-    if (!origin) return rejectUpgrade(socket, 403, "Forbidden");
 
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      contexts.set(ws, { uid: session.uid, origin, ip });
-      wss.emit("connection", ws, req);
-    });
+    try {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        contexts.set(ws, { uid: session.uid, origin, ip, lease });
+        wss.emit("connection", ws, req);
+      });
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
   });
 
   wss.on("connection", (ws) => {
@@ -115,50 +115,66 @@ export function createGameServer() {
     connections.set(ws, conn);
     conn.startAuthenticationTimeout(config.authTimeoutMs);
 
+    const violate = (code: "BAD_REQUEST" | "RATE_LIMITED", rid?: string) => {
+      const strikes = (violations.get(conn) ?? 0) + 1;
+      violations.set(conn, strikes);
+      conn.send({ t: "ERROR", code, ...(rid ? { rid } : {}) });
+      if (strikes >= 3) conn.closePolicy("sustained abuse");
+    };
+
     ws.on("message", (data) => {
+      // Reject oversized input before UTF-8 conversion / JSON parsing.
+      if (rawDataBytes(data) > config.maxMessageBytes) {
+        violate("BAD_REQUEST");
+        if (ws.readyState === 1) ws.close(1009, "message too large");
+        return;
+      }
       const msg = parseClientMessage(data, config.maxMessageBytes);
       if (!msg) {
-        const allowed = abuse.allowMessage(conn.uid ?? `ip:${conn.ip}`);
-        conn.send({ t: "ERROR", code: allowed ? "BAD_REQUEST" : "RATE_LIMITED" });
+        violate(abuse.allowMessage(conn.uid ?? `ip:${conn.ip}`) ? "BAD_REQUEST" : "RATE_LIMITED");
         return;
       }
 
       if (msg.t === "HELLO") {
         if (conn.uid !== null) {
-          conn.send({ t: "ERROR", code: "BAD_REQUEST" });
+          conn.send({ t: "ERROR", code: "BAD_REQUEST", ...(msg.rid ? { rid: msg.rid } : {}) });
           conn.closePolicy("duplicate authentication");
           return;
         }
-        if (!abuse.allowSession(conn.ip, context.uid)) {
-          conn.send({ t: "ERROR", code: "RATE_LIMITED" });
-          return;
-        }
+        if (!abuse.allowSession(conn.ip, context.uid)) return violate("RATE_LIMITED", msg.rid);
         conn.authenticate(context.uid);
-        try {
-          manager.register(conn);
-        } catch (error) {
+        try { manager.register(conn); }
+        catch (error) {
           const code = error instanceof GameError ? error.code : "INTERNAL";
-          conn.send({ t: "ERROR", code });
+          conn.send({ t: "ERROR", code, ...(msg.rid ? { rid: msg.rid } : {}) });
           conn.closePolicy("connection rejected");
         }
         return;
       }
 
       if (!conn.uid) {
-        conn.send({ t: "ERROR", code: "UNAUTHORIZED" });
+        const rid = "rid" in msg ? msg.rid : undefined;
+        conn.send({ t: "ERROR", code: "UNAUTHORIZED", ...(rid ? { rid } : {}) });
         return;
       }
       if (!abuse.allowMessage(conn.uid, msg.t)) {
-        conn.send({ t: "ERROR", code: "RATE_LIMITED" });
+        return violate("RATE_LIMITED", "rid" in msg ? msg.rid : undefined);
+      }
+      if (msg.t === "CREATE_ROOM" && !abuse.allowRoomCreation(conn.ip, conn.uid)) {
+        violate("RATE_LIMITED", msg.rid);
         return;
       }
       manager.handle(conn, msg);
     });
 
-    ws.on("pong", () => {
-      conn.alive = true;
-    });
-    const cleanup = () => manager.disconnect(conn);
+    ws.on("pong", () => { conn.alive = true; });
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      manager.disconnect(conn);
+      context.lease.release();
+    };
     ws.on("close", cleanup);
     ws.on("error", cleanup);
   });
@@ -166,20 +182,12 @@ export function createGameServer() {
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
       const conn = connections.get(ws);
-      if (!conn) {
-        ws.terminate();
-        continue;
-      }
-      if (!conn.alive) {
+      if (!conn || !conn.alive) {
         ws.terminate();
         continue;
       }
       conn.alive = false;
-      try {
-        ws.ping();
-      } catch {
-        ws.terminate();
-      }
+      try { ws.ping(); } catch { ws.terminate(); }
     }
   }, config.heartbeatMs);
   heartbeat.unref?.();
@@ -191,17 +199,16 @@ export function createGameServer() {
     clearInterval(heartbeat);
     abuse.dispose();
     manager.dispose();
+    for (const ws of wss.clients) ws.terminate();
   };
   server.on("close", dispose);
-
-  return { app, server, wss, manager, dispose };
+  return { app, server, wss, manager, dispose, capacity };
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 if (isMain) {
   const runtime = createGameServer();
   runtime.server.listen(config.port, config.host, () => {
-    // eslint-disable-next-line no-console
     console.log(`«خلك طبيعي» listening on port ${config.port} (${totalPairs()} question pairs)`);
   });
 }
