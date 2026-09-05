@@ -35,7 +35,7 @@ interface Deps {
 
 interface CachedRequest {
   fingerprint: string;
-  context: string;
+  contexts: string[];
   expiresAt: number;
   ok: boolean;
   error?: { code: ErrorCode; message?: string };
@@ -161,11 +161,12 @@ export class RoomManager {
 
     const rid = "rid" in message ? message.rid : undefined;
     const fingerprint = this.requestFingerprint(message);
+    const contextBefore = this.requestContext(uid, message);
     if (rid) {
       const cached = this.cachedRequest(uid, rid);
       if (cached) {
-        if (cached.fingerprint !== fingerprint) {
-          conn.send({ t: "ERROR", code: "BAD_REQUEST", message: "request id reused with different action", rid });
+        if (cached.fingerprint !== fingerprint || !cached.contexts.includes(contextBefore)) {
+          conn.send({ t: "ERROR", code: "BAD_REQUEST", message: "request id reused outside its original action context", rid });
           return false;
         }
         if (cached.ok) conn.send({ t: "ACK", rid });
@@ -177,7 +178,13 @@ export class RoomManager {
     try {
       this.dispatch(conn, message);
       if (rid) {
-        this.rememberRequest(uid, rid, { fingerprint, context: this.requestContext(uid, message), expiresAt: this.deps.now() + this.deps.requestRetentionMs, ok: true });
+        const contextAfter = this.requestContext(uid, message);
+        this.rememberRequest(uid, rid, {
+          fingerprint,
+          contexts: [...new Set([contextBefore, contextAfter])],
+          expiresAt: this.deps.now() + this.deps.requestRetentionMs,
+          ok: true,
+        });
         conn.send({ t: "ACK", rid });
       }
       return true;
@@ -186,7 +193,16 @@ export class RoomManager {
         ? { code: error.code, message: error.message }
         : { code: "INTERNAL" as const, message: undefined };
       if (!isGameError(error)) console.error("unexpected error handling", message.t, error);
-      if (rid) this.rememberRequest(uid, rid, { fingerprint, context: this.requestContext(uid, message), expiresAt: this.deps.now() + this.deps.requestRetentionMs, ok: false, error: result });
+      if (rid) {
+        const contextAfter = this.requestContext(uid, message);
+        this.rememberRequest(uid, rid, {
+          fingerprint,
+          contexts: [...new Set([contextBefore, contextAfter])],
+          expiresAt: this.deps.now() + this.deps.requestRetentionMs,
+          ok: false,
+          error: result,
+        });
+      }
       conn.send({ t: "ERROR", code: result.code, message: result.message, ...(rid ? { rid } : {}) });
       return false;
     }
