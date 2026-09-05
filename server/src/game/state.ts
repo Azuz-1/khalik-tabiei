@@ -14,7 +14,6 @@ export interface InternalPlayer {
   uid: string;
   name: string;
   normalizedName: string;
-  /** Used only by INDIVIDUAL play; TEAM remains score-free. */
   score: number;
   connected: boolean;
   joinedAt: number;
@@ -25,10 +24,7 @@ export interface InternalPlayer {
   isHost: boolean;
 }
 
-export interface SealedParticipant {
-  uid: string;
-  name: string;
-}
+export interface SealedParticipant { uid: string; name: string }
 
 export interface PauseState {
   reason: "HOST_DISCONNECTED";
@@ -37,49 +33,31 @@ export interface PauseState {
   generation: number;
 }
 
-/**
- * Legacy and current rounds still share one state interface because generic
- * room/reconnect helpers consume both shapes. TEXT_PAIR remains legacy-only and
- * is not selectable in the current product.
- */
 export interface RoundState {
   kind: "IMITATION" | "TEXT_PAIR";
   index: number;
   impostorUid: string;
   participantUids: string[];
-
   challengeIndex: number;
-  /** Current Challenge's selected mode; survived Challenges may rotate modes. */
   mode: GameMode;
   promptId: string;
   prompt: string;
   readyUids: Set<string>;
   roundComplete: boolean;
-
   pairId: string;
   category: CategoryId;
   normalQuestion: string;
   impostorQuestion: string;
   answers: Map<string, string>;
-
   votes: Map<string, string>;
-  /**
-   * Once every currently eligible voter has voted, the resolving ballot is
-   * sealed before any membership-dependent work. This lets a Host reconnect
-   * publish exactly the ballot that completed while the Host was offline.
-   */
   resolutionSealed?: boolean;
   sealedParticipants?: SealedParticipant[];
   sealedVotes?: Map<string, string>;
   resultComputed: boolean;
   groupFound?: boolean;
-  /** Majority threshold that actually governed this computed result. */
   resultRequiredVotes?: number;
-  /** Frozen public identity after a completed Round, so later removal cannot rewrite history. */
   resultImpostorName?: string;
-  /** Frozen anonymous aggregate tally for the Challenge that produced this completed result. */
   resultVoteTally?: Array<{ uid: string; name: string; votes: number }>;
-  /** Round-complete INDIVIDUAL score delta. Empty for TEAM/intermediate results. */
   roundScores: Map<string, number>;
 }
 
@@ -93,36 +71,35 @@ export interface RoomState {
   code: string;
   hostUid: string;
   hostConnected: boolean;
-  /** Server-provided grace deadline; transport reconnects never extend it via heartbeat. */
   hostCloseDeadline?: number;
-  /** Publicly projectable pause status without exposing hidden game state. */
   pause?: PauseState;
   phase: GamePhase;
   createdAt: number;
+  /** Operational bookkeeping; may include transport-level activity. */
   updatedAt: number;
+  /** Product activity only. Heartbeats, reconnects, broadcasts, rejected actions and settings spam do not extend this. */
+  meaningfulAt: number;
   minPlayers: number;
   maxPlayers: number;
   totalRounds: number;
   currentRound: number;
+  admissionLocked: boolean;
+  /** Blocks a signed anonymous UID, not a physical person. */
+  kickedIdentities: Map<string, string>;
 
   categories: CategoryId[];
   playStyle: PlayStyle;
   selectedModes: GameMode[];
-  /** Balanced Challenge-level mode bag. Redeals never consume it. */
   modeBag: GameMode[];
   lastMode?: GameMode;
   players: Map<string, InternalPlayer>;
   round: RoundState | null;
-
-  /** Hidden across survived Challenges so a point cannot leak the impostor early. */
   pendingRoundScores: Map<string, number>;
   usedPairIds: Set<string>;
-  /** Game-scoped prompt history. A mode resets only after its own pool is exhausted. */
   usedPromptIds: Set<string>;
   impostorHistory: string[];
   roundOutcomes: RoundOutcome[];
   phaseEndsAt?: number;
-  /** Invalidates callbacks from an older physical sequence/reset. */
   timerGeneration: number;
   closed: boolean;
 }
@@ -135,10 +112,13 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     phase: "LOBBY",
     createdAt: now,
     updatedAt: now,
+    meaningfulAt: now,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
     totalRounds: 0,
     currentRound: 0,
+    admissionLocked: false,
+    kickedIdentities: new Map(),
     categories: [],
     playStyle: "TEAM",
     selectedModes: [...DEFAULT_GAME_MODES],
