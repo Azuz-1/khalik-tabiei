@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import type { PublicPlayer } from "../../shared/types.js";
-import { actions, clearNotice, resetToHome, useGame } from "./net/socket.js";
+import {
+  actions,
+  clearNotice,
+  clearTransportFeedback,
+  resetToHome,
+  useGame,
+} from "./net/socket.js";
 import { errorText } from "./i18n/errors.js";
 import { HostAudioLayer } from "./audio/HostAudioLayer.js";
 import { Home } from "./screens/Home.js";
@@ -8,31 +14,39 @@ import { Host } from "./screens/Host.js";
 import { Player } from "./screens/Player.js";
 
 export function App() {
-  const { view, status, error, notice } = useGame();
-  const [toast, setToast] = useState<{ text: string; id: number } | null>(null);
+  const { view, status, error, notice, transportFeedback } = useGame();
+  const [toast, setToast] = useState<{ text: string; id: string } | null>(null);
   const [showConn, setShowConn] = useState(false);
   const [showHostPlayers, setShowHostPlayers] = useState(false);
 
-  // Error → transient toast.
   useEffect(() => {
     if (!error) return;
-    setToast({ text: errorText(error.code), id: error.id });
-    const h = setTimeout(() => setToast((t) => (t && t.id === error.id ? null : t)), 3200);
+    const id = `e-${error.id}`;
+    setToast({ text: errorText(error.code), id });
+    const h = setTimeout(() => setToast((current) => current?.id === id ? null : current), 3_200);
     return () => clearTimeout(h);
   }, [error]);
 
-  // Only show the "connection lost" banner if we stay offline for a moment.
+  useEffect(() => {
+    if (!transportFeedback) return;
+    const id = `t-${transportFeedback.id}`;
+    setToast({ text: transportFeedback.text, id });
+    const h = setTimeout(() => {
+      setToast((current) => current?.id === id ? null : current);
+      clearTransportFeedback();
+    }, 4_000);
+    return () => clearTimeout(h);
+  }, [transportFeedback]);
+
   useEffect(() => {
     if (status === "online") {
       setShowConn(false);
       return;
     }
-    const h = setTimeout(() => setShowConn(true), 1200);
+    const h = setTimeout(() => setShowConn(true), 1_200);
     return () => clearTimeout(h);
   }, [status]);
 
-  // Clean deep-link URL once we're inside a room (so refresh reconnects via
-  // the saved identity, not the /join path).
   useEffect(() => {
     if (view && location.pathname.startsWith("/join/")) {
       try {
@@ -54,10 +68,13 @@ export function App() {
     view?.self.role === "host" && ["LOBBY", "DISCUSSION", "GAME_OVER"].includes(view.room.phase);
   const showHostDisconnected =
     view?.self.role === "player" && view.room.hostConnected === false && view.room.phase !== "CLOSED";
+  const hostDeadline = view?.room.hostCloseDeadline
+    ? new Date(view.room.hostCloseDeadline).toLocaleTimeString("ar-SA", { hour: "numeric", minute: "2-digit" })
+    : null;
 
   return (
     <div className="app">
-      {showConn ? <div className="conn">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
+      {showConn ? <div className="conn" role="status">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
 
       {showHostDisconnected ? (
         <div
@@ -75,6 +92,7 @@ export function App() {
           }}
         >
           <strong>المضيف انقطع… ننتظره يرجع</strong>
+          {hostDeadline ? <div className="helper">إذا ما رجع قبل {hostDeadline} بتنقفل الغرفة.</div> : null}
         </div>
       ) : null}
 
@@ -109,34 +127,60 @@ export function App() {
         </div>
       ) : null}
 
-      {view == null ? (
-        <Home />
-      ) : view.self.role === "host" ? (
-        <HostAudioLayer view={view}>
-          <Host view={view} />
-        </HostAudioLayer>
-      ) : view.self.role === "player" ? (
-        <Player view={view} />
-      ) : (
-        <Spectator />
-      )}
+      <fieldset
+        disabled={status !== "online"}
+        aria-busy={status !== "online"}
+        style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
+      >
+        {view == null ? (
+          <Home />
+        ) : view.self.role === "host" ? (
+          <HostAudioLayer view={view}>
+            <Host view={view} />
+          </HostAudioLayer>
+        ) : view.self.role === "player" ? (
+          <Player view={view} />
+        ) : (
+          <Spectator />
+        )}
 
-      {view?.self.role === "host" && activeRoom ? (
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => setShowHostPlayers(true)}
-          style={{
-            position: "fixed",
-            right: 14,
-            bottom: 14,
-            zIndex: 35,
-            opacity: 0.9,
-          }}
-        >
-          اللاعبين
-        </button>
-      ) : null}
+        {view?.self.role === "host" && activeRoom ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setShowHostPlayers(true)}
+            style={{
+              position: "fixed",
+              right: 14,
+              bottom: 14,
+              zIndex: 35,
+              opacity: 0.9,
+            }}
+          >
+            اللاعبين
+          </button>
+        ) : null}
+
+        {view?.self.role === "player" ? (
+          <RoomExitButton
+            label="الخروج من الغرفة"
+            onClick={() => {
+              const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
+              const message = active
+                ? "تطلع من الغرفة؟ إذا كنت المتخفي أو صار عدد اللاعبين أقل من 3، المجموعة بترجع للّوبي. غير كذا تكمل لعبتهم بنفس المتخفي."
+                : "تطلع من الغرفة؟";
+              if (confirm(message)) actions.leaveRoom();
+            }}
+          />
+        ) : view?.self.role === "host" && !hostAlreadyHasClose ? (
+          <RoomExitButton
+            label="إنهاء اللعبة"
+            onClick={() => {
+              if (confirm("تنهي اللعبة وتقفل الغرفة على الكل؟")) actions.closeRoom();
+            }}
+          />
+        ) : null}
+      </fieldset>
 
       {view?.self.role === "host" && showHostPlayers ? (
         <HostPlayerManager
@@ -146,27 +190,7 @@ export function App() {
         />
       ) : null}
 
-      {view?.self.role === "player" ? (
-        <RoomExitButton
-          label="الخروج من الغرفة"
-          onClick={() => {
-            const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
-            const message = active
-              ? "تطلع من الغرفة؟ إذا كنت المتخفي أو صار عدد اللاعبين أقل من 3، المجموعة بترجع للّوبي. غير كذا تكمل لعبتهم بنفس المتخفي."
-              : "تطلع من الغرفة؟";
-            if (confirm(message)) actions.leaveRoom();
-          }}
-        />
-      ) : view?.self.role === "host" && !hostAlreadyHasClose ? (
-        <RoomExitButton
-          label="إنهاء اللعبة"
-          onClick={() => {
-            if (confirm("تنهي اللعبة وتقفل الغرفة على الكل؟")) actions.closeRoom();
-          }}
-        />
-      ) : null}
-
-      {toast ? <div className="toast">{toast.text}</div> : null}
+      {toast ? <div className="toast" role="status">{toast.text}</div> : null}
 
       {notice ? (
         <div className="overlay">
