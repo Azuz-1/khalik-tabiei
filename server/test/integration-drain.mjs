@@ -20,6 +20,15 @@ async function waitUntil(predicate, label) {
   throw new Error(`timed out: ${label}`);
 }
 
+async function openSocket(cookie) {
+  const socket = new WebSocket(WS_URL, { headers: { Cookie: cookie, Origin: ORIGIN } });
+  await new Promise((resolve, reject) => {
+    socket.once("open", resolve);
+    socket.once("error", reject);
+  });
+  return socket;
+}
+
 async function main() {
   console.log("Graceful drain real-process suite");
   const child = spawn(process.execPath, ["server/dist/server/src/index.js"], {
@@ -47,13 +56,15 @@ async function main() {
     const cookie = session.headers.get("set-cookie")?.split(";", 1)[0];
     if (!cookie) throw new Error("missing session cookie");
 
+    // Complete an HTTP upgrade before drain but intentionally delay HELLO. This
+    // closes the narrow race between accepting /ws and authenticating it.
+    const delayedMessages = [];
+    const delayedWs = await openSocket(cookie);
+    delayedWs.on("message", (data) => delayedMessages.push(JSON.parse(data.toString())));
+
     const messages = [];
-    const ws = new WebSocket(WS_URL, { headers: { Cookie: cookie, Origin: ORIGIN } });
+    const ws = await openSocket(cookie);
     ws.on("message", (data) => messages.push(JSON.parse(data.toString())));
-    await new Promise((resolve, reject) => {
-      ws.once("open", resolve);
-      ws.once("error", reject);
-    });
     ws.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
     await waitUntil(() => messages.some((message) => message.t === "HELLO_OK"), "HELLO_OK");
     ws.send(JSON.stringify({ t: "CREATE_ROOM", rid: "before-drain" }));
@@ -70,6 +81,14 @@ async function main() {
     assert(health.status === 200, "liveness remains 200 during drain");
     const bootstrapDuringDrain = await fetch(`${ORIGIN}/api/session`, { headers: { Cookie: cookie } });
     assert(bootstrapDuringDrain.status === 503, "session bootstrap is rejected during drain");
+
+    delayedWs.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, rid: "delayed-hello" }));
+    await waitUntil(
+      () => delayedMessages.some((message) => message.t === "ERROR" && message.rid === "delayed-hello"),
+      "delayed HELLO drain rejection",
+    );
+    const delayedError = delayedMessages.find((message) => message.t === "ERROR" && message.rid === "delayed-hello");
+    assert(delayedError.code === "SERVER_RESTARTING", "pre-drain upgraded socket cannot authenticate after drain begins");
 
     ws.send(JSON.stringify({ t: "START_GAME", rid: "during-drain" }));
     await waitUntil(() => messages.some((message) => message.t === "ERROR" && message.rid === "during-drain"), "drain action rejection");
