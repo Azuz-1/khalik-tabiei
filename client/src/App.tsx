@@ -144,7 +144,7 @@ export function App() {
           <Spectator />
         )}
 
-        {view?.self.role === "host" && activeRoom ? (
+        {view?.self.role === "host" && view.room.phase !== "CLOSED" ? (
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -186,6 +186,9 @@ export function App() {
         <HostPlayerManager
           players={view.players}
           active={activeRoom}
+          lobby={view.room.phase === "LOBBY"}
+          admissionLocked={view.room.admissionLocked}
+          blockedPlayers={view.blockedPlayers ?? []}
           onClose={() => setShowHostPlayers(false)}
         />
       ) : null}
@@ -215,17 +218,23 @@ export function App() {
 function HostPlayerManager({
   players,
   active,
+  lobby,
+  admissionLocked,
+  blockedPlayers,
   onClose,
 }: {
   players: PublicPlayer[];
   active: boolean;
+  lobby: boolean;
+  admissionLocked: boolean;
+  blockedPlayers: Array<{ uid: string; name: string }>;
   onClose: () => void;
 }) {
   return (
     <div className="overlay" onClick={onClose}>
       <div
         className="card stack"
-        style={{ width: "min(calc(100% - 28px), 520px)", maxHeight: "80vh", overflow: "auto" }}
+        style={{ width: "min(calc(100% - 28px), 560px)", maxHeight: "82vh", overflow: "auto" }}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="row between">
@@ -237,6 +246,29 @@ function HostPlayerManager({
             إغلاق
           </button>
         </div>
+
+        {lobby ? (
+          <div className="card stack" style={{ padding: 12 }}>
+            <div className="row between">
+              <div>
+                <strong>دخول لاعبين جدد</strong>
+                <div className="helper">
+                  {admissionLocked ? "موقوف مؤقتًا" : "مفتوح"}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => actions.setAdmission(!admissionLocked)}
+              >
+                {admissionLocked ? "فتح الدخول" : "إيقاف الدخول"}
+              </button>
+            </div>
+            <p className="helper">
+              القفل يمنع الهويات الجديدة فقط. اللاعب اللي له مقعد محفوظ يقدر يرجع بنفس هويته.
+            </p>
+          </div>
+        ) : null}
 
         {players.map((player) => (
           <div key={player.uid} className="row between card" style={{ padding: 12 }}>
@@ -264,6 +296,27 @@ function HostPlayerManager({
         ))}
 
         {players.length === 0 ? <p className="subtitle center">ما فيه لاعبين الحين.</p> : null}
+
+        {blockedPlayers.length > 0 ? (
+          <div className="card stack" style={{ padding: 12 }}>
+            <strong>هويات ممنوعة من الرجوع</strong>
+            {blockedPlayers.map((player) => (
+              <div key={player.uid} className="row between">
+                <span>{player.name}</span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => actions.unblockPlayer(player.uid)}
+                >
+                  السماح له يرجع
+                </button>
+              </div>
+            ))}
+            <p className="helper">
+              المنع مرتبط بالهوية المجهولة الموقّعة في هذا المتصفح، مو بالشخص أو عنوان IP. هوية جديدة تعتبر مستخدمًا مختلفًا.
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );
