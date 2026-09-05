@@ -155,8 +155,11 @@ test("Unicode names, stale confirmations, Player leave, focus restoration, and r
     await quietExternalFonts(reduced);
     const reducedPage = await reduced.newPage();
     await reducedPage.goto("/");
-    const animationDuration = await reducedPage.locator(".home-screen").evaluate((element) => getComputedStyle(element).animationDuration);
-    expect(animationDuration).toBe("0.001ms");
+    const durationMs = await reducedPage.locator(".home-screen").evaluate((element) => {
+      const duration = getComputedStyle(element).animationDuration.trim();
+      return duration.endsWith("ms") ? Number.parseFloat(duration) : Number.parseFloat(duration) * 1000;
+    });
+    expect(durationMs).toBeLessThanOrEqual(0.0011);
   } finally {
     await Promise.allSettled(playerContexts.map((context) => context.close()));
     await host.context.close();
