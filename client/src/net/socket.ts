@@ -115,11 +115,12 @@ function startHeartbeat(socket: WebSocket): void {
 
 function authenticated(socket: WebSocket, message: Extract<ServerMessage, { t: "HELLO_OK" | "STATE" }>): void {
   if (socket !== ws) return;
+  const firstAuthenticatedFrame = state.status !== "online";
   reconnectDelay = 500;
   lastInboundMono = performance.now();
   if (message.t === "HELLO_OK" && message.serverMs !== undefined) serverClock.seed(message.serverMs);
   set({ status: "online" });
-  startHeartbeat(socket);
+  if (firstAuthenticatedFrame) startHeartbeat(socket);
 }
 
 function dispatch(socket: WebSocket, message: ServerMessage): void {
@@ -181,8 +182,10 @@ async function bootstrap(generation: number): Promise<boolean> {
 async function connectNow(): Promise<void> {
   const generation = ++connectGeneration;
   bootstrapAbort?.abort();
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-    try { ws.close(1000, "superseded"); } catch { /* close race */ }
+  const superseded = ws;
+  if (superseded && (superseded.readyState === WebSocket.OPEN || superseded.readyState === WebSocket.CONNECTING)) {
+    failPendingForSocket(superseded);
+    try { superseded.close(1000, "superseded"); } catch { /* close race */ }
   }
   ws = null;
   window.clearInterval(heartbeatTimer);
@@ -200,16 +203,23 @@ async function connectNow(): Promise<void> {
   ws = socket;
   let helloComplete = false;
   const connectTimeout = window.setTimeout(() => {
-    if (socket === ws && socket.readyState === WebSocket.CONNECTING) socket.close(4000, "connect timeout");
+    if (socket === ws && socket.readyState === WebSocket.CONNECTING) {
+      try { socket.close(4000, "connect timeout"); } catch { /* close race */ }
+    }
   }, CONNECT_TIMEOUT_MS);
   let helloTimeout: number | undefined;
 
   socket.onopen = () => {
-    if (socket !== ws || generation !== connectGeneration) return socket.close(1000, "stale attempt");
+    if (socket !== ws || generation !== connectGeneration) {
+      try { socket.close(1000, "stale attempt"); } catch { /* close race */ }
+      return;
+    }
     window.clearTimeout(connectTimeout);
     socket.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 } satisfies ClientMessage));
     helloTimeout = window.setTimeout(() => {
-      if (!helloComplete && socket === ws) socket.close(4001, "hello timeout");
+      if (!helloComplete && socket === ws) {
+        try { socket.close(4001, "hello timeout"); } catch { /* close race */ }
+      }
     }, HELLO_TIMEOUT_MS);
   };
 
@@ -297,8 +307,12 @@ if (typeof window !== "undefined") {
     const stale = !socket || socket.readyState !== WebSocket.OPEN || performance.now() - lastInboundMono > STALE_BACKGROUND_MS;
     serverClock.resetSamples();
     if (stale) {
-      if (socket) try { socket.close(4002, "stale background connection"); } catch { /* close race */ }
-      ws = null;
+      if (socket) {
+        failPendingForSocket(socket);
+        try { socket.close(4002, "stale background connection"); } catch { /* close race */ }
+      }
+      if (ws === socket) ws = null;
+      window.clearInterval(heartbeatTimer);
       connect();
     } else {
       sendClockSample(socket);
