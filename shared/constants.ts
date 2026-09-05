@@ -24,7 +24,7 @@ export const GAME_MODES: GameModeInfo[] = [
   {
     id: "HANDS",
     icon: "🙋",
-    label: "ارفع",
+    label: "ارفع يدك",
     fullLabel: "ارفع يدك",
     description: "إذا المطلوب ينطبق عليك، ارفع يدك.",
     onboardingInstructions: [
@@ -38,7 +38,7 @@ export const GAME_MODES: GameModeInfo[] = [
   {
     id: "POINT",
     icon: "👉",
-    label: "أشر",
+    label: "أشر على شخص",
     fullLabel: "أشر على شخص",
     description: "اختر الشخص اللي تشوف إن المطلوب ينطبق عليه.",
     onboardingInstructions: [
@@ -52,7 +52,7 @@ export const GAME_MODES: GameModeInfo[] = [
   {
     id: "NUMBER",
     icon: "🔢",
-    label: "كم؟",
+    label: "ارفع أصابعك",
     fullLabel: "ارفع أصابعك",
     description: "جاوب من 0 إلى 5 بأصابعك.",
     onboardingInstructions: [
@@ -82,7 +82,9 @@ export const TIMERS = {
   ACTION: 1_000,
   HOLD: 2_000,
   PROMPT_REVEAL: 2_500,
-  DISCONNECT_GRACE: 60_000,
+  // Only the Host has a disconnect expiry. Player seats have no transport
+  // expiry timer: they remain until reconnect, LEAVE_ROOM, KICK_PLAYER, or room close.
+  HOST_DISCONNECT_GRACE: 5 * 60 * 1_000,
 } as const;
 
 /** Legacy TEXT_PAIR categories retained for future content work. */

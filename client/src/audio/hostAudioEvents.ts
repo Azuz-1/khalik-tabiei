@@ -21,6 +21,7 @@ export interface HostAudioSnapshot {
   currentRound: number;
   challengeIndex?: number;
   submittedVotes?: number;
+  totalVotes?: number;
   playerUids: string[];
   result?: {
     groupFound: boolean;
@@ -60,7 +61,10 @@ export class HostAudioEventController {
   private roomCode = "";
   private phase: GamePhase | null = null;
   private currentRound = 0;
+  private challengeIndex: number | undefined;
   private submittedVotes = 0;
+  private totalVotes = 0;
+  private votingPlayerUids = new Set<string>();
   private seenPlayerUids = new Set<string>();
   private playedResultKeys = new Set<string>();
   private lastCountdownStep: CountdownStep | null = null;
@@ -74,6 +78,7 @@ export class HostAudioEventController {
     const events: HostAudioEvent[] = [];
     const previousPhase = this.phase;
     const previousRound = this.currentRound;
+    const previousChallengeIndex = this.challengeIndex;
 
     // A rematch keeps the same room code and players but starts a fresh game.
     // Reset only per-game event dedupe; keep seen player UIDs so returning to
@@ -82,6 +87,20 @@ export class HostAudioEventController {
       (snapshot.phase === "LOBBY" && previousPhase !== "LOBBY") ||
       snapshot.currentRound < previousRound;
     if (newGameLifecycle) this.resetPerGameDedupe();
+
+    // If an explicit retry/redeal path ever restarts this Round at QUESTION,
+    // allow the new physical attempt to make its own result sound even when
+    // room/round/challenge identifiers collide with a result already heard.
+    const redealtCurrentRound =
+      !newGameLifecycle &&
+      snapshot.phase === "QUESTION" &&
+      previousPhase !== null &&
+      previousPhase !== "QUESTION" &&
+      snapshot.currentRound === previousRound &&
+      snapshot.challengeIndex != null &&
+      previousChallengeIndex != null &&
+      snapshot.challengeIndex <= previousChallengeIndex;
+    if (redealtCurrentRound) this.resetCurrentRoundDedupe(snapshot.currentRound);
 
     let newPlayers = 0;
     for (const uid of snapshot.playerUids) {
@@ -120,12 +139,35 @@ export class HostAudioEventController {
 
     if (snapshot.phase === "VOTING") {
       const submitted = snapshot.submittedVotes ?? 0;
+      const total = snapshot.totalVotes ?? this.totalVotes;
       if (previousPhase === "VOTING" && submitted > this.submittedVotes) {
         events.push({ type: "voteReceived", count: submitted - this.submittedVotes });
       }
       this.submittedVotes = submitted;
+      this.totalVotes = total;
+      this.votingPlayerUids = new Set(snapshot.playerUids);
+    } else if (snapshot.phase === "RESULT" && previousPhase === "VOTING") {
+      // The server computes RESULT before broadcasting the final real vote, so
+      // the Host may never receive a VOTING snapshot with submitted === total.
+      // Recover that one aggregate increment only when the participant set did
+      // not shrink. A KICK/LEAVE can also turn 3/4 into RESULT with no new vote;
+      // that transition must not synthesize a fake fourth vote sound.
+      const participantShrank = [...this.votingPlayerUids].some(
+        (uid) => !snapshot.playerUids.includes(uid),
+      );
+      const finalIncrement = participantShrank
+        ? 0
+        : Math.max(0, this.totalVotes - this.submittedVotes);
+      if (finalIncrement > 0) {
+        events.push({ type: "voteReceived", count: finalIncrement });
+      }
+      this.submittedVotes = 0;
+      this.totalVotes = 0;
+      this.votingPlayerUids.clear();
     } else {
       this.submittedVotes = 0;
+      this.totalVotes = 0;
+      this.votingPlayerUids.clear();
     }
 
     if (snapshot.phase === "RESULT" && snapshot.result) {
@@ -144,6 +186,7 @@ export class HostAudioEventController {
 
     this.phase = snapshot.phase;
     this.currentRound = snapshot.currentRound;
+    this.challengeIndex = snapshot.challengeIndex;
     return events;
   }
 
@@ -157,6 +200,19 @@ export class HostAudioEventController {
   private resetPerGameDedupe(): void {
     this.playedResultKeys.clear();
     this.submittedVotes = 0;
+    this.totalVotes = 0;
+    this.votingPlayerUids.clear();
+    this.lastCountdownStep = null;
+  }
+
+  private resetCurrentRoundDedupe(round: number): void {
+    const prefix = `${this.roomCode}:${round}:`;
+    for (const key of [...this.playedResultKeys]) {
+      if (key.startsWith(prefix)) this.playedResultKeys.delete(key);
+    }
+    this.submittedVotes = 0;
+    this.totalVotes = 0;
+    this.votingPlayerUids.clear();
     this.lastCountdownStep = null;
   }
 
@@ -165,7 +221,12 @@ export class HostAudioEventController {
     this.roomCode = snapshot.roomCode;
     this.phase = snapshot.phase;
     this.currentRound = snapshot.currentRound;
+    this.challengeIndex = snapshot.challengeIndex;
     this.submittedVotes = snapshot.phase === "VOTING" ? snapshot.submittedVotes ?? 0 : 0;
+    this.totalVotes = snapshot.phase === "VOTING" ? snapshot.totalVotes ?? 0 : 0;
+    this.votingPlayerUids = snapshot.phase === "VOTING"
+      ? new Set(snapshot.playerUids)
+      : new Set<string>();
     this.seenPlayerUids = new Set(snapshot.playerUids);
     this.playedResultKeys = new Set<string>();
     this.lastCountdownStep = null;

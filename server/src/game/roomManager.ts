@@ -17,6 +17,7 @@ import {
   cleanName,
   createRoomState,
   normalizeArabic,
+  roundParticipants,
   type InternalPlayer,
   type RoomState,
 } from "./state.js";
@@ -24,7 +25,7 @@ import {
 interface Deps {
   rng: () => number;
   now: () => number;
-  disconnectGraceMs: number;
+  hostDisconnectGraceMs: number;
   countdownMs: number;
   actionMs: number;
   holdMs: number;
@@ -36,6 +37,7 @@ interface Deps {
 const IDLE_ROOM_MS = 30 * 60 * 1_000;
 const GC_INTERVAL_MS = 60_000;
 const IMITATION_STAGE_TIMER = "imitation-stage";
+const HOST_DISCONNECT_TIMER = "host-disconnect";
 const SAFE_REMOVAL_PHASES = new Set(["LOBBY", "GAME_OVER"]);
 
 export class RoomManager {
@@ -50,7 +52,7 @@ export class RoomManager {
     this.deps = {
       rng: deps.rng ?? Math.random,
       now: deps.now ?? Date.now,
-      disconnectGraceMs: deps.disconnectGraceMs ?? TIMERS.DISCONNECT_GRACE,
+      hostDisconnectGraceMs: deps.hostDisconnectGraceMs ?? TIMERS.HOST_DISCONNECT_GRACE,
       countdownMs: deps.countdownMs ?? TIMERS.COUNTDOWN,
       actionMs: deps.actionMs ?? TIMERS.ACTION,
       holdMs: deps.holdMs ?? TIMERS.HOLD,
@@ -95,9 +97,9 @@ export class RoomManager {
       player.disconnectedAt = undefined;
       player.connected = true;
       player.lastSeen = this.deps.now();
-      this.cancelTimer(room.code, this.disconnectTimerKey(uid));
     } else if (uid === room.hostUid) {
-      this.cancelTimer(room.code, this.disconnectTimerKey(uid));
+      room.hostConnected = true;
+      this.cancelTimer(room.code, HOST_DISCONNECT_TIMER);
     }
 
     room.updatedAt = this.deps.now();
@@ -117,6 +119,8 @@ export class RoomManager {
     connections?.delete(conn);
     if (connections?.size === 0) this.connsByUid.delete(uid);
 
+    // Multiple tabs/screens can share the same signed Host identity. Do not
+    // mark the Host disconnected while any authenticated room connection lives.
     if (!roomCode || this.hasRoomConnection(uid, roomCode)) return;
 
     const room = this.rooms.get(roomCode);
@@ -124,8 +128,11 @@ export class RoomManager {
     room.updatedAt = this.deps.now();
 
     if (uid === room.hostUid) {
-      this.schedule(room, this.disconnectTimerKey(uid), this.deps.disconnectGraceMs, () => {
+      room.hostConnected = false;
+      this.broadcast(room);
+      this.schedule(room, HOST_DISCONNECT_TIMER, this.deps.hostDisconnectGraceMs, () => {
         if (
+          !room.hostConnected &&
           !this.hasRoomConnection(uid, room.code) &&
           this.uidToRoomCode.get(uid) === room.code
         ) {
@@ -142,11 +149,11 @@ export class RoomManager {
     player.lastSeen = this.deps.now();
     player.disconnectedAt = player.lastSeen;
     player.disconnectGeneration += 1;
-    const generation = player.disconnectGeneration;
 
-    this.schedule(room, this.disconnectTimerKey(uid), this.deps.disconnectGraceMs, () => {
-      this.expirePlayerDisconnect(room, uid, generation);
-    });
+    // Phone sleep, a closed tab, or a flaky Wi-Fi hop is not an intentional
+    // leave. Keep the seat, hidden role, prompt assignment, and current round
+    // intact until this same signed session reconnects or the Host explicitly
+    // removes the player. Player disconnects have no expiry/redeal timer.
     this.broadcast(room);
   }
 
@@ -248,7 +255,6 @@ export class RoomManager {
       existing.disconnectedAt = undefined;
       existing.connected = true;
       existing.lastSeen = this.deps.now();
-      this.cancelTimer(code, this.disconnectTimerKey(uid));
       this.attachAll(uid, code);
       this.broadcast(room);
       return;
@@ -293,8 +299,7 @@ export class RoomManager {
       return;
     }
 
-    if (!SAFE_REMOVAL_PHASES.has(room.phase)) throw new GameError("INVALID_PHASE");
-    this.removePlayer(room, uid);
+    this.removePlayerByChoice(room, uid);
     this.broadcast(room);
     this.sendIdleToUid(uid);
   }
@@ -385,10 +390,10 @@ export class RoomManager {
   private kick(hostUid: string, targetUid: string): void {
     this.withRoom(hostUid, (room) => {
       if (room.hostUid !== hostUid) throw new GameError("NOT_HOST");
-      if (room.phase !== "LOBBY") throw new GameError("INVALID_PHASE");
       if (!room.players.has(targetUid)) throw new GameError("NOT_PLAYER");
 
-      this.removePlayer(room, targetUid);
+      this.removePlayerByChoice(room, targetUid);
+
       for (const conn of this.connsByUid.get(targetUid) ?? []) {
         conn.send({ t: "KICKED" });
       }
@@ -396,79 +401,79 @@ export class RoomManager {
     });
   }
 
+  /**
+   * Explicit leave/kick is different from a transport disconnect. Remove the
+   * seat immediately while preserving the current game whenever it is safe:
+   * a normal player can be removed from ready/voting requirements without a
+   * redeal, so the same impostor/prompt/challenge continue. If the leaving seat
+   * is the current impostor (or fewer than MIN_PLAYERS remain), return visibly
+   * to Lobby instead of silently selecting a new impostor inside the same game.
+   */
+  private removePlayerByChoice(room: RoomState, uid: string): void {
+    const phase = room.phase;
+    const round = room.round;
+    const wasParticipant = round?.participantUids.includes(uid) ?? false;
+    const wasImpostor = round?.impostorUid === uid;
+    const activeGame = !SAFE_REMOVAL_PHASES.has(phase);
+    const currentImpostorStillRequired =
+      activeGame &&
+      wasParticipant &&
+      wasImpostor &&
+      !(phase === "RESULT" && round?.roundComplete === true);
+
+    if (round && wasParticipant && phase !== "RESULT") {
+      round.participantUids = round.participantUids.filter((participantUid) => participantUid !== uid);
+      round.readyUids.delete(uid);
+      round.answers.delete(uid);
+      // A submitted ballot is committed. Remove only this player's own vote;
+      // votes from remaining voters that targeted this now-removed normal seat
+      // stay submitted and become wasted ballots. They never count for the
+      // impostor, and the voter is never asked to vote again.
+      round.votes.delete(uid);
+    }
+
+    this.removePlayer(room, uid);
+
+    if (!activeGame || !round || !wasParticipant) return;
+
+    if (phase === "RESULT") {
+      // Freeze the already-computed result, but ensure a survived Challenge
+      // does not carry the removed normal seat into the next Challenge.
+      if (!round.roundComplete && !wasImpostor) {
+        round.participantUids = round.participantUids.filter((participantUid) => participantUid !== uid);
+      }
+      if (currentImpostorStillRequired || roundParticipants(room).length < room.minPlayers) {
+        engine.abortToLobby(room, this.deps);
+      }
+      return;
+    }
+
+    const participants = roundParticipants(room);
+    if (currentImpostorStillRequired || participants.length < room.minPlayers) {
+      this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+      engine.abortToLobby(room, this.deps);
+      return;
+    }
+
+    if (
+      phase === "QUESTION" &&
+      participants.length > 0 &&
+      participants.every((participant) => round.readyUids.has(participant.uid))
+    ) {
+      this.beginPhysicalSequence(room);
+      return;
+    }
+
+    if (phase === "VOTING" && engine.allVoted(room)) {
+      engine.computeResult(room, this.deps);
+    }
+  }
+
   private closeRoom(uid: string): void {
     const room = this.roomOf(uid);
     if (!room) return;
     if (room.hostUid !== uid) throw new GameError("NOT_HOST");
     this.doClose(room, "closed_by_host");
-  }
-
-  private expirePlayerDisconnect(room: RoomState, uid: string, generation: number): void {
-    if (this.rooms.get(room.code) !== room || this.uidToRoomCode.get(uid) !== room.code) {
-      return;
-    }
-
-    const player = room.players.get(uid);
-    if (
-      !player ||
-      player.connected ||
-      player.disconnectGeneration !== generation ||
-      this.hasRoomConnection(uid, room.code)
-    ) {
-      return;
-    }
-
-    // A survived challenge result is not the end of the round: the same hidden
-    // impostor would otherwise carry a stale disconnected seat into the next
-    // challenge. Expiry here cancels the incomplete round and redeals challenge
-    // 1 with the same round mode if enough players remain.
-    if (
-      room.phase === "RESULT" &&
-      room.round?.kind === "IMITATION" &&
-      !room.round.roundComplete
-    ) {
-      const wasParticipant = room.round.participantUids.includes(uid);
-      this.removePlayer(room, uid);
-      if (!wasParticipant) {
-        this.broadcast(room);
-        return;
-      }
-
-      if (activePlayers(room).length < room.minPlayers) {
-        engine.abortToLobby(room, this.deps);
-      } else {
-        engine.redealCurrentRound(room, this.deps);
-      }
-      this.broadcast(room);
-      return;
-    }
-
-    if (room.phase === "RESULT" || room.phase === "GAME_OVER") {
-      player.pendingRemoval = true;
-      this.broadcast(room);
-      return;
-    }
-
-    if (SAFE_REMOVAL_PHASES.has(room.phase)) {
-      this.removePlayer(room, uid);
-      this.broadcast(room);
-      return;
-    }
-
-    const wasParticipant = room.round?.participantUids.includes(uid) ?? false;
-    this.removePlayer(room, uid);
-    if (!wasParticipant) {
-      this.broadcast(room);
-      return;
-    }
-
-    this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
-    if (activePlayers(room).length < room.minPlayers) {
-      engine.abortToLobby(room, this.deps);
-    } else {
-      engine.redealCurrentRound(room, this.deps);
-    }
-    this.broadcast(room);
   }
 
   private prunePendingPlayers(room: RoomState): void {
@@ -547,7 +552,6 @@ export class RoomManager {
   private removePlayer(room: RoomState, uid: string): void {
     room.players.delete(uid);
     room.updatedAt = this.deps.now();
-    this.cancelTimer(room.code, this.disconnectTimerKey(uid));
     if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
     this.detachAll(uid, room.code);
   }
@@ -575,10 +579,6 @@ export class RoomManager {
       if (!this.rooms.has(code)) return code;
     }
     throw new GameError("INTERNAL", "could not allocate room code");
-  }
-
-  private disconnectTimerKey(uid: string): string {
-    return `disconnect:${uid}`;
   }
 
   private schedule(room: RoomState, key: string, ms: number, fn: () => void): void {

@@ -66,6 +66,7 @@ export interface RoundOutcome {
 export interface RoomState {
   code: string;
   hostUid: string;
+  hostConnected: boolean;
   phase: GamePhase;
   createdAt: number;
   updatedAt: number;
@@ -95,6 +96,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
   return {
     code,
     hostUid,
+    hostConnected: true,
     phase: "LOBBY",
     createdAt: now,
     updatedAt: now,

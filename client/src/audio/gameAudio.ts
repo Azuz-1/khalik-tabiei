@@ -184,7 +184,10 @@ export function createGameAudioRuntime(environment: GameAudioEnvironment = {}): 
         ensureMaster(context);
       }
 
-      if (context.state === "suspended") {
+      // Safari/WebKit can expose interruption-like non-running states in
+      // addition to the standard "suspended" state. A user gesture should try
+      // resume for any live context that is not already running.
+      if (context.state !== "running" && context.state !== "closed") {
         await context.resume();
       }
       return context.state === "running";

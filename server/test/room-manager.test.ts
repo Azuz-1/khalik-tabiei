@@ -174,7 +174,6 @@ test("reconnect during countdown restores normal prompt but never leaks it to im
     actionMs: 5,
     holdMs: 5,
     promptRevealMs: 5,
-    disconnectGraceMs: 200,
   });
   const { players, room } = start(manager);
   const round = room.round!;
@@ -323,7 +322,6 @@ test("voting survives disconnect/reconnect and completes only after every partic
     actionMs: 2,
     holdMs: 2,
     promptRevealMs: 2,
-    disconnectGraceMs: 80,
   });
   const { host, players, room } = await toDiscussion(manager);
 
@@ -353,34 +351,39 @@ test("voting survives disconnect/reconnect and completes only after every partic
   manager.dispose();
 });
 
-test("grace expiry during a challenge redeals safely with same current challenge mode and bag", async () => {
-  const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 4 });
+test("player disconnect remains preserved with no expiry/redeal timer", async () => {
+  const manager = new RoomManager({ rng: () => 0 });
   const { players, room } = start(manager, 4);
   const oldRound = room.round!;
   const oldMode = oldRound.mode;
+  const oldPrompt = oldRound.promptId;
+  const oldImpostor = oldRound.impostorUid;
   const bagBefore = [...room.modeBag];
-  const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
+  const target = players.find((player) => player.uid !== oldImpostor)!;
 
   manager.disconnect(target.conn);
   await wait(12);
 
   assert.equal(room.currentRound, 1);
-  assert.notEqual(room.round, oldRound);
+  assert.equal(room.round, oldRound);
   assert.equal(room.round?.challengeIndex, 1);
   assert.equal(room.round?.mode, oldMode);
+  assert.equal(room.round?.promptId, oldPrompt);
+  assert.equal(room.round?.impostorUid, oldImpostor);
   assert.deepEqual(room.modeBag, bagBefore);
   assert.equal(room.phase, "QUESTION");
+  assert.equal(room.players.has(target.uid), true);
+  assert.equal(room.players.get(target.uid)?.connected, false);
   manager.dispose();
 });
 
-test("grace expiry after a survived challenge redeals incomplete round without consuming bag", async () => {
+test("disconnect after a survived challenge keeps the result and seat until explicit Host action", async () => {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 2,
     actionMs: 2,
     holdMs: 2,
     promptRevealMs: 2,
-    disconnectGraceMs: 4,
   });
   const { host, players, room } = await toDiscussion(manager, 4);
   manager.handle(host.conn, { t: "START_VOTING" });
@@ -406,20 +409,17 @@ test("grace expiry after a survived challenge redeals incomplete round without c
   assert.equal(room.round?.roundComplete, false);
 
   const oldRound = room.round!;
-  const oldMode = oldRound.mode;
-  const bagBefore = [...room.modeBag];
   const target = players.find((player) => player.uid !== oldRound.impostorUid)!;
   manager.disconnect(target.conn);
   await wait(12);
 
   assert.equal(room.currentRound, 1);
-  assert.equal(room.phase, "QUESTION");
-  assert.notEqual(room.round, oldRound);
-  assert.equal(room.round?.challengeIndex, 1);
-  assert.equal(room.round?.mode, oldMode);
-  assert.deepEqual(room.modeBag, bagBefore);
-  assert.ok(!room.players.has(target.uid));
-  assert.equal(room.players.size, 3);
+  assert.equal(room.phase, "RESULT");
+  assert.equal(room.round, oldRound);
+  assert.equal(room.round?.roundComplete, false);
+  assert.equal(room.players.has(target.uid), true);
+  assert.equal(room.players.get(target.uid)?.connected, false);
+  assert.equal(room.players.size, 4);
   assert.ok([...room.players.values()].every((player) => player.score === 0));
   manager.dispose();
 });

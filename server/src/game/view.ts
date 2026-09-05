@@ -83,6 +83,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       maxPlayers: room.maxPlayers,
       minPlayers: room.minPlayers,
       hostUid: room.hostUid,
+      hostConnected: room.hostConnected,
       selectedModes: room.selectedModes,
       availableModes: GAME_MODES,
       categories: room.categories,

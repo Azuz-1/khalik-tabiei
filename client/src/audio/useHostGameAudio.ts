@@ -31,6 +31,7 @@ function snapshotFromView(view: ClientView): HostAudioSnapshot {
     currentRound: view.room.currentRound,
     challengeIndex: view.challenge?.index,
     submittedVotes: view.votesProgress?.submitted,
+    totalVotes: view.votesProgress?.total,
     playerUids: view.players.map((player) => player.uid),
     result: view.result
       ? {
@@ -109,12 +110,11 @@ export function useHostGameAudio(view: ClientView): {
   }, [view.room.code, view.room.phase, view.room.phaseEndsAt]);
 
   useEffect(() => {
-    let unlocked = false;
+    // Keep trying on real Host gestures. Calling unlockAudio() while already
+    // running is cheap, and unlike a one-shot flag this also recovers after
+    // BFCache/pagehide disposal or browser audio interruptions.
     const tryUnlock = () => {
-      if (unlocked) return;
-      void unlockAudio().then((success) => {
-        unlocked = success;
-      });
+      void unlockAudio();
     };
 
     document.addEventListener("pointerdown", tryUnlock, true);
