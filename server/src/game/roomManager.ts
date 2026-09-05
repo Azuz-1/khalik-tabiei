@@ -1,5 +1,6 @@
 /** Authoritative room, connection, timer, and membership orchestration. */
-import type { ClientMessage } from "../../../shared/types.js";
+import { randomInt } from "node:crypto";
+import type { ClientMessage, GamePhase } from "../../../shared/types.js";
 import {
   MAX_ACTIVE_ROOMS,
   MAX_CONNECTIONS_PER_UID,
@@ -34,11 +35,13 @@ interface Deps {
   maxConnectionsPerUid: number;
 }
 
+const secureRng = () => randomInt(0, 2 ** 32) / 2 ** 32;
 const IDLE_ROOM_MS = 30 * 60 * 1_000;
 const GC_INTERVAL_MS = 60_000;
 const IMITATION_STAGE_TIMER = "imitation-stage";
 const HOST_DISCONNECT_TIMER = "host-disconnect";
-const SAFE_REMOVAL_PHASES = new Set(["LOBBY", "GAME_OVER"]);
+const SAFE_REMOVAL_PHASES = new Set<GamePhase>(["LOBBY", "GAME_OVER"]);
+const RESTART_PHYSICAL_PHASES = new Set<GamePhase>(["COUNTDOWN", "ACTION", "HOLD"]);
 
 export class RoomManager {
   private readonly rooms = new Map<string, RoomState>();
@@ -50,7 +53,7 @@ export class RoomManager {
 
   constructor(deps: Partial<Deps> = {}) {
     this.deps = {
-      rng: deps.rng ?? Math.random,
+      rng: deps.rng ?? secureRng,
       now: deps.now ?? Date.now,
       hostDisconnectGraceMs: deps.hostDisconnectGraceMs ?? TIMERS.HOST_DISCONNECT_GRACE,
       countdownMs: deps.countdownMs ?? TIMERS.COUNTDOWN,
@@ -99,7 +102,9 @@ export class RoomManager {
       player.lastSeen = this.deps.now();
     } else if (uid === room.hostUid) {
       room.hostConnected = true;
+      room.hostCloseDeadline = undefined;
       this.cancelTimer(room.code, HOST_DISCONNECT_TIMER);
+      this.resumeAfterHostReconnect(room);
     }
 
     room.updatedAt = this.deps.now();
@@ -129,6 +134,8 @@ export class RoomManager {
 
     if (uid === room.hostUid) {
       room.hostConnected = false;
+      room.hostCloseDeadline = this.deps.now() + this.deps.hostDisconnectGraceMs;
+      this.pauseForHostDisconnect(room);
       this.broadcast(room);
       this.schedule(room, HOST_DISCONNECT_TIMER, this.deps.hostDisconnectGraceMs, () => {
         if (
@@ -319,47 +326,52 @@ export class RoomManager {
   private markReady(uid: string): void {
     this.withRoom(uid, (room) => {
       const { allReady } = engine.markReady(room, uid, this.deps);
-      if (allReady) this.beginPhysicalSequence(room);
+      if (allReady && room.hostConnected && !room.pause) this.beginPhysicalSequence(room);
       this.broadcast(room);
     });
   }
 
-  private beginPhysicalSequence(room: RoomState): void {
+  private beginPhysicalSequence(room: RoomState, restart = false): void {
+    const generation = ++room.timerGeneration;
     const endsAt = this.deps.now() + this.deps.countdownMs;
-    engine.startCountdown(room, endsAt, this.deps);
+    if (restart) engine.restartCountdown(room, endsAt, this.deps);
+    else engine.startCountdown(room, endsAt, this.deps);
 
     this.schedule(room, IMITATION_STAGE_TIMER, this.deps.countdownMs, () => {
-      if (room.phase !== "COUNTDOWN") return;
+      if (room.phase !== "COUNTDOWN" || !room.hostConnected || room.pause) return;
       const actionEndsAt = this.deps.now() + this.deps.actionMs;
       engine.toAction(room, actionEndsAt, this.deps);
       this.broadcast(room);
 
       this.schedule(room, IMITATION_STAGE_TIMER, this.deps.actionMs, () => {
-        if (room.phase !== "ACTION") return;
+        if (room.phase !== "ACTION" || !room.hostConnected || room.pause) return;
         const holdEndsAt = this.deps.now() + this.deps.holdMs;
         engine.toHold(room, holdEndsAt, this.deps);
         this.broadcast(room);
 
         this.schedule(room, IMITATION_STAGE_TIMER, this.deps.holdMs, () => {
-          if (room.phase !== "HOLD") return;
+          if (room.phase !== "HOLD" || !room.hostConnected || room.pause) return;
           const revealEndsAt = this.deps.now() + this.deps.promptRevealMs;
           engine.revealPrompt(room, revealEndsAt, this.deps);
           this.broadcast(room);
 
           this.schedule(room, IMITATION_STAGE_TIMER, this.deps.promptRevealMs, () => {
-            if (room.phase !== "PROMPT_REVEAL") return;
+            if (room.phase !== "PROMPT_REVEAL" || !room.hostConnected || room.pause) return;
             engine.toDiscussion(room, this.deps);
             this.broadcast(room);
-          });
-        });
-      });
-    });
+          }, generation);
+        }, generation);
+      }, generation);
+    }, generation);
   }
 
   private submitVote(uid: string, targetUid: string): void {
     this.withRoom(uid, (room) => {
       const { allVoted } = engine.submitVote(room, uid, targetUid, this.deps);
-      if (allVoted) engine.computeResult(room, this.deps);
+      if (allVoted) {
+        engine.sealVoteResolution(room, this.deps);
+        if (room.hostConnected && !room.pause) engine.computeResult(room, this.deps);
+      }
       this.broadcast(room);
     });
   }
@@ -369,8 +381,19 @@ export class RoomManager {
       if (room.hostUid !== uid) throw new GameError("NOT_HOST");
       if (room.phase !== "RESULT") throw new GameError("INVALID_PHASE");
 
-      const wasComplete = room.round?.roundComplete ?? false;
+      const round = room.round;
+      if (!round) throw new GameError("INVALID_PHASE");
+      const wasComplete = round.roundComplete;
       const wasFinal = wasComplete && room.currentRound >= room.totalRounds;
+
+      if (!wasComplete) {
+        const impostorStillPresent = room.players.has(round.impostorUid);
+        if (!impostorStillPresent || roundParticipants(room).length < room.minPlayers) {
+          engine.abortToLobby(room, this.deps);
+          this.broadcast(room);
+          return;
+        }
+      }
 
       if (wasComplete && !wasFinal) {
         this.prunePendingPlayers(room);
@@ -403,11 +426,9 @@ export class RoomManager {
 
   /**
    * Explicit leave/kick is different from a transport disconnect. Remove the
-   * seat immediately while preserving the current game whenever it is safe:
-   * a normal player can be removed from ready/voting requirements without a
-   * redeal, so the same impostor/prompt/challenge continue. If the leaving seat
-   * is the current impostor (or fewer than MIN_PLAYERS remain), return visibly
-   * to Lobby instead of silently selecting a new impostor inside the same game.
+   * seat immediately while preserving a completed RESULT verbatim. Before a
+   * ballot is sealed, the existing committed/wasted-ballot rules apply. After
+   * sealing, membership changes cannot rewrite the resolving ballot.
    */
   private removePlayerByChoice(room: RoomState, uid: string): void {
     const phase = room.phase;
@@ -415,20 +436,20 @@ export class RoomManager {
     const wasParticipant = round?.participantUids.includes(uid) ?? false;
     const wasImpostor = round?.impostorUid === uid;
     const activeGame = !SAFE_REMOVAL_PHASES.has(phase);
+    const sealedVoting = phase === "VOTING" && round?.resolutionSealed === true;
     const currentImpostorStillRequired =
       activeGame &&
       wasParticipant &&
       wasImpostor &&
-      !(phase === "RESULT" && round?.roundComplete === true);
+      !(phase === "RESULT" && round?.roundComplete === true) &&
+      !sealedVoting;
 
     if (round && wasParticipant && phase !== "RESULT") {
       round.participantUids = round.participantUids.filter((participantUid) => participantUid !== uid);
       round.readyUids.delete(uid);
       round.answers.delete(uid);
-      // A submitted ballot is committed. Remove only this player's own vote;
-      // votes from remaining voters that targeted this now-removed normal seat
-      // stay submitted and become wasted ballots. They never count for the
-      // impostor, and the voter is never asked to vote again.
+      // Submitted ballots are committed until the ballot is sealed. Once
+      // sealed, sealedVotes is immutable even if the live Map is cleaned up.
       round.votes.delete(uid);
     }
 
@@ -437,14 +458,20 @@ export class RoomManager {
     if (!activeGame || !round || !wasParticipant) return;
 
     if (phase === "RESULT") {
-      // Freeze the already-computed result, but ensure a survived Challenge
-      // does not carry the removed normal seat into the next Challenge.
-      if (!round.roundComplete && !wasImpostor) {
-        round.participantUids = round.participantUids.filter((participantUid) => participantUid !== uid);
-      }
-      if (currentImpostorStillRequired || roundParticipants(room).length < room.minPlayers) {
+      // A finished result is historical. Never abort or rewrite it, even below
+      // the minimum player count. The Host decides what happens on NEXT_ROUND.
+      if (round.roundComplete) return;
+
+      round.participantUids = round.participantUids.filter((participantUid) => participantUid !== uid);
+      if (wasImpostor || roundParticipants(room).length < room.minPlayers) {
         engine.abortToLobby(room, this.deps);
       }
+      return;
+    }
+
+    if (sealedVoting) {
+      // The completed ballot is waiting for the Host. Do not abort or recompute
+      // it because somebody leaves after the last eligible vote.
       return;
     }
 
@@ -457,6 +484,8 @@ export class RoomManager {
 
     if (
       phase === "QUESTION" &&
+      room.hostConnected &&
+      !room.pause &&
       participants.length > 0 &&
       participants.every((participant) => round.readyUids.has(participant.uid))
     ) {
@@ -465,7 +494,78 @@ export class RoomManager {
     }
 
     if (phase === "VOTING" && engine.allVoted(room)) {
-      engine.computeResult(room, this.deps);
+      engine.sealVoteResolution(room, this.deps);
+      if (room.hostConnected && !room.pause) engine.computeResult(room, this.deps);
+    }
+  }
+
+  private pauseForHostDisconnect(room: RoomState): void {
+    if (room.phase === "CLOSED") return;
+    const remainingMs =
+      room.phase === "PROMPT_REVEAL" && room.phaseEndsAt !== undefined
+        ? Math.max(0, room.phaseEndsAt - this.deps.now())
+        : undefined;
+
+    const generation = ++room.timerGeneration;
+    room.pause = {
+      reason: "HOST_DISCONNECTED",
+      originalPhase: room.phase,
+      ...(remainingMs !== undefined ? { remainingMs } : {}),
+      generation,
+    };
+
+    if (RESTART_PHYSICAL_PHASES.has(room.phase) || room.phase === "PROMPT_REVEAL") {
+      this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+      room.phaseEndsAt = undefined;
+    }
+  }
+
+  private resumeAfterHostReconnect(room: RoomState): void {
+    const pause = room.pause;
+    if (!pause) return;
+
+    room.pause = undefined;
+    room.timerGeneration += 1;
+
+    if (pause.originalPhase === "QUESTION" && room.phase === "QUESTION") {
+      const round = room.round;
+      const participants = roundParticipants(room);
+      if (
+        round?.kind === "IMITATION" &&
+        participants.length > 0 &&
+        participants.every((participant) => round.readyUids.has(participant.uid))
+      ) {
+        this.beginPhysicalSequence(room);
+      }
+      return;
+    }
+
+    if (RESTART_PHYSICAL_PHASES.has(pause.originalPhase) && room.phase === pause.originalPhase) {
+      this.beginPhysicalSequence(room, true);
+      return;
+    }
+
+    if (pause.originalPhase === "PROMPT_REVEAL" && room.phase === "PROMPT_REVEAL") {
+      const remainingMs = Math.max(0, pause.remainingMs ?? 0);
+      if (remainingMs === 0) {
+        engine.toDiscussion(room, this.deps);
+        return;
+      }
+
+      const generation = ++room.timerGeneration;
+      engine.resumePromptReveal(room, this.deps.now() + remainingMs, this.deps);
+      this.schedule(room, IMITATION_STAGE_TIMER, remainingMs, () => {
+        if (room.phase !== "PROMPT_REVEAL" || !room.hostConnected || room.pause) return;
+        engine.toDiscussion(room, this.deps);
+        this.broadcast(room);
+      }, generation);
+      return;
+    }
+
+    if (pause.originalPhase === "VOTING" && room.phase === "VOTING") {
+      if (room.round?.resolutionSealed && !room.round.resultComputed) {
+        engine.computeResult(room, this.deps);
+      }
     }
   }
 
@@ -483,6 +583,9 @@ export class RoomManager {
   }
 
   private doClose(room: RoomState, reason: string): void {
+    room.timerGeneration += 1;
+    room.pause = undefined;
+    room.hostCloseDeadline = undefined;
     room.closed = true;
     room.phase = "CLOSED";
     const memberUids = [room.hostUid, ...room.players.keys()];
@@ -581,7 +684,13 @@ export class RoomManager {
     throw new GameError("INTERNAL", "could not allocate room code");
   }
 
-  private schedule(room: RoomState, key: string, ms: number, fn: () => void): void {
+  private schedule(
+    room: RoomState,
+    key: string,
+    ms: number,
+    fn: () => void,
+    generation?: number,
+  ): void {
     let roomTimers = this.timers.get(room.code);
     if (!roomTimers) {
       roomTimers = new Map();
@@ -589,10 +698,20 @@ export class RoomManager {
     }
     this.cancelTimer(room.code, key);
 
+    const roundIndex = room.round?.index;
+    const challengeIndex = room.round?.challengeIndex;
     const handle = setTimeout(() => {
       roomTimers?.delete(key);
       if (roomTimers?.size === 0) this.timers.delete(room.code);
       if (this.rooms.get(room.code) !== room) return;
+      if (
+        generation !== undefined &&
+        (room.timerGeneration !== generation ||
+          room.round?.index !== roundIndex ||
+          room.round?.challengeIndex !== challengeIndex)
+      ) {
+        return;
+      }
 
       try {
         fn();

@@ -126,6 +126,11 @@ test("five consecutive INDIVIDUAL games survive rematch without stale score stat
       catchCurrentRound(room);
       const resultView = buildView(room, "host", "http://game/join/ADV01");
       assert.equal(resultView.scoreboard?.length, 3);
+      assert.equal(
+        resultView.scoreboard?.reduce((sum, row) => sum + (row.roundDelta ?? 0), 0),
+        2,
+        "each caught three-player round awards exactly two normal-vote points",
+      );
       assert.equal(JSON.stringify(resultView).includes("pendingRoundScores"), false);
       engine.nextRound(room, "host", deps);
     }
@@ -133,8 +138,11 @@ test("five consecutive INDIVIDUAL games survive rematch without stale score stat
     assert.equal(room.phase, "GAME_OVER");
     const final = buildView(room, "host", "http://game/join/ADV01");
     assert.equal(final.scoreboard?.length, 3);
-    assert.ok(final.scoreboard?.every((row) => row.score === 2));
-    assert.ok(final.scoreboard?.every((row) => row.rank === 1));
+    assert.equal(
+      final.scoreboard?.reduce((sum, row) => sum + row.score, 0),
+      6,
+      "weighted selection may repeat an impostor, but exactly-once score totals stay invariant",
+    );
 
     engine.rematch(room, "host", deps);
     assert.equal(room.phase, "LOBBY");
@@ -298,8 +306,6 @@ test("seat reconnecting after a new Round started stays TV-directed instead of r
   assert.equal(view.isImpostor, undefined);
   assert.equal(view.myPrompt, undefined);
 
-  // The server remains authoritative and rejects a forged Ready from a seat
-  // that is not participating in this Round.
   manager.handle(reconnect.conn, { t: "MARK_READY" });
   assert.equal(lastMessage(reconnect.socket, "ERROR")?.code, "NOT_PLAYER");
 

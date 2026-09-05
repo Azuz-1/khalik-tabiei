@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type { CategoryId, GameMode, GamePhase, PlayStyle } from "../../../shared/types.js";
 import {
   DEFAULT_ROUNDS,
@@ -14,16 +15,19 @@ import {
   roundParticipants,
   type RoomState,
   type RoundState,
+  type SealedParticipant,
 } from "./state.js";
 import { IMITATION_PROMPTS, type ImitationPrompt } from "./imitationPrompts.data.js";
 import { pickPair } from "./questions.js";
+import { aggregateVoteTally } from "./votes.js";
 
 export interface EngineDeps {
   rng: () => number;
   now: () => number;
 }
 
-const defaultDeps: EngineDeps = { rng: Math.random, now: Date.now };
+const secureRng = () => randomInt(0, 2 ** 32) / 2 ** 32;
+const defaultDeps: EngineDeps = { rng: secureRng, now: Date.now };
 
 function touch(room: RoomState, deps: EngineDeps): void {
   room.updatedAt = deps.now();
@@ -37,50 +41,83 @@ function assertHost(room: RoomState, uid: string): void {
   if (room.hostUid !== uid) throw new GameError("NOT_HOST");
 }
 
-export function setSettings(
-  room: RoomState,
-  uid: string,
-  patch: {
-    totalRounds?: number;
-    categories?: CategoryId[];
-    selectedModes?: GameMode[];
-    playStyle?: PlayStyle;
-  },
-  deps: EngineDeps = defaultDeps,
-): void {
-  assertHost(room, uid);
-  assertPhase(room, "LOBBY");
+interface ProposedSettings {
+  totalRounds: number;
+  selectedModes: GameMode[];
+  playStyle: PlayStyle;
+}
 
+type SettingsPatch = {
+  totalRounds?: number;
+  categories?: CategoryId[];
+  selectedModes?: GameMode[];
+  playStyle?: PlayStyle;
+};
+
+function deriveProposedSettings(room: RoomState, patch: SettingsPatch): ProposedSettings {
+  const selectedModes =
+    patch.selectedModes === undefined
+      ? [...room.selectedModes]
+      : [...new Set(Array.isArray(patch.selectedModes) ? patch.selectedModes : [])].filter(
+          (mode): mode is GameMode => GAME_MODE_IDS.includes(mode as GameMode),
+        );
+
+  return {
+    totalRounds: patch.totalRounds ?? room.totalRounds,
+    selectedModes,
+    playStyle: patch.playStyle ?? room.playStyle,
+  };
+}
+
+function validateProposedSettings(proposed: ProposedSettings, patch: SettingsPatch): void {
   if (patch.categories !== undefined) {
     // Legacy TEXT_PAIR content remains in the codebase, but is intentionally
     // not selectable through the current client/server protocol.
     throw new GameError("BAD_REQUEST", "legacy mode unavailable");
   }
 
-  if (patch.totalRounds !== undefined) {
-    if (!ROUND_OPTIONS.includes(patch.totalRounds as (typeof ROUND_OPTIONS)[number])) {
-      throw new GameError("BAD_REQUEST", "invalid round count");
-    }
-    room.totalRounds = patch.totalRounds;
+  if (
+    patch.totalRounds !== undefined &&
+    !ROUND_OPTIONS.includes(proposed.totalRounds as (typeof ROUND_OPTIONS)[number])
+  ) {
+    throw new GameError("BAD_REQUEST", "invalid round count");
   }
 
+  if (patch.selectedModes !== undefined && !proposed.selectedModes.length) {
+    throw new GameError("NO_MODE_SELECTED");
+  }
+
+  if (
+    patch.playStyle !== undefined &&
+    proposed.playStyle !== "TEAM" &&
+    proposed.playStyle !== "INDIVIDUAL"
+  ) {
+    throw new GameError("BAD_REQUEST", "invalid play style");
+  }
+}
+
+function commitSettings(room: RoomState, proposed: ProposedSettings, patch: SettingsPatch): void {
+  if (patch.totalRounds !== undefined) room.totalRounds = proposed.totalRounds;
   if (patch.selectedModes !== undefined) {
-    const modes = [...new Set(Array.isArray(patch.selectedModes) ? patch.selectedModes : [])].filter(
-      (mode): mode is GameMode => GAME_MODE_IDS.includes(mode as GameMode),
-    );
-    if (!modes.length) throw new GameError("NO_MODE_SELECTED");
-    room.selectedModes = modes;
+    room.selectedModes = proposed.selectedModes;
     room.modeBag = [];
     room.lastMode = undefined;
   }
+  if (patch.playStyle !== undefined) room.playStyle = proposed.playStyle;
+}
 
-  if (patch.playStyle !== undefined) {
-    if (patch.playStyle !== "TEAM" && patch.playStyle !== "INDIVIDUAL") {
-      throw new GameError("BAD_REQUEST", "invalid play style");
-    }
-    room.playStyle = patch.playStyle;
-  }
+export function setSettings(
+  room: RoomState,
+  uid: string,
+  patch: SettingsPatch,
+  deps: EngineDeps = defaultDeps,
+): void {
+  assertHost(room, uid);
+  assertPhase(room, "LOBBY");
 
+  const proposed = deriveProposedSettings(room, patch);
+  validateProposedSettings(proposed, patch);
+  commitSettings(room, proposed, patch);
   touch(room, deps);
 }
 
@@ -94,9 +131,16 @@ export function selectImpostor(room: RoomState, deps: EngineDeps = defaultDeps):
   }
 
   const minimum = Math.min(...counts.values());
-  const candidates = active.filter((player) => (counts.get(player.uid) ?? 0) === minimum);
-  const index = Math.min(Math.floor(deps.rng() * candidates.length), candidates.length - 1);
-  return candidates[index].uid;
+  const weights = active.map(
+    (player) => 1 / (1 + (counts.get(player.uid) ?? 0) - minimum),
+  );
+  let ticket = deps.rng() * weights.reduce((sum, weight) => sum + weight, 0);
+
+  for (let index = 0; index < active.length; index += 1) {
+    ticket -= weights[index]!;
+    if (ticket < 0) return active[index]!.uid;
+  }
+  return active[active.length - 1]!.uid;
 }
 
 function shuffle<T>(items: T[], rng: () => number): T[] {
@@ -164,6 +208,10 @@ function prepareChallenge(
 ): void {
   const prompt = pickPrompt(room, mode, deps);
 
+  // A new Challenge is a new timer identity. It also resets every
+  // challenge-specific result/seal snapshot by constructing a fresh RoundState.
+  room.timerGeneration += 1;
+  room.pause = undefined;
   room.round = {
     kind: "IMITATION",
     index: room.currentRound,
@@ -214,6 +262,8 @@ export function beginLegacyRound(room: RoomState, deps: EngineDeps = defaultDeps
 
   const impostorUid = selectImpostor(room, deps);
   room.impostorHistory.push(impostorUid);
+  room.timerGeneration += 1;
+  room.pause = undefined;
   room.round = {
     kind: "TEXT_PAIR",
     index: room.currentRound || 1,
@@ -343,6 +393,19 @@ export function startCountdown(
   touch(room, deps);
 }
 
+/** Restart the same physical Challenge after a Host disconnect. */
+export function restartCountdown(
+  room: RoomState,
+  endsAt: number,
+  deps: EngineDeps = defaultDeps,
+): void {
+  assertPhase(room, "COUNTDOWN", "ACTION", "HOLD");
+  if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
+  room.phase = "COUNTDOWN";
+  room.phaseEndsAt = endsAt;
+  touch(room, deps);
+}
+
 export function toAction(
   room: RoomState,
   endsAt: number,
@@ -379,6 +442,17 @@ export function revealPrompt(
   touch(room, deps);
 }
 
+export function resumePromptReveal(
+  room: RoomState,
+  endsAt: number,
+  deps: EngineDeps = defaultDeps,
+): void {
+  assertPhase(room, "PROMPT_REVEAL");
+  if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
+  room.phaseEndsAt = endsAt;
+  touch(room, deps);
+}
+
 export function toDiscussion(room: RoomState, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "PROMPT_REVEAL");
   if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
@@ -407,6 +481,7 @@ export function submitVote(
   assertPhase(room, "VOTING");
   const round = room.round;
   if (!round) throw new GameError("INVALID_PHASE");
+  if (round.resolutionSealed) throw new GameError("VOTE_ALREADY_SUBMITTED");
 
   const voter = room.players.get(uid);
   if (!voter || !voter.connected || !round.participantUids.includes(uid)) {
@@ -429,8 +504,29 @@ export function submitVote(
 export function allVoted(room: RoomState): boolean {
   const round = room.round;
   if (!round) return false;
+  if (round.resolutionSealed) return true;
   const participants = roundParticipants(room);
   return participants.length > 0 && participants.every((player) => round.votes.has(player.uid));
+}
+
+export function sealVoteResolution(room: RoomState, deps: EngineDeps = defaultDeps): void {
+  assertPhase(room, "VOTING");
+  const round = room.round;
+  if (!round) throw new GameError("INVALID_PHASE");
+  if (round.resolutionSealed) return;
+  if (!allVoted(room)) throw new GameError("INVALID_PHASE", "ballot is incomplete");
+
+  const participants: SealedParticipant[] = roundParticipants(room).map((player) => ({
+    uid: player.uid,
+    name: player.name,
+  }));
+  const participantSet = new Set(participants.map((player) => player.uid));
+  round.sealedParticipants = participants;
+  round.sealedVotes = new Map(
+    [...round.votes].filter(([voterUid]) => participantSet.has(voterUid)),
+  );
+  round.resolutionSealed = true;
+  touch(room, deps);
 }
 
 function addPendingScore(room: RoomState, uid: string, points: number): void {
@@ -441,11 +537,14 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
   assertPhase(room, "VOTING");
   const round = room.round;
   if (!round) throw new GameError("INVALID_PHASE");
+  if (round.resultComputed) return;
+  if (!round.resolutionSealed) sealVoteResolution(room, deps);
 
-  const participants = roundParticipants(room);
+  const participants = round.sealedParticipants ?? [];
+  const votes = round.sealedVotes ?? new Map<string, string>();
   const tally = new Map(participants.map((player) => [player.uid, 0]));
-  for (const targetUid of round.votes.values()) {
-    tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
+  for (const targetUid of votes.values()) {
+    if (tally.has(targetUid)) tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
   }
 
   const requiredVotes = requiredVotesFor(participants.length);
@@ -455,7 +554,7 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
     // Every normal player's vote is their own point decision. Keep these
     // increments server-only until the round ends; exposing them after
     // Challenge 1/2 would reveal that a private guess was correct.
-    for (const [voterUid, targetUid] of round.votes) {
+    for (const [voterUid, targetUid] of votes) {
       if (voterUid !== round.impostorUid && targetUid === round.impostorUid) {
         addPendingScore(room, voterUid, SCORING.POINT_CORRECT_VOTE);
       }
@@ -466,7 +565,7 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
   round.roundComplete =
     round.kind === "TEXT_PAIR" || found || round.challengeIndex >= MAX_CHALLENGES_PER_ROUND;
   round.roundScores = new Map();
-  round.resultComputed = true;
+  round.resultRequiredVotes = requiredVotes;
 
   if (room.playStyle === "INDIVIDUAL" && round.kind === "IMITATION" && round.roundComplete) {
     if (!found) addPendingScore(room, round.impostorUid, SCORING.POINT_IMPOSTOR_SURVIVES);
@@ -479,6 +578,14 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
     }
     room.pendingRoundScores.clear();
   }
+
+  if (round.roundComplete) {
+    round.resultImpostorName =
+      participants.find((player) => player.uid === round.impostorUid)?.name ?? "—";
+    round.resultVoteTally = aggregateVoteTally(participants, votes);
+  }
+
+  round.resultComputed = true;
 
   if (
     round.kind === "IMITATION" &&
@@ -519,6 +626,8 @@ export function nextRound(room: RoomState, uid: string, deps: EngineDeps = defau
   }
 
   if (room.currentRound >= room.totalRounds) {
+    room.timerGeneration += 1;
+    room.pause = undefined;
     room.phase = "GAME_OVER";
     room.phaseEndsAt = undefined;
     touch(room, deps);
@@ -576,6 +685,8 @@ export function redealCurrentRound(room: RoomState, deps: EngineDeps = defaultDe
 }
 
 export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): void {
+  room.timerGeneration += 1;
+  room.pause = undefined;
   room.phase = "LOBBY";
   room.currentRound = 0;
   room.round = null;

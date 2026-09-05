@@ -3,7 +3,6 @@ import type {
   PublicPlayer,
   RevealedAnswer,
   Role,
-  VoteTallyEntry,
 } from "../../../shared/types.js";
 import {
   CATEGORIES,
@@ -11,12 +10,12 @@ import {
   MAX_CHALLENGES_PER_ROUND,
 } from "../../../shared/constants.js";
 import {
+  activePlayers,
   roundParticipants,
-  type InternalPlayer,
   type RoomState,
-  type RoundState,
 } from "./state.js";
 import { questionFor, ranking, requiredVotesFor } from "./engine.js";
+import { aggregateVoteTally } from "./votes.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
 const PUBLIC_PROMPT_PHASES = new Set(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
@@ -50,43 +49,6 @@ function revealAnswers(room: RoomState): RevealedAnswer[] {
   return answers;
 }
 
-function aggregateVoteTally(
-  participants: InternalPlayer[],
-  votes: Map<string, string>,
-): VoteTallyEntry[] {
-  const tally = new Map(participants.map((player) => [player.uid, 0]));
-  for (const targetUid of votes.values()) {
-    tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
-  }
-
-  // Participant order is intentionally stable. Live TV cards must never jump
-  // around as vote counts change.
-  return participants.map((player) => ({
-    uid: player.uid,
-    name: player.name,
-    votes: tally.get(player.uid) ?? 0,
-  }));
-}
-
-function freezeResultProjection(
-  room: RoomState,
-  round: RoundState,
-  participants: InternalPlayer[],
-): void {
-  // RoomManager synchronously broadcasts immediately after computeResult().
-  // Memoize the public facts on that first RESULT projection so a later
-  // KICK/LEAVE cannot rewrite the already-computed majority threshold, hide a
-  // historical vote row, or turn the revealed impostor name into "—".
-  if (round.resultRequiredVotes === undefined) {
-    round.resultRequiredVotes = requiredVotesFor(participants.length);
-  }
-
-  if (round.roundComplete && round.resultVoteTally === undefined) {
-    round.resultImpostorName = room.players.get(round.impostorUid)?.name ?? "—";
-    round.resultVoteTally = aggregateVoteTally(participants, round.votes);
-  }
-}
-
 export function buildView(room: RoomState, uid: string, joinUrl: string): ClientView {
   const role = roleFor(room, uid);
   const self = room.players.get(uid);
@@ -115,6 +77,15 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       availableCategories: CATEGORIES,
       joinUrl,
       ...(room.phaseEndsAt ? { phaseEndsAt: room.phaseEndsAt } : {}),
+      ...(room.hostCloseDeadline ? { hostCloseDeadline: room.hostCloseDeadline } : {}),
+      ...(room.pause
+        ? {
+            hostPause: {
+              reason: room.pause.reason,
+              originalPhase: room.pause.originalPhase,
+            },
+          }
+        : {}),
     },
     players: publicPlayers(room),
   };
@@ -184,14 +155,16 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   if (room.phase === "VOTING" && round) {
     const participants = roundParticipants(room);
     view.votesProgress = {
-      submitted: round.votes.size,
+      submitted: round.resolutionSealed ? participants.length : round.votes.size,
       total: participants.length,
       requiredVotes: requiredVotesFor(participants.length),
     };
 
     if (role === "host") {
       // Deliberately live for the shared TV. This is aggregate-only: the
-      // voter->target Map stays server-internal and is never projected.
+      // voter->target Map stays server-internal and is never projected. A live
+      // aggregate can reveal timing correlation and is intentionally not
+      // described as fully anonymous.
       view.liveVoteTally = aggregateVoteTally(participants, round.votes);
     }
 
@@ -199,14 +172,12 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       view.voteTargets = participants
         .filter((player) => player.uid !== uid)
         .map((player) => ({ uid: player.uid, name: player.name }));
-      view.myVoteSubmitted = round.votes.has(uid);
+      view.myVoteSubmitted = round.votes.has(uid) || Boolean(round.resolutionSealed);
     }
   }
 
   if (room.phase === "RESULT" && round && round.resultComputed) {
-    const participants = roundParticipants(room);
     const revealIdentity = round.roundComplete;
-    freezeResultProjection(room, round, participants);
 
     view.result = {
       ...(revealIdentity
@@ -220,7 +191,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       challengeIndex: round.challengeIndex,
       maxChallenges: round.kind === "IMITATION" ? MAX_CHALLENGES_PER_ROUND : 1,
       mode: round.mode,
-      requiredVotes: round.resultRequiredVotes ?? requiredVotesFor(participants.length),
+      requiredVotes: round.resultRequiredVotes ?? 0,
       ...(round.kind === "TEXT_PAIR"
         ? {
             normalQuestion: round.normalQuestion,
@@ -236,6 +207,16 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
         ...row,
         roundDelta: round.roundScores.get(row.uid) ?? 0,
       }));
+    }
+
+    if (
+      role === "host" &&
+      round.roundComplete &&
+      room.currentRound < room.totalRounds &&
+      activePlayers(room).length < room.minPlayers
+    ) {
+      view.nextRoundWarning =
+        "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية وتنمسح نقاطها.";
     }
   }
 
