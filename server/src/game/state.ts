@@ -14,6 +14,8 @@ export interface InternalPlayer {
   uid: string;
   name: string;
   normalizedName: string;
+  /** Stable for this occupied seat; rendered in addition to color/status. */
+  seatNumber?: number;
   score: number;
   connected: boolean;
   joinedAt: number;
@@ -153,9 +155,15 @@ export function allPlayers(room: RoomState): InternalPlayer[] {
   return [...room.players.values()];
 }
 
+/**
+ * Comparison-only Arabic key. Display text is never replaced by this value.
+ * Default-ignorable code points are removed here so visually identical names
+ * such as سالم and سالم\u200b collide. This is not a complete confusable-spoofing system.
+ */
 export function normalizeArabic(input: string): string {
   return input
     .normalize("NFKC")
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
     .replace(/[ً-ٰٟـ]/g, "")
     .replace(/[آأإٱ]/g, "ا")
     .replace(/ة/g, "ه")
@@ -169,15 +177,34 @@ export function normalizeArabic(input: string): string {
 
 export function stripUnsafeTextControls(input: string): string {
   return input.replace(
-    /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
+    /[\u0000-\u001f\u007f-\u009f\u061c\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g,
     "",
   );
 }
 
+function graphemeLength(input: string): number {
+  const Segmenter = Intl.Segmenter;
+  if (Segmenter) {
+    return [...new Segmenter("ar", { granularity: "grapheme" }).segment(input)].length;
+  }
+  return [...input].length;
+}
+
+function hasVisibleContent(input: string): boolean {
+  return input
+    .replace(/\s/gu, "")
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+    .length > 0;
+}
+
+/** Name length is measured in Unicode grapheme clusters after display cleaning. */
 export function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("INVALID_NAME");
-  const name = stripUnsafeTextControls(raw).replace(/\s+/g, " ").trim();
-  const length = [...name].length;
+  // NFC preserves legitimate Arabic diacritics and emoji ZWJ sequences while
+  // normalizing canonically equivalent display spellings.
+  const name = stripUnsafeTextControls(raw.normalize("NFC")).replace(/\s+/g, " ").trim();
+  if (!hasVisibleContent(name)) throw new GameError("INVALID_NAME");
+  const length = graphemeLength(name);
   if (length < NAME_MIN || length > NAME_MAX) throw new GameError("INVALID_NAME");
   return name;
 }
