@@ -135,6 +135,7 @@ export interface ClientView {
     maxPlayers: number;
     minPlayers: number;
     hostUid: string;
+    hostConnected: boolean;
     selectedModes: GameMode[];
     availableModes: GameModeInfo[];
     categories: CategoryId[];
