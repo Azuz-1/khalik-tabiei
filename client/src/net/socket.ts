@@ -20,6 +20,14 @@ export interface GameState {
   pendingActions: readonly string[];
 }
 
+type ActionMessage = Exclude<ClientMessage, { t: "HELLO" } | { t: "PING" }>;
+interface PendingAction {
+  type: ActionMessage["t"];
+  message: ActionMessage;
+  socket: WebSocket;
+  timeout: number;
+}
+
 let state: GameState = {
   status: "connecting",
   uid: null,
@@ -31,7 +39,7 @@ let state: GameState = {
 };
 
 const listeners = new Set<() => void>();
-const pending = new Map<string, { type: string; socket: WebSocket; timeout: number }>();
+const pending = new Map<string, PendingAction>();
 let errorSeq = 0;
 let feedbackSeq = 0;
 let requestSeq = 0;
@@ -50,8 +58,6 @@ const HELLO_TIMEOUT_MS = 5_000;
 const ACTION_TIMEOUT_MS = 10_000;
 const HEARTBEAT_MS = 10_000;
 const STALE_BACKGROUND_MS = 45_000;
-
-type ActionMessage = Exclude<ClientMessage, { t: "HELLO" } | { t: "PING" }>;
 
 function set(patch: Partial<GameState>): void {
   state = { ...state, ...patch };
@@ -85,6 +91,17 @@ function clearPending(rid: string, socket: WebSocket): boolean {
   return true;
 }
 
+function clearPendingMatching(socket: WebSocket, predicate: (entry: PendingAction) => boolean): void {
+  let changed = false;
+  for (const [rid, entry] of pending) {
+    if (entry.socket !== socket || !predicate(entry)) continue;
+    window.clearTimeout(entry.timeout);
+    pending.delete(rid);
+    changed = true;
+  }
+  if (changed) syncPendingState();
+}
+
 function failPendingForSocket(socket: WebSocket): void {
   let changed = false;
   for (const [rid, entry] of pending) {
@@ -97,6 +114,56 @@ function failPendingForSocket(socket: WebSocket): void {
     syncPendingState();
     feedback("انقطع الاتصال قبل ما نتأكد من تنفيذ الطلب. ما أعدنا إرساله تلقائيًا.");
   }
+}
+
+function sameValues<T extends string | number>(a: readonly T[] | undefined, b: readonly T[] | undefined): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+function actionCompleted(entry: PendingAction, view: ClientView, previous: ClientView | null): boolean {
+  const message = entry.message;
+  switch (message.t) {
+    case "CREATE_ROOM":
+      return view.self.role === "host";
+    case "JOIN_ROOM":
+      return view.self.role === "player" && view.room.code === message.code.toUpperCase();
+    case "SET_SETTINGS":
+      return (message.totalRounds === undefined || view.room.totalRounds === message.totalRounds) &&
+        (message.selectedModes === undefined || sameValues(view.room.selectedModes, message.selectedModes)) &&
+        (message.playStyle === undefined || view.room.playStyle === message.playStyle) &&
+        (message.categories === undefined || sameValues(view.room.categories, message.categories));
+    case "SET_ADMISSION":
+      return view.room.admissionLocked === message.locked;
+    case "UNBLOCK_PLAYER":
+      return !view.blockedPlayers?.some((player) => player.uid === message.uid);
+    case "START_GAME":
+      return view.room.phase !== "LOBBY" && view.room.currentRound >= 1;
+    case "MARK_READY":
+      return view.myReady === true || view.room.phase !== "QUESTION";
+    case "START_VOTING":
+      return view.room.phase === "VOTING" || view.room.phase === "RESULT";
+    case "SUBMIT_VOTE":
+      return view.myVoteSubmitted === true || view.room.phase === "RESULT";
+    case "NEXT_ROUND":
+      return previous !== null && (
+        view.room.phase !== "RESULT" ||
+        view.room.currentRound !== previous.room.currentRound ||
+        view.challenge?.index !== previous.challenge?.index
+      );
+    case "KICK_PLAYER":
+      return !view.players.some((player) => player.uid === message.uid);
+    case "REMATCH":
+      return view.room.phase === "LOBBY" && view.room.currentRound === 0;
+    case "LEAVE_ROOM":
+    case "CLOSE_ROOM":
+    case "SUBMIT_ANSWER":
+      return false;
+  }
+}
+
+function clearAuthoritativePending(socket: WebSocket, view: ClientView, previous: ClientView | null): void {
+  clearPendingMatching(socket, (entry) => actionCompleted(entry, view, previous));
 }
 
 function sendClockSample(socket: WebSocket): void {
@@ -127,14 +194,20 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
   if (socket !== ws) return;
   lastInboundMono = performance.now();
   switch (message.t) {
-    case "HELLO_OK":
+    case "HELLO_OK": {
+      const hadRoom = state.view !== null;
       authenticated(socket, message);
       set({ uid: message.uid, view: null });
+      if (hadRoom) clearPendingMatching(socket, (entry) => entry.type === "LEAVE_ROOM");
       break;
-    case "STATE":
+    }
+    case "STATE": {
+      const previous = state.view;
       authenticated(socket, message);
       set({ view: message.view, uid: message.view.self.uid });
+      clearAuthoritativePending(socket, message.view, previous);
       break;
+    }
     case "ACK":
       clearPending(message.rid, socket);
       break;
@@ -144,6 +217,7 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
       set({ error: { code: message.code, id: errorSeq } });
       break;
     case "ROOM_CLOSED":
+      clearPendingMatching(socket, (entry) => entry.type === "CLOSE_ROOM");
       set({ view: null, notice: "الغرفة مقفلة" });
       break;
     case "KICKED":
@@ -285,6 +359,10 @@ function sendAction(message: ActionMessage): string | null {
     feedback("الاتصال مو جاهز، لذلك ما أرسلنا الطلب.");
     return null;
   }
+  if ([...pending.values()].some((entry) => entry.socket === socket && entry.type === message.t)) {
+    feedback("الطلب هذا قيد التنفيذ للحين.");
+    return null;
+  }
   const rid = newRid();
   const timeout = window.setTimeout(() => {
     const entry = pending.get(rid);
@@ -293,7 +371,7 @@ function sendAction(message: ActionMessage): string | null {
     syncPendingState();
     feedback("ما وصل تأكيد للطلب. ما راح نعيده تلقائيًا؛ تأكد من حالة اللعبة قبل المحاولة.");
   }, ACTION_TIMEOUT_MS);
-  pending.set(rid, { type: message.t, socket, timeout });
+  pending.set(rid, { type: message.t, message, socket, timeout });
   syncPendingState();
   socket.send(JSON.stringify({ ...message, rid }));
   return rid;
