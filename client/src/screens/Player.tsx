@@ -115,6 +115,13 @@ function PlayerLobby({ view }: { view: ClientView }) {
 }
 
 function PlayerPrompt({ view }: { view: ClientView }) {
+  // A seat can reconnect after a new Round already started without having been
+  // selected as a participant for that Round. The server intentionally sends
+  // no private role/prompt/ready state in that case. Keep the phone on the
+  // shared-TV flow instead of rendering a fake normal prompt ("…") and a Ready
+  // button that the authoritative server would reject with NOT_PLAYER.
+  if (view.myReady === undefined) return <PlayerWatchScreen />;
+
   const ready = view.myReady === true;
   const mode = modeInfo(view);
 
@@ -205,6 +212,12 @@ function PlayerVote({ view }: { view: ClientView }) {
   const [picked, setPicked] = useState<string | null>(null);
   const targets = view.voteTargets ?? [];
   const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
+
+  // Same boundary case as QUESTION: a reconnected seat that sat this Round out
+  // gets no voting projection. Never show an empty ballot UI that cannot submit.
+  if (view.voteTargets === undefined && view.myVoteSubmitted === undefined) {
+    return <PlayerWatchScreen />;
+  }
 
   if (view.myVoteSubmitted) {
     return (
