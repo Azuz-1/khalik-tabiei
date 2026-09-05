@@ -76,7 +76,7 @@ export class AbuseGuard {
     this.sessionIp = new FixedWindowLimiter(300, 60_000, 20_000, now);
     this.sessionIdentity = new FixedWindowLimiter(120, 60_000, 20_000, now);
     this.generic = new FixedWindowLimiter(80, 10_000, 20_000, now);
-    this.httpFallback = new FixedWindowLimiter(240, 60_000, 20_000, now);
+    this.httpFallback = new FixedWindowLimiter(120, 60_000, 20_000, now);
     for (const [type, [limit, windowMs]] of Object.entries(ACTION_LIMITS)) {
       this.actions.set(type as ClientMessage["t"], new FixedWindowLimiter(limit, windowMs, 20_000, now));
     }
