@@ -14,7 +14,13 @@ function roleFor(room: RoomState, uid: string): Role {
 }
 
 function publicPlayers(room: RoomState): PublicPlayer[] {
-  return [...room.players.values()].map((player) => ({ uid: player.uid, name: player.name, connected: player.connected, isHost: false }));
+  return [...room.players.values()].map((player, index) => ({
+    uid: player.uid,
+    name: player.name,
+    seatNumber: player.seatNumber ?? index + 1,
+    connected: player.connected,
+    isHost: false,
+  }));
 }
 
 function revealAnswers(room: RoomState): RevealedAnswer[] {
