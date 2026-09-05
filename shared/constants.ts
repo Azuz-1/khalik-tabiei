@@ -82,10 +82,9 @@ export const TIMERS = {
   ACTION: 1_000,
   HOLD: 2_000,
   PROMPT_REVEAL: 2_500,
-  // Phone sleep, browser suspension, and temporary Wi-Fi drops are not a
-  // deliberate leave action. Preserve the seat for the whole party session;
-  // explicit LEAVE_ROOM / KICK_PLAYER is the fast path when somebody is gone.
-  DISCONNECT_GRACE: 6 * 60 * 60 * 1_000,
+  // Only the Host has a disconnect expiry. Player seats have no transport
+  // expiry timer: they remain until reconnect, LEAVE_ROOM, KICK_PLAYER, or room close.
+  HOST_DISCONNECT_GRACE: 5 * 60 * 1_000,
 } as const;
 
 /** Legacy TEXT_PAIR categories retained for future content work. */
