@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientView } from "../../../shared/types.js";
+import { estimatedServerNow } from "../net/clock.js";
 import {
   disposeAudio,
   isMuted,
@@ -100,7 +101,7 @@ export function useHostGameAudio(view: ClientView): {
     if (view.room.phase !== "COUNTDOWN") return;
 
     const observe = () => {
-      const step = visibleCountdownSecond(view.room.phaseEndsAt, Date.now());
+      const step = visibleCountdownSecond(view.room.phaseEndsAt, estimatedServerNow());
       playEvents(controllerRef.current!.observeCountdown(step));
     };
 
