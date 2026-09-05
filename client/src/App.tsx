@@ -52,10 +52,31 @@ export function App() {
     view != null && !["LOBBY", "GAME_OVER", "CLOSED"].includes(view.room.phase);
   const hostAlreadyHasClose =
     view?.self.role === "host" && ["LOBBY", "DISCUSSION"].includes(view.room.phase);
+  const showHostDisconnected =
+    view?.self.role === "player" && view.room.hostConnected === false && view.room.phase !== "CLOSED";
 
   return (
     <div className="app">
       {showConn ? <div className="conn">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
+
+      {showHostDisconnected ? (
+        <div
+          className="card"
+          role="status"
+          style={{
+            position: "fixed",
+            top: showConn ? 58 : 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "min(calc(100% - 24px), 520px)",
+            zIndex: 40,
+            padding: "10px 14px",
+            textAlign: "center",
+          }}
+        >
+          <strong>المضيف انقطع… ننتظره يرجع</strong>
+        </div>
+      ) : null}
 
       {view?.self.role === "host" && activeRoom && offlinePlayers.length > 0 ? (
         <div
