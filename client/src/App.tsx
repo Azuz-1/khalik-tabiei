@@ -51,7 +51,7 @@ export function App() {
   const activeRoom =
     view != null && !["LOBBY", "GAME_OVER", "CLOSED"].includes(view.room.phase);
   const hostAlreadyHasClose =
-    view?.self.role === "host" && ["LOBBY", "DISCUSSION"].includes(view.room.phase);
+    view?.self.role === "host" && ["LOBBY", "DISCUSSION", "GAME_OVER"].includes(view.room.phase);
   const showHostDisconnected =
     view?.self.role === "player" && view.room.hostConnected === false && view.room.phase !== "CLOSED";
 
