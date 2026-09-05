@@ -39,9 +39,9 @@ export function ConfirmDialog({
         previous.focus();
         return;
       }
-      const fallback = document.querySelector<HTMLElement>(
-        '[data-dialog-fallback], button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
+      const fallback =
+        document.querySelector<HTMLElement>(".player-manager-panel button:not([disabled])") ??
+        document.querySelector<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])');
       fallback?.focus();
     };
   }, [state ? `${state.title}:${state.description}` : null]);
