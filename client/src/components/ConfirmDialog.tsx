@@ -35,7 +35,14 @@ export function ConfirmDialog({
       window.clearTimeout(focusTimer);
       background?.removeAttribute("inert");
       background?.removeAttribute("aria-hidden");
-      if (previous?.isConnected) previous.focus();
+      if (previous?.isConnected) {
+        previous.focus();
+        return;
+      }
+      const fallback = document.querySelector<HTMLElement>(
+        '[data-dialog-fallback], button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      fallback?.focus();
     };
   }, [state ? `${state.title}:${state.description}` : null]);
 
@@ -88,21 +95,8 @@ export function ConfirmDialog({
         <p id={descriptionId} className="subtitle">{state.description}</p>
         {state.error ? <p id={errorId} className="confirm-error" role="status">{state.error}</p> : null}
         <div className="confirm-actions">
-          <button
-            ref={cancelRef}
-            type="button"
-            className="btn btn-ghost"
-            disabled={state.pending}
-            onClick={onCancel}
-          >
-            إلغاء
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger"
-            disabled={state.pending}
-            onClick={onConfirm}
-          >
+          <button ref={cancelRef} type="button" className="btn btn-ghost" disabled={state.pending} onClick={onCancel}>إلغاء</button>
+          <button type="button" className="btn btn-danger" disabled={state.pending} onClick={onConfirm}>
             {state.pending ? "جارٍ التنفيذ…" : state.confirmLabel}
           </button>
         </div>
