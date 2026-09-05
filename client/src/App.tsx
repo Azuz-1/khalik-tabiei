@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { PublicPlayer } from "../../shared/types.js";
 import {
   actions,
@@ -14,12 +14,12 @@ import { Home } from "./screens/Home.js";
 import { Host, type ConfirmActionRequest } from "./screens/Host.js";
 import { Player } from "./screens/Player.js";
 
-interface ActiveConfirm extends ConfirmDialogState {
-  actionType: string;
+interface ActiveConfirm extends ConfirmDialogState, ConfirmActionRequest {
   roomCode: string;
-  targetUid?: string;
-  run: () => string | null;
   errorBaseline: number;
+  phaseBaseline: string;
+  roundBaseline: number;
+  challengeBaseline?: number;
 }
 
 export function App() {
@@ -77,6 +77,15 @@ export function App() {
       setConfirmRequest(null);
       return;
     }
+    if (confirmRequest.actionType === "NEXT_ROUND" && confirmRequest.pending) {
+      const progressed = view.room.phase !== confirmRequest.phaseBaseline ||
+        view.room.currentRound !== confirmRequest.roundBaseline ||
+        view.challenge?.index !== confirmRequest.challengeBaseline;
+      if (progressed) {
+        setConfirmRequest(null);
+        return;
+      }
+    }
     if (confirmRequest.pending && error && error.id > confirmRequest.errorBaseline) {
       setConfirmRequest((current) => current ? {
         ...current,
@@ -86,22 +95,30 @@ export function App() {
       } : null);
       return;
     }
-    if (confirmRequest.pending && !pendingActions.includes(confirmRequest.actionType)) {
-      setConfirmRequest((current) => current ? {
-        ...current,
-        pending: false,
-        error: "ما قدرنا نتأكد من تنفيذ الطلب. راجع حالة الغرفة وحاول مرة ثانية.",
-      } : null);
-    }
+    if (!confirmRequest.pending || pendingActions.includes(confirmRequest.actionType)) return;
+    const h = window.setTimeout(() => {
+      setConfirmRequest((current) => {
+        if (!current?.pending || pendingActions.includes(current.actionType)) return current;
+        return {
+          ...current,
+          pending: false,
+          error: "ما قدرنا نتأكد من تنفيذ الطلب. راجع حالة الغرفة وحاول مرة ثانية.",
+        };
+      });
+    }, 350);
+    return () => window.clearTimeout(h);
   }, [confirmRequest, error, pendingActions, view]);
 
   const openConfirm = (request: ConfirmActionRequest) => {
-    if (!view || confirmRequest?.pending) return;
+    if (!view || confirmRequest) return;
     setConfirmRequest({
       ...request,
       pending: false,
       roomCode: view.room.code,
       errorBaseline: error?.id ?? 0,
+      phaseBaseline: view.room.phase,
+      roundBaseline: view.room.currentRound,
+      challengeBaseline: view.challenge?.index,
     });
   };
 
@@ -129,13 +146,12 @@ export function App() {
           <div className="card offline-player-banner">
             <strong>اتصال {offlinePlayers.map((player) => player.name).join("، ")} منقطع</strong>
             <div className="helper">مكانه محفوظ وما راح نغيّر المتخفي بسبب نوم الجوال أو انقطاع الشبكة.</div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowHostPlayers(true)}>
-              إدارة اللاعبين
-            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowHostPlayers(true)}>إدارة اللاعبين</button>
           </div>
         ) : null}
 
         <fieldset
+          data-game-surface
           disabled={status !== "online"}
           aria-busy={status !== "online"}
           style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
@@ -153,9 +169,7 @@ export function App() {
           )}
 
           {view?.self.role === "host" && view.room.phase !== "CLOSED" ? (
-            <button type="button" className="btn btn-ghost btn-sm floating-players" onClick={() => setShowHostPlayers(true)}>
-              اللاعبين
-            </button>
+            <button type="button" className="btn btn-ghost btn-sm floating-players" onClick={() => setShowHostPlayers(true)}>اللاعبين</button>
           ) : null}
 
           {view?.self.role === "player" ? (
@@ -203,12 +217,10 @@ export function App() {
         {toast ? <div className="toast" role="status">{toast.text}</div> : null}
 
         {notice ? (
-          <div className="overlay">
+          <div className="overlay" role="dialog" aria-modal="true" aria-label="تنبيه الغرفة">
             <div className="card center stack" style={{ maxWidth: 420 }}>
               <h2 className="title">{notice}</h2>
-              <button className="btn btn-primary" onClick={() => { clearNotice(); resetToHome(); }}>
-                الرئيسية
-              </button>
+              <button className="btn btn-primary" onClick={() => { clearNotice(); resetToHome(); }}>الرئيسية</button>
             </div>
           </div>
         ) : null}
@@ -223,10 +235,7 @@ export function App() {
           if (!confirmRequest || confirmRequest.pending) return;
           const rid = confirmRequest.run();
           if (!rid) {
-            setConfirmRequest((current) => current ? {
-              ...current,
-              error: "الاتصال مو جاهز، لذلك ما أرسلنا الطلب.",
-            } : null);
+            setConfirmRequest((current) => current ? { ...current, error: "الاتصال مو جاهز، لذلك ما أرسلنا الطلب." } : null);
             return;
           }
           setConfirmRequest((current) => current ? { ...current, pending: true, error: undefined } : null);
@@ -253,37 +262,78 @@ function HostPlayerManager({
   onConfirm: (request: ConfirmActionRequest) => void;
   onClose: () => void;
 }) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const orderedPlayers = useMemo(
-    () => players
-      .map((player, index) => ({ player, index }))
-      .sort((a, b) => Number(a.player.connected) - Number(b.player.connected) || a.index - b.index)
-      .map(({ player }) => player),
+    () => [...players].sort((a, b) => Number(a.connected) - Number(b.connected) || a.seatNumber - b.seatNumber),
     [players],
   );
 
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const surface = document.querySelector<HTMLElement>("[data-game-surface]");
+    surface?.setAttribute("inert", "");
+    surface?.setAttribute("aria-hidden", "true");
+    const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(focusTimer);
+      surface?.removeAttribute("inert");
+      surface?.removeAttribute("aria-hidden");
+      if (previous?.isConnected) previous.focus();
+    };
+  }, []);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusable = [...panel.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    if (focusable.length === 0) {
+      event.preventDefault();
+      panel.focus();
+      return;
+    }
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
-    <div className="overlay" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <div className="card stack player-manager-panel">
+    <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div
+        ref={panelRef}
+        className="card stack player-manager-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+      >
         <div className="row between">
           <div>
-            <h2 className="title" style={{ marginBottom: 4 }}>اللاعبين</h2>
+            <h2 id={titleId} className="title" style={{ marginBottom: 4 }}>اللاعبين</h2>
             <p className="helper">المنقطعين يظهرون أول عشان يسهل التعامل معهم.</p>
           </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>إغلاق</button>
+          <button ref={closeRef} type="button" className="btn btn-ghost btn-sm" onClick={onClose}>إغلاق</button>
         </div>
 
         {lobby ? (
           <div className="card stack manager-subcard">
             <div className="row between">
-              <div>
-                <strong>دخول لاعبين جدد</strong>
-                <div className="helper">{admissionLocked ? "موقوف مؤقتًا" : "مفتوح"}</div>
-              </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.setAdmission(!admissionLocked)}>
-                {admissionLocked ? "فتح الدخول" : "إيقاف الدخول"}
-              </button>
+              <div><strong>دخول لاعبين جدد</strong><div className="helper">{admissionLocked ? "موقوف مؤقتًا" : "مفتوح"}</div></div>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.setAdmission(!admissionLocked)}>{admissionLocked ? "فتح الدخول" : "إيقاف الدخول"}</button>
             </div>
             <p className="helper">القفل يمنع الهويات الجديدة فقط. اللاعب اللي له مقعد محفوظ يقدر يرجع بنفس هويته.</p>
           </div>
@@ -291,10 +341,7 @@ function HostPlayerManager({
 
         {orderedPlayers.map((player) => (
           <div key={player.uid} className="row between card manager-player-row">
-            <div>
-              <strong>مقعد {player.seatNumber} · {player.name}</strong>
-              <div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div>
-            </div>
+            <div><strong>مقعد {player.seatNumber} · {player.name}</strong><div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div></div>
             <button
               type="button"
               className="btn btn-ghost btn-sm"
@@ -322,9 +369,7 @@ function HostPlayerManager({
             {blockedPlayers.map((player) => (
               <div key={player.uid} className="row between">
                 <span>{player.name}</span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>
-                  السماح له يرجع
-                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>السماح له يرجع</button>
               </div>
             ))}
             <p className="helper">المنع مرتبط بالهوية المجهولة الموقّعة في هذا المتصفح، مو بالشخص أو عنوان IP. هوية جديدة تعتبر مستخدمًا مختلفًا.</p>
@@ -336,11 +381,7 @@ function HostPlayerManager({
 }
 
 function RoomExitButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button type="button" className="btn btn-ghost btn-sm floating-exit" onClick={onClick}>
-      {label}
-    </button>
-  );
+  return <button type="button" className="btn btn-ghost btn-sm floating-exit" onClick={onClick}>{label}</button>;
 }
 
 function Spectator() {
