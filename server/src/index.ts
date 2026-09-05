@@ -23,7 +23,10 @@ const clientDist = join(sourceDir, "..", "..", "client", "dist");
 interface UpgradeContext { uid: string; origin: string; ip: string; lease: CapacityLease }
 
 function rejectUpgrade(socket: Duplex, status: number, reason: string): void {
-  if (!socket.writable) return socket.destroy();
+  if (!socket.writable) {
+    socket.destroy();
+    return;
+  }
   const body = `${reason}\n`;
   socket.write(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
   socket.destroy();
@@ -150,7 +153,8 @@ export function createGameServer() {
       }
 
       if (!conn.uid) {
-        conn.send({ t: "ERROR", code: "UNAUTHORIZED", ...(msg.rid ? { rid: msg.rid } : {}) });
+        const rid = "rid" in msg ? msg.rid : undefined;
+        conn.send({ t: "ERROR", code: "UNAUTHORIZED", ...(rid ? { rid } : {}) });
         return;
       }
       if (!abuse.allowMessage(conn.uid, msg.t)) {
