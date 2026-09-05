@@ -47,14 +47,16 @@ test("active Host UI exposes player management and Player UI exposes explicit le
   assert.ok(app.includes("إنهاء اللعبة"));
   assert.ok(app.includes("مكانه محفوظ"));
 
-  // A transport disconnect must not silently call the old redeal/removal path.
+  // A transport disconnect must mark the seat offline in-place. It must not
+  // silently call the explicit removal/redeal path.
   const disconnectBlock = manager.slice(
     manager.indexOf("disconnect(conn: Connection)"),
     manager.indexOf("handle(conn: Connection"),
   );
   assert.equal(disconnectBlock.includes("redealCurrentRound"), false);
   assert.equal(disconnectBlock.includes("removePlayer(room"), false);
-  assert.ok(disconnectBlock.includes("Keep the seat"));
+  assert.ok(disconnectBlock.includes("player.connected = false"));
+  assert.ok(disconnectBlock.includes("player.disconnectGeneration += 1"));
 });
 
 test("room exit controls stay single-owner on Player and Host game-over screens", async () => {
