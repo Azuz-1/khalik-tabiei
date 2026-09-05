@@ -53,6 +53,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     maxBufferedBytes: positiveInteger(env.MAX_BUFFERED_BYTES, 512 * 1024),
     heartbeatMs: positiveInteger(env.HEARTBEAT_MS, 30_000),
     authTimeoutMs: positiveInteger(env.AUTH_TIMEOUT_MS, 8_000),
+    drainTimeoutMs: positiveInteger(env.DRAIN_TIMEOUT_MS, 10_000),
     emptyLobbyExpiryMs: positiveInteger(env.EMPTY_LOBBY_EXPIRY_MS, 20 * 60 * 1_000),
     // At least Host + ten phones behind one NAT, with generous reconnect overlap.
     maxConcurrentSocketsPerIp: positiveInteger(env.MAX_SOCKETS_PER_IP, 64),
