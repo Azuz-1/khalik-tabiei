@@ -1,5 +1,5 @@
 /** Internal server-only room state. */
-import type { CategoryId, GameMode, GamePhase } from "../../../shared/types.js";
+import type { CategoryId, GameMode, GamePhase, PlayStyle } from "../../../shared/types.js";
 import {
   ANSWER_MAX,
   DEFAULT_GAME_MODES,
@@ -14,7 +14,7 @@ export interface InternalPlayer {
   uid: string;
   name: string;
   normalizedName: string;
-  /** Retained internally for legacy compatibility; current gameplay never changes or exposes it. */
+  /** Used only by INDIVIDUAL play; TEAM remains score-free. */
   score: number;
   connected: boolean;
   joinedAt: number;
@@ -53,7 +53,7 @@ export interface RoundState {
   votes: Map<string, string>;
   resultComputed: boolean;
   groupFound?: boolean;
-  /** Retained internally as an always-zero legacy field; never serialized. */
+  /** Round-complete INDIVIDUAL score delta. Empty for TEAM/intermediate results. */
   roundScores: Map<string, number>;
 }
 
@@ -76,6 +76,7 @@ export interface RoomState {
   currentRound: number;
 
   categories: CategoryId[];
+  playStyle: PlayStyle;
   selectedModes: GameMode[];
   /** Balanced Challenge-level mode bag. Redeals never consume it. */
   modeBag: GameMode[];
@@ -83,6 +84,8 @@ export interface RoomState {
   players: Map<string, InternalPlayer>;
   round: RoundState | null;
 
+  /** Hidden across survived Challenges so a point cannot leak the impostor early. */
+  pendingRoundScores: Map<string, number>;
   usedPairIds: Set<string>;
   /** Game-scoped prompt history. A mode resets only after its own pool is exhausted. */
   usedPromptIds: Set<string>;
@@ -105,10 +108,12 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     totalRounds: 0,
     currentRound: 0,
     categories: [],
+    playStyle: "TEAM",
     selectedModes: [...DEFAULT_GAME_MODES],
     modeBag: [],
     players: new Map(),
     round: null,
+    pendingRoundScores: new Map(),
     usedPairIds: new Set(),
     usedPromptIds: new Set(),
     impostorHistory: [],

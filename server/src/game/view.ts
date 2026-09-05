@@ -11,7 +11,7 @@ import {
   MAX_CHALLENGES_PER_ROUND,
 } from "../../../shared/constants.js";
 import { roundParticipants, type InternalPlayer, type RoomState } from "./state.js";
-import { questionFor, requiredVotesFor } from "./engine.js";
+import { questionFor, ranking, requiredVotesFor } from "./engine.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
 const PUBLIC_PROMPT_PHASES = new Set(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
@@ -84,6 +84,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       minPlayers: room.minPlayers,
       hostUid: room.hostUid,
       hostConnected: room.hostConnected,
+      playStyle: room.playStyle,
       selectedModes: room.selectedModes,
       availableModes: GAME_MODES,
       categories: room.categories,
@@ -205,6 +206,13 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
         : {}),
       voteTally: revealIdentity ? aggregateVoteTally(participants, round.votes) : [],
     };
+
+    if (room.playStyle === "INDIVIDUAL" && revealIdentity) {
+      view.scoreboard = ranking(room).map((row) => ({
+        ...row,
+        roundDelta: round.roundScores.get(row.uid) ?? 0,
+      }));
+    }
   }
 
   if (room.phase === "GAME_OVER") {
@@ -215,6 +223,10 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       caughtRounds,
       escapedRounds,
     };
+
+    if (room.playStyle === "INDIVIDUAL") {
+      view.scoreboard = ranking(room);
+    }
   }
 
   return view;

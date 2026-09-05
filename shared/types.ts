@@ -15,6 +15,7 @@ export type GamePhase =
 
 export type Role = "host" | "player" | "spectator";
 export type GameMode = "HANDS" | "POINT" | "NUMBER";
+export type PlayStyle = "TEAM" | "INDIVIDUAL";
 
 export interface GameModeInfo {
   id: GameMode;
@@ -91,6 +92,15 @@ export interface VoteTallyEntry {
   votes: number;
 }
 
+export interface ScoreEntry {
+  uid: string;
+  name: string;
+  score: number;
+  rank: number;
+  /** Present only on a completed round result, never during an intermediate Challenge. */
+  roundDelta?: number;
+}
+
 export interface RoundResult {
   /** Present only once the round is over; omitted after survived challenge 1/2. */
   impostorUid?: string;
@@ -136,6 +146,7 @@ export interface ClientView {
     minPlayers: number;
     hostUid: string;
     hostConnected: boolean;
+    playStyle: PlayStyle;
     selectedModes: GameMode[];
     availableModes: GameModeInfo[];
     categories: CategoryId[];
@@ -185,6 +196,8 @@ export interface ClientView {
   }>;
   result?: RoundResult;
   gameOver?: GameOverInfo;
+  /** INDIVIDUAL only; exposed only when a round is complete or at GAME_OVER. */
+  scoreboard?: ScoreEntry[];
 }
 
 export type ClientMessage =
@@ -197,6 +210,7 @@ export type ClientMessage =
       totalRounds?: number;
       categories?: CategoryId[];
       selectedModes?: GameMode[];
+      playStyle?: PlayStyle;
     }
   | { t: "START_GAME" }
   | { t: "MARK_READY" }

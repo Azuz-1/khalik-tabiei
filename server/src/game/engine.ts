@@ -1,9 +1,10 @@
-import type { CategoryId, GameMode, GamePhase } from "../../../shared/types.js";
+import type { CategoryId, GameMode, GamePhase, PlayStyle } from "../../../shared/types.js";
 import {
   DEFAULT_ROUNDS,
   GAME_MODE_IDS,
   MAX_CHALLENGES_PER_ROUND,
   ROUND_OPTIONS,
+  SCORING,
 } from "../../../shared/constants.js";
 import { GameError } from "./errors.js";
 import {
@@ -43,6 +44,7 @@ export function setSettings(
     totalRounds?: number;
     categories?: CategoryId[];
     selectedModes?: GameMode[];
+    playStyle?: PlayStyle;
   },
   deps: EngineDeps = defaultDeps,
 ): void {
@@ -70,6 +72,13 @@ export function setSettings(
     room.selectedModes = modes;
     room.modeBag = [];
     room.lastMode = undefined;
+  }
+
+  if (patch.playStyle !== undefined) {
+    if (patch.playStyle !== "TEAM" && patch.playStyle !== "INDIVIDUAL") {
+      throw new GameError("BAD_REQUEST", "invalid play style");
+    }
+    room.playStyle = patch.playStyle;
   }
 
   touch(room, deps);
@@ -245,9 +254,8 @@ export function startGame(room: RoomState, uid: string, deps: EngineDeps = defau
   room.lastMode = undefined;
   room.impostorHistory = [];
   room.roundOutcomes = [];
+  room.pendingRoundScores.clear();
 
-  // Scores are retained internally only for legacy compatibility. The current
-  // game has no points and never changes or serializes them.
   for (const player of room.players.values()) player.score = 0;
   beginImitationRound(room, deps);
 }
@@ -425,6 +433,10 @@ export function allVoted(room: RoomState): boolean {
   return participants.length > 0 && participants.every((player) => round.votes.has(player.uid));
 }
 
+function addPendingScore(room: RoomState, uid: string, points: number): void {
+  room.pendingRoundScores.set(uid, (room.pendingRoundScores.get(uid) ?? 0) + points);
+}
+
 export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "VOTING");
   const round = room.round;
@@ -439,11 +451,34 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
   const requiredVotes = requiredVotesFor(participants.length);
   const found = (tally.get(round.impostorUid) ?? 0) >= requiredVotes;
 
+  if (room.playStyle === "INDIVIDUAL" && round.kind === "IMITATION") {
+    // Every normal player's vote is their own point decision. Keep these
+    // increments server-only until the round ends; exposing them after
+    // Challenge 1/2 would reveal that a private guess was correct.
+    for (const [voterUid, targetUid] of round.votes) {
+      if (voterUid !== round.impostorUid && targetUid === round.impostorUid) {
+        addPendingScore(room, voterUid, SCORING.POINT_CORRECT_VOTE);
+      }
+    }
+  }
+
   round.groupFound = found;
   round.roundComplete =
     round.kind === "TEXT_PAIR" || found || round.challengeIndex >= MAX_CHALLENGES_PER_ROUND;
   round.roundScores = new Map();
   round.resultComputed = true;
+
+  if (room.playStyle === "INDIVIDUAL" && round.kind === "IMITATION" && round.roundComplete) {
+    if (!found) addPendingScore(room, round.impostorUid, SCORING.POINT_IMPOSTOR_SURVIVES);
+
+    for (const [playerUid, delta] of room.pendingRoundScores) {
+      const player = room.players.get(playerUid);
+      if (!player) continue;
+      player.score += delta;
+      round.roundScores.set(playerUid, delta);
+    }
+    room.pendingRoundScores.clear();
+  }
 
   if (
     round.kind === "IMITATION" &&
@@ -517,6 +552,7 @@ export function redealCurrentRound(room: RoomState, deps: EngineDeps = defaultDe
   }
 
   if (room.impostorHistory.at(-1) === round.impostorUid) room.impostorHistory.pop();
+  room.pendingRoundScores.clear();
 
   if (round.kind === "TEXT_PAIR") {
     beginLegacyRound(room, deps);
@@ -550,6 +586,7 @@ export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): v
   room.lastMode = undefined;
   room.impostorHistory = [];
   room.roundOutcomes = [];
+  room.pendingRoundScores.clear();
   room.phaseEndsAt = undefined;
   for (const player of room.players.values()) player.score = 0;
   touch(room, deps);
@@ -561,7 +598,7 @@ export function rematch(room: RoomState, uid: string, deps: EngineDeps = default
   abortToLobby(room, deps);
 }
 
-/** Legacy-only helper retained for dormant TEXT_PAIR compatibility. */
+/** Shared ranking helper for INDIVIDUAL play and dormant TEXT_PAIR compatibility. */
 export function ranking(room: RoomState) {
   const rows = allPlayers(room)
     .map((player) => ({ uid: player.uid, name: player.name, score: player.score }))

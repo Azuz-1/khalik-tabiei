@@ -63,13 +63,14 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
     }
 
     case "SET_SETTINGS": {
-      if (!exactKeys(value, ["t"], ["totalRounds", "categories", "selectedModes"])) {
+      if (!exactKeys(value, ["t"], ["totalRounds", "categories", "selectedModes", "playStyle"])) {
         return null;
       }
       if (
         !Object.hasOwn(value, "totalRounds") &&
         !Object.hasOwn(value, "categories") &&
-        !Object.hasOwn(value, "selectedModes")
+        !Object.hasOwn(value, "selectedModes") &&
+        !Object.hasOwn(value, "playStyle")
       ) {
         return null;
       }
@@ -101,6 +102,14 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
         }
         if (!value.selectedModes.every((mode) => GAME_MODE_IDS.includes(mode))) return null;
         if (new Set(value.selectedModes).size !== value.selectedModes.length) return null;
+      }
+
+      if (
+        value.playStyle !== undefined &&
+        value.playStyle !== "TEAM" &&
+        value.playStyle !== "INDIVIDUAL"
+      ) {
+        return null;
       }
 
       return value as ClientMessage;
