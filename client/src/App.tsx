@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { PublicPlayer } from "../../shared/types.js";
 import { actions, clearNotice, resetToHome, useGame } from "./net/socket.js";
 import { errorText } from "./i18n/errors.js";
 import { HostAudioLayer } from "./audio/HostAudioLayer.js";
@@ -10,6 +11,7 @@ export function App() {
   const { view, status, error, notice } = useGame();
   const [toast, setToast] = useState<{ text: string; id: number } | null>(null);
   const [showConn, setShowConn] = useState(false);
+  const [showHostPlayers, setShowHostPlayers] = useState(false);
 
   // Error → transient toast.
   useEffect(() => {
@@ -41,6 +43,10 @@ export function App() {
     }
   }, [view]);
 
+  useEffect(() => {
+    if (view?.self.role !== "host") setShowHostPlayers(false);
+  }, [view?.self.role]);
+
   const offlinePlayers = view?.players.filter((player) => !player.connected) ?? [];
   const activeRoom =
     view != null && !["LOBBY", "GAME_OVER", "CLOSED"].includes(view.room.phase);
@@ -71,6 +77,14 @@ export function App() {
           <div className="helper" style={{ marginTop: 4 }}>
             مكانه محفوظ وما راح نغيّر المتخفي بسبب نوم الجوال أو انقطاع الشبكة.
           </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 8 }}
+            onClick={() => setShowHostPlayers(true)}
+          >
+            إدارة اللاعبين
+          </button>
         </div>
       ) : null}
 
@@ -86,13 +100,38 @@ export function App() {
         <Spectator />
       )}
 
+      {view?.self.role === "host" && activeRoom ? (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => setShowHostPlayers(true)}
+          style={{
+            position: "fixed",
+            right: 14,
+            bottom: 14,
+            zIndex: 35,
+            opacity: 0.9,
+          }}
+        >
+          اللاعبين
+        </button>
+      ) : null}
+
+      {view?.self.role === "host" && showHostPlayers ? (
+        <HostPlayerManager
+          players={view.players}
+          active={activeRoom}
+          onClose={() => setShowHostPlayers(false)}
+        />
+      ) : null}
+
       {view?.self.role === "player" ? (
         <RoomExitButton
           label="الخروج من الغرفة"
           onClick={() => {
             const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
             const message = active
-              ? "تطلع من الغرفة؟ إذا طلعت واللعبة شغّالة، المجموعة بترجع للّوبي عشان ما تتغيّر الأدوار بدون ما تدرون."
+              ? "تطلع من الغرفة؟ إذا كنت المتخفي أو صار عدد اللاعبين أقل من 3، المجموعة بترجع للّوبي. غير كذا تكمل لعبتهم بنفس المتخفي."
               : "تطلع من الغرفة؟";
             if (confirm(message)) actions.leaveRoom();
           }}
@@ -124,6 +163,63 @@ export function App() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function HostPlayerManager({
+  players,
+  active,
+  onClose,
+}: {
+  players: PublicPlayer[];
+  active: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div
+        className="card stack"
+        style={{ width: "min(calc(100% - 28px), 520px)", maxHeight: "80vh", overflow: "auto" }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="row between">
+          <div>
+            <h2 className="title" style={{ marginBottom: 4 }}>اللاعبين</h2>
+            <p className="helper">طلع أي شخص مشى أو صار يعطل الجولة.</p>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+            إغلاق
+          </button>
+        </div>
+
+        {players.map((player) => (
+          <div key={player.uid} className="row between card" style={{ padding: 12 }}>
+            <div>
+              <strong>{player.name}</strong>
+              <div className="helper">
+                {player.connected ? "متصل" : "منقطع — مكانه محفوظ"}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                const detail = active
+                  ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع للّوبي. غير كذا تكملون بنفس المتخفي والتحدّي."
+                  : "";
+                if (confirm(`تطلع ${player.name} من الغرفة؟${detail ? `\n\n${detail}` : ""}`)) {
+                  actions.kick(player.uid);
+                }
+              }}
+            >
+              إخراج
+            </button>
+          </div>
+        ))}
+
+        {players.length === 0 ? <p className="subtitle center">ما فيه لاعبين الحين.</p> : null}
+      </div>
     </div>
   );
 }
