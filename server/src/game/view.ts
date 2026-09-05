@@ -10,7 +10,12 @@ import {
   GAME_MODES,
   MAX_CHALLENGES_PER_ROUND,
 } from "../../../shared/constants.js";
-import { roundParticipants, type InternalPlayer, type RoomState } from "./state.js";
+import {
+  roundParticipants,
+  type InternalPlayer,
+  type RoomState,
+  type RoundState,
+} from "./state.js";
 import { questionFor, ranking, requiredVotesFor } from "./engine.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
@@ -61,6 +66,25 @@ function aggregateVoteTally(
     name: player.name,
     votes: tally.get(player.uid) ?? 0,
   }));
+}
+
+function freezeResultProjection(
+  room: RoomState,
+  round: RoundState,
+  participants: InternalPlayer[],
+): void {
+  // RoomManager synchronously broadcasts immediately after computeResult().
+  // Memoize the public facts on that first RESULT projection so a later
+  // KICK/LEAVE cannot rewrite the already-computed majority threshold, hide a
+  // historical vote row, or turn the revealed impostor name into "—".
+  if (round.resultRequiredVotes === undefined) {
+    round.resultRequiredVotes = requiredVotesFor(participants.length);
+  }
+
+  if (round.roundComplete && round.resultVoteTally === undefined) {
+    round.resultImpostorName = room.players.get(round.impostorUid)?.name ?? "—";
+    round.resultVoteTally = aggregateVoteTally(participants, round.votes);
+  }
 }
 
 export function buildView(room: RoomState, uid: string, joinUrl: string): ClientView {
@@ -181,14 +205,14 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
 
   if (room.phase === "RESULT" && round && round.resultComputed) {
     const participants = roundParticipants(room);
-    const impostor = room.players.get(round.impostorUid);
     const revealIdentity = round.roundComplete;
+    freezeResultProjection(room, round, participants);
 
     view.result = {
       ...(revealIdentity
         ? {
             impostorUid: round.impostorUid,
-            impostorName: impostor?.name ?? "—",
+            impostorName: round.resultImpostorName ?? "—",
           }
         : {}),
       groupFound: round.groupFound ?? false,
@@ -196,7 +220,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       challengeIndex: round.challengeIndex,
       maxChallenges: round.kind === "IMITATION" ? MAX_CHALLENGES_PER_ROUND : 1,
       mode: round.mode,
-      requiredVotes: requiredVotesFor(participants.length),
+      requiredVotes: round.resultRequiredVotes ?? requiredVotesFor(participants.length),
       ...(round.kind === "TEXT_PAIR"
         ? {
             normalQuestion: round.normalQuestion,
@@ -204,7 +228,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
             category: round.category,
           }
         : {}),
-      voteTally: revealIdentity ? aggregateVoteTally(participants, round.votes) : [],
+      voteTally: revealIdentity ? round.resultVoteTally ?? [] : [],
     };
 
     if (room.playStyle === "INDIVIDUAL" && revealIdentity) {
