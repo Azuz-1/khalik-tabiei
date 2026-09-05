@@ -14,9 +14,10 @@ test("production-facing browser uses local Tajawal assets with normal readiness"
 
   await page.goto("/");
   await page.evaluate(() => document.fonts.ready);
+  const pageOrigin = new URL(page.url()).origin;
   expect(externalFontRequests).toEqual([]);
   expect(localFontRequests.length).toBeGreaterThan(0);
-  expect(localFontRequests.every((url) => new URL(url).origin === location.origin)).toBe(true);
+  expect(localFontRequests.every((url) => new URL(url).origin === pageOrigin)).toBe(true);
 
   const family = await page.locator("body").evaluate((element) => getComputedStyle(element).fontFamily);
   expect(family).toContain("Tajawal");
