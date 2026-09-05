@@ -174,7 +174,6 @@ test("reconnect during countdown restores normal prompt but never leaks it to im
     actionMs: 5,
     holdMs: 5,
     promptRevealMs: 5,
-    disconnectGraceMs: 200,
   });
   const { players, room } = start(manager);
   const round = room.round!;
@@ -323,7 +322,6 @@ test("voting survives disconnect/reconnect and completes only after every partic
     actionMs: 2,
     holdMs: 2,
     promptRevealMs: 2,
-    disconnectGraceMs: 80,
   });
   const { host, players, room } = await toDiscussion(manager);
 
@@ -353,8 +351,8 @@ test("voting survives disconnect/reconnect and completes only after every partic
   manager.dispose();
 });
 
-test("disconnect past grace keeps the same active challenge and hidden impostor", async () => {
-  const manager = new RoomManager({ rng: () => 0, disconnectGraceMs: 4 });
+test("player disconnect remains preserved with no expiry/redeal timer", async () => {
+  const manager = new RoomManager({ rng: () => 0 });
   const { players, room } = start(manager, 4);
   const oldRound = room.round!;
   const oldMode = oldRound.mode;
@@ -386,7 +384,6 @@ test("disconnect after a survived challenge keeps the result and seat until expl
     actionMs: 2,
     holdMs: 2,
     promptRevealMs: 2,
-    disconnectGraceMs: 4,
   });
   const { host, players, room } = await toDiscussion(manager, 4);
   manager.handle(host.conn, { t: "START_VOTING" });
