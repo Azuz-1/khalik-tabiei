@@ -57,6 +57,30 @@ test("active Host UI exposes player management and Player UI exposes explicit le
   assert.ok(disconnectBlock.includes("Keep the seat"));
 });
 
+test("room exit controls stay single-owner on Player and Host game-over screens", async () => {
+  const [app, player, host] = await Promise.all([
+    readFile(new URL("../../client/src/App.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8"),
+  ]);
+
+  // Player exit is owned globally by App so every room phase gets the same
+  // confirmation semantics and Player screens cannot render a second control.
+  assert.equal((app.match(/label="الخروج من الغرفة"/g) ?? []).length, 1);
+  assert.ok(app.includes('view?.self.role === "player"'));
+  assert.equal(player.includes("function LeaveLink"), false);
+  assert.equal(player.includes("<LeaveLink />"), false);
+  assert.equal(player.includes("مغادرة الغرفة"), false);
+
+  // Lobby/Discussion/Game Over own their Host close/navigation UI. Other active
+  // phases still fall through to the fixed App-level "إنهاء اللعبة" control.
+  assert.ok(app.includes('["LOBBY", "DISCUSSION", "GAME_OVER"].includes(view.room.phase)'));
+  assert.ok(app.includes('view?.self.role === "host" && !hostAlreadyHasClose'));
+  assert.ok(app.includes('label="إنهاء اللعبة"'));
+  assert.ok(host.includes("function HostGameOver"));
+  assert.ok(host.includes("الرئيسية"));
+});
+
 test("short in-game mode labels are retired in favor of explicit actions", async () => {
   const constants = await readFile(
     new URL("../../shared/constants.ts", import.meta.url),
