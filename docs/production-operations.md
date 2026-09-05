@@ -14,6 +14,9 @@ Default transport limits are configurable through environment variables. The cur
 - `GET /readyz` is admission readiness. It returns HTTP 200 normally and HTTP 503 as soon as graceful drain starts.
 - `/api/session` returns HTTP 503 during drain, so new bootstrap identities are not admitted.
 - New WebSocket upgrades are rejected with HTTP 503 during drain.
+- A WebSocket whose HTTP upgrade completed immediately before drain but whose `HELLO` arrives afterward is rejected with `SERVER_RESTARTING` and closed; an upgrade race cannot become a newly authenticated admission after readiness is false.
+
+The checked-in Render Blueprint uses `/readyz` as its health-check path, so draining instances stop satisfying the service readiness check. It also uses `runtime: docker`, making the hosted Blueprint consume the same multi-stage non-root image that CI builds and smoke-tests. `maxShutdownDelaySeconds` is 15 seconds, leaving headroom above the application's default 10-second drain deadline.
 
 ## Graceful shutdown
 
@@ -31,6 +34,6 @@ The drain is best-effort continuity, not state persistence. If a game has not co
 
 Production builds compile the server TypeScript to JavaScript. `tsx` and TypeScript remain development/build tooling rather than production runtime dependencies. The Dockerfile is multi-stage: the build stage installs the full toolchain and builds client/server; the runtime stage installs only server production dependencies, copies compiled server/client output and third-party notices, and runs as the non-root `node` user.
 
-Tajawal is pinned through `@fontsource/tajawal@5.3.0`; Vite emits the requested 400/500/700/800/900 Arabic/Latin WOFF2 assets into the local client build. The app no longer requests Google Fonts and CSP permits fonts/styles from self only. The upstream Tajawal SIL OFL 1.1 notice is retained under `client/THIRD_PARTY_NOTICES/`.
+Tajawal is pinned through `@fontsource/tajawal@5.3.0`; Vite emits the requested 400/500/700/800/900 Arabic/Latin font assets into the local client build. The app no longer requests Google Fonts and CSP permits fonts/styles from self only. The upstream Tajawal SIL OFL 1.1 notice is retained under `client/THIRD_PARTY_NOTICES/`.
 
 No deployment is performed by Stage D.
