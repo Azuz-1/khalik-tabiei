@@ -53,6 +53,12 @@ export interface RoundState {
   votes: Map<string, string>;
   resultComputed: boolean;
   groupFound?: boolean;
+  /** Majority threshold that actually governed this computed result. */
+  resultRequiredVotes?: number;
+  /** Frozen public identity after a completed Round, so later removal cannot rewrite history. */
+  resultImpostorName?: string;
+  /** Frozen anonymous aggregate tally for the Challenge that produced this completed result. */
+  resultVoteTally?: Array<{ uid: string; name: string; votes: number }>;
   /** Round-complete INDIVIDUAL score delta. Empty for TEAM/intermediate results. */
   roundScores: Map<string, number>;
 }
