@@ -64,6 +64,7 @@ export class HostAudioEventController {
   private challengeIndex: number | undefined;
   private submittedVotes = 0;
   private totalVotes = 0;
+  private votingPlayerUids = new Set<string>();
   private seenPlayerUids = new Set<string>();
   private playedResultKeys = new Set<string>();
   private lastCountdownStep: CountdownStep | null = null;
@@ -87,11 +88,9 @@ export class HostAudioEventController {
       snapshot.currentRound < previousRound;
     if (newGameLifecycle) this.resetPerGameDedupe();
 
-    // A disconnect grace expiry can redeal the current Round back to QUESTION,
-    // including resetting Challenge 2/3 to Challenge 1. That is a new physical
-    // attempt even though room/round/challenge IDs may collide with a result
-    // already heard earlier in the same Game. Clear only this Round's result
-    // keys so the redealt attempt can make its own result sound.
+    // If an explicit retry/redeal path ever restarts this Round at QUESTION,
+    // allow the new physical attempt to make its own result sound even when
+    // room/round/challenge identifiers collide with a result already heard.
     const redealtCurrentRound =
       !newGameLifecycle &&
       snapshot.phase === "QUESTION" &&
@@ -146,19 +145,29 @@ export class HostAudioEventController {
       }
       this.submittedVotes = submitted;
       this.totalVotes = total;
+      this.votingPlayerUids = new Set(snapshot.playerUids);
     } else if (snapshot.phase === "RESULT" && previousPhase === "VOTING") {
-      // The server computes RESULT before broadcasting the final vote, so the
-      // Host normally never receives a VOTING snapshot with submitted === total.
-      // Recover that anonymous final increment from aggregate progress only.
-      const finalIncrement = Math.max(0, this.totalVotes - this.submittedVotes);
+      // The server computes RESULT before broadcasting the final real vote, so
+      // the Host may never receive a VOTING snapshot with submitted === total.
+      // Recover that one aggregate increment only when the participant set did
+      // not shrink. A KICK/LEAVE can also turn 3/4 into RESULT with no new vote;
+      // that transition must not synthesize a fake fourth vote sound.
+      const participantShrank = [...this.votingPlayerUids].some(
+        (uid) => !snapshot.playerUids.includes(uid),
+      );
+      const finalIncrement = participantShrank
+        ? 0
+        : Math.max(0, this.totalVotes - this.submittedVotes);
       if (finalIncrement > 0) {
         events.push({ type: "voteReceived", count: finalIncrement });
       }
       this.submittedVotes = 0;
       this.totalVotes = 0;
+      this.votingPlayerUids.clear();
     } else {
       this.submittedVotes = 0;
       this.totalVotes = 0;
+      this.votingPlayerUids.clear();
     }
 
     if (snapshot.phase === "RESULT" && snapshot.result) {
@@ -192,6 +201,7 @@ export class HostAudioEventController {
     this.playedResultKeys.clear();
     this.submittedVotes = 0;
     this.totalVotes = 0;
+    this.votingPlayerUids.clear();
     this.lastCountdownStep = null;
   }
 
@@ -202,6 +212,7 @@ export class HostAudioEventController {
     }
     this.submittedVotes = 0;
     this.totalVotes = 0;
+    this.votingPlayerUids.clear();
     this.lastCountdownStep = null;
   }
 
@@ -213,6 +224,9 @@ export class HostAudioEventController {
     this.challengeIndex = snapshot.challengeIndex;
     this.submittedVotes = snapshot.phase === "VOTING" ? snapshot.submittedVotes ?? 0 : 0;
     this.totalVotes = snapshot.phase === "VOTING" ? snapshot.totalVotes ?? 0 : 0;
+    this.votingPlayerUids = snapshot.phase === "VOTING"
+      ? new Set(snapshot.playerUids)
+      : new Set<string>();
     this.seenPlayerUids = new Set(snapshot.playerUids);
     this.playedResultKeys = new Set<string>();
     this.lastCountdownStep = null;
