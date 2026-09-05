@@ -69,7 +69,7 @@ export const GAME_MODES: GameModeInfo[] = [
 export const GAME_MODE_IDS: GameMode[] = GAME_MODES.map((mode) => mode.id);
 export const DEFAULT_GAME_MODES: GameMode[] = [...GAME_MODE_IDS];
 
-/** Legacy-only constants kept for dormant TEXT_PAIR compatibility. */
+/** INDIVIDUAL scoring values. TEAM gameplay remains score-free. */
 export const SCORING = {
   POINT_CORRECT_VOTE: 1,
   POINT_IMPOSTOR_SURVIVES: 2,

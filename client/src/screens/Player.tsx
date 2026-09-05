@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ClientView, GameModeInfo } from "../../../shared/types.js";
+import type { ClientView, GameModeInfo, ScoreEntry } from "../../../shared/types.js";
 import { actions } from "../net/socket.js";
 import { ResultBody, roundLabel } from "../components/Bits.js";
 import { Players } from "../components/Players.js";
@@ -38,6 +38,38 @@ function modeTitle(view: ClientView): string {
   return mode ? `${mode.icon} ${mode.label}` : "";
 }
 
+function PlayerScoreboard({
+  rows,
+  selfUid,
+  round,
+}: {
+  rows: ScoreEntry[];
+  selfUid: string;
+  round?: boolean;
+}) {
+  return (
+    <div className="card stack" style={{ width: "100%" }}>
+      <div className="code-label">{round ? "النقاط بعد الجولة" : "الترتيب النهائي"}</div>
+      {rows.map((row) => (
+        <div
+          key={row.uid}
+          className="row between"
+          style={{ fontWeight: row.uid === selfUid ? 900 : 700 }}
+        >
+          <span>
+            #{row.rank} {row.name}
+            {row.uid === selfUid ? " — أنت" : ""}
+          </span>
+          <span>
+            {row.score} نقطة
+            {round && (row.roundDelta ?? 0) > 0 ? ` (+${row.roundDelta})` : ""}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PlayerLobby({ view }: { view: ClientView }) {
   const selectedModes = view.room.availableModes.filter((mode) =>
     view.room.selectedModes.includes(mode.id),
@@ -53,7 +85,14 @@ function PlayerLobby({ view }: { view: ClientView }) {
         <span className="pill-note" style={{ direction: "ltr", marginInline: "auto" }}>
           غرفة {view.room.code}
         </span>
-        <p className="subtitle">ننتظر المضيف يبدأ اللعبة…</p>
+        <span className="chip">
+          {view.room.playStyle === "INDIVIDUAL" ? "🏅 فردي بالنقاط" : "🤝 جماعي"}
+        </span>
+        <p className="subtitle">
+          {view.room.playStyle === "INDIVIDUAL"
+            ? "التصويت الصحيح = +1، والمتخفي إذا نجا من الجولة = +2."
+            : "ننتظر المضيف يبدأ اللعبة…"}
+        </p>
         <div className="players">
           {selectedModes.map((mode) => (
             <span className="chip" key={mode.id}>
@@ -76,6 +115,13 @@ function PlayerLobby({ view }: { view: ClientView }) {
 }
 
 function PlayerPrompt({ view }: { view: ClientView }) {
+  // A seat can reconnect after a new Round already started without having been
+  // selected as a participant for that Round. The server intentionally sends
+  // no private role/prompt/ready state in that case. Keep the phone on the
+  // shared-TV flow instead of rendering a fake normal prompt ("…") and a Ready
+  // button that the authoritative server would reject with NOT_PLAYER.
+  if (view.myReady === undefined) return <PlayerWatchScreen />;
+
   const ready = view.myReady === true;
   const mode = modeInfo(view);
 
@@ -167,6 +213,12 @@ function PlayerVote({ view }: { view: ClientView }) {
   const targets = view.voteTargets ?? [];
   const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
 
+  // Same boundary case as QUESTION: a reconnected seat that sat this Round out
+  // gets no voting projection. Never show an empty ballot UI that cannot submit.
+  if (view.voteTargets === undefined && view.myVoteSubmitted === undefined) {
+    return <PlayerWatchScreen />;
+  }
+
   if (view.myVoteSubmitted) {
     return (
       <div className="screen">
@@ -176,6 +228,11 @@ function PlayerVote({ view }: { view: ClientView }) {
           <p className="subtitle">
             ننتظر الباقين… <span className="num-ltr">{progress.submitted}/{progress.total}</span>
           </p>
+          {view.room.playStyle === "INDIVIDUAL" ? (
+            <p className="helper center">
+              إذا اختيارك صحيح، نقطتك تنحفظ وما تنكشف إلا بعد نهاية الجولة.
+            </p>
+          ) : null}
         </div>
         <div className="spacer" />
       </div>
@@ -187,9 +244,13 @@ function PlayerVote({ view }: { view: ClientView }) {
       <div className="center stack">
         <div className="eyebrow">{roundLabel(view)}</div>
         <h1 className="title">مين تحس إنه المتخفي؟</h1>
-        <p className="helper">
-          يحتاج المتخفي {progress.requiredVotes} أصوات عشان ينكشف
-        </p>
+        {progress.requiredVotes > 0 ? (
+          <p className="helper">
+            {view.room.playStyle === "INDIVIDUAL"
+              ? `اختيارك الصحيح = +1 لك. و${progress.requiredVotes} أصوات تكشف المتخفي بالجولة.`
+              : `يحتاج المتخفي ${progress.requiredVotes} أصوات عشان ينكشف`}
+          </p>
+        ) : null}
       </div>
       <div className="vote-list">
         {targets.map((target) => (
@@ -224,6 +285,9 @@ function PlayerResult({ view }: { view: ClientView }) {
         <div className="card">
           <ResultBody result={view.result} />
         </div>
+      ) : null}
+      {view.result?.roundComplete && view.scoreboard ? (
+        <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} round />
       ) : null}
       <p className="subtitle center">
         {view.result?.roundComplete
@@ -261,6 +325,9 @@ function PlayerGameOver({ view }: { view: ClientView }) {
               </div>
             </div>
           </>
+        ) : null}
+        {view.scoreboard ? (
+          <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} />
         ) : null}
         <p className="subtitle center">ننتظر المضيف يبدأ لعبة جديدة أو يقفل الغرفة</p>
       </div>
