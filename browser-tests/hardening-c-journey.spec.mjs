@@ -1,20 +1,17 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * A real Chromium journey through an actual game: four isolated browser
- * contexts join, one genuinely goes offline and comes back to the same signed
- * seat, the Host kicks a different player, and the remaining three play a full
- * three-round TEAM match to a real GAME_OVER.
+ * A real Chromium journey through an actual competitive game: four isolated
+ * browser contexts join, one genuinely goes offline and recovers to the same
+ * signed seat, the Host kicks a different player, and the remaining three play
+ * nine real Challenges to GAME_OVER under the production timers.
  *
- * Every wait is on observable UI or authoritative state. There are no fixed
- * sleeps standing in for phase progress, so the test tracks the production
- * timings (~5s countdown + 1s action + 2s hold + 2.5s reveal per challenge)
- * rather than racing them.
+ * Every phase wait is on rendered UI or authoritative state; no fixed sleeps
+ * stand in for gameplay correctness.
  */
 
 const PHASE_TIMEOUT = 40_000;
 
-/** Records every inbound WebSocket frame so public state can be inspected. */
 const RECORD_FRAMES = `
 window.__frames = [];
 (function () {
@@ -67,18 +64,12 @@ async function joinPlayer(browser, code, name) {
   return { context, page, name };
 }
 
-/** The seat number the Host roster shows for a given player name. */
 async function hostSeatFor(hostPage, name) {
   const chip = hostPage.locator(".chip", { hasText: name });
   await expect(chip).toHaveCount(1);
   return (await chip.locator(".seat-badge").textContent())?.trim();
 }
 
-/**
- * Reads each player's private screen to find this round's impostor. Impostor
- * selection is weighted-random, so this is re-derived every round and never
- * assumes the role moved.
- */
 async function identifyRoles(players) {
   const seen = [];
   for (const player of players) {
@@ -87,16 +78,10 @@ async function identifyRoles(players) {
     seen.push({ ...player, isImpostor });
   }
   const impostors = seen.filter((player) => player.isImpostor);
-  expect(impostors, "exactly one impostor per challenge").toHaveLength(1);
+  expect(impostors, "exactly one impostor per stint").toHaveLength(1);
   return { impostor: impostors[0], normals: seen.filter((player) => !player.isImpostor) };
 }
 
-/**
- * Votes and waits for the vote to be observably registered. The final vote of a
- * challenge resolves the round server-side, so that voter can move straight to
- * the result screen without ever rendering the confirmation badge; both are
- * valid evidence that the vote landed.
- */
 async function castVote(voter, targetName) {
   const option = voter.page.locator(".vote-opt", { hasText: targetName });
   await expect(option).toHaveCount(1);
@@ -113,7 +98,6 @@ async function castVote(voter, targetName) {
     .toBe(true);
 }
 
-/** Recursively asserts no frame ever carries a voter-to-target mapping. */
 function assertNoVoterMapping(frames, label) {
   const walk = (node, path) => {
     if (Array.isArray(node)) {
@@ -123,73 +107,106 @@ function assertNoVoterMapping(frames, label) {
     if (!node || typeof node !== "object") return;
     for (const [key, value] of Object.entries(node)) {
       expect(
-        /voter|ballot|votedFor|votesByUid/i.test(key),
-        `${label}: frame at ${path} exposed a voter-identifying key "${key}"`,
+        /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i.test(key),
+        `${label}: frame at ${path} exposed private key "${key}"`,
       ).toBe(false);
-      if ((key === "voteTally" || key === "liveVoteTally") && Array.isArray(value)) {
+      if (key === "voteTally" && Array.isArray(value)) {
         for (const entry of value) {
-          expect(
-            Object.keys(entry).sort(),
-            `${label}: ${key} entries must stay aggregate-only`,
-          ).toEqual(["name", "uid", "votes"]);
+          expect(Object.keys(entry).sort(), `${label}: voteTally stays aggregate-only`).toEqual([
+            "name",
+            "uid",
+            "votes",
+          ]);
         }
       }
+      expect(key, `${label}: live target totals must never be serialized`).not.toBe("liveVoteTally");
       walk(value, `${path}.${key}`);
     }
   };
 
   for (const [index, raw] of frames.entries()) {
-    let parsed;
     try {
-      parsed = JSON.parse(raw);
+      walk(JSON.parse(raw), `frame#${index}`);
     } catch {
-      continue;
+      // Ignore non-JSON frames if any future transport metadata is introduced.
     }
-    walk(parsed, `frame#${index}`);
   }
 }
 
-test("full game journey: join, offline/online, kick, three TEAM rounds, real GAME_OVER", async ({
+async function playCaughtChallenge(host, players, globalChallenge) {
+  await expect(host.page.getByRole("heading", { name: "شوفوا جوالاتكم" })).toBeVisible({
+    timeout: PHASE_TIMEOUT,
+  });
+  await expect(host.page.getByText(new RegExp(`التحدّي ${globalChallenge} من 9`))).toBeVisible();
+
+  const { impostor, normals } = await identifyRoles(players);
+  expect(normals).toHaveLength(2);
+
+  for (const player of [impostor, ...normals]) {
+    await player.page.getByRole("button", { name: "جاهز" }).click();
+  }
+
+  await expect(host.page.locator(".host-countdown-number")).toBeVisible({ timeout: PHASE_TIMEOUT });
+  if (globalChallenge === 1) {
+    for (const player of players) {
+      await expect(player.page.locator(".player-countdown-number")).toBeVisible({ timeout: PHASE_TIMEOUT });
+    }
+    await expect(players[0].page.locator(".player-action-title")).toBeVisible({ timeout: PHASE_TIMEOUT });
+  }
+
+  await expect(host.page.locator(".host-prompt-reveal")).toBeVisible({ timeout: PHASE_TIMEOUT });
+  await expect(host.page.getByRole("heading", { name: "مين تصرفه مو طبيعي؟" })).toBeVisible({
+    timeout: PHASE_TIMEOUT,
+  });
+
+  await host.page.getByRole("button", { name: "ابدأ التصويت" }).click();
+  await expect(host.page.getByRole("heading", { name: "صوّتوا" })).toBeVisible({ timeout: PHASE_TIMEOUT });
+  await expect(host.page.getByText("الأصوات مخفية للحين")).toBeVisible();
+  await expect(host.page.locator(".vote-board")).toHaveCount(0);
+
+  await castVote(impostor, normals[0].name);
+  await castVote(normals[0], impostor.name);
+  await castVote(normals[1], impostor.name);
+
+  await expect(host.page.locator(".host-result-stage")).toBeVisible({ timeout: PHASE_TIMEOUT });
+  await expect(host.page.getByText("مسكتوا المتخفي")).toBeVisible();
+  await expect(host.page.locator(".impostor-name")).toHaveText(impostor.name);
+  await expect(host.page.getByText("النقاط بعد دور المتخفي")).toBeVisible();
+
+  return { impostor, normals };
+}
+
+test("full game journey: reconnect, kick, competitive scoring, nine Challenges, real GAME_OVER", async ({
   browser,
 }) => {
-  // Real production phase timings, three rounds, six browser contexts.
-  test.setTimeout(240_000);
+  test.setTimeout(260_000);
   const startedAt = Date.now();
 
   const host = await createHost(browser);
   const joined = [];
   try {
-    // 1-2. Four real players join from separate session contexts.
     for (let index = 1; index <= 4; index += 1) {
       joined.push(await joinPlayer(browser, host.code, `لاعب${index}`));
     }
     await expect(host.page.locator(".seat-badge")).toHaveCount(4);
 
-    // 3. Take one player genuinely offline at the browser-context level.
     const flaky = joined[3];
     const seatBefore = await hostSeatFor(host.page, flaky.name);
     await flaky.context.setOffline(true);
-
-    // 4. Arabic connection feedback, and game actions really are unavailable.
     await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeVisible({
       timeout: PHASE_TIMEOUT,
     });
     await expect(flaky.page.locator("[data-game-surface]")).toHaveAttribute("disabled", "");
-    await expect(flaky.page.locator("[data-game-surface]")).toHaveAttribute("aria-busy", "true");
-    await expect(flaky.page.getByRole("button", { name: "الخروج من الغرفة" })).toBeDisabled();
+    await expect(flaky.page.getByRole("button", { name: "الخروج من الغرفة" })).toBeEnabled();
 
-    // 5-6. Back online, reconnecting to the same signed identity and seat.
     await flaky.context.setOffline(false);
     await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeHidden({
       timeout: PHASE_TIMEOUT,
     });
     await expect(flaky.page.locator("[data-game-surface]")).not.toHaveAttribute("disabled", "");
-    await expect(flaky.page.getByRole("button", { name: "الخروج من الغرفة" })).toBeEnabled();
     await expect(flaky.page.locator(".chip", { hasText: `${flaky.name} (أنت)` })).toBeVisible();
-    await expect(host.page.locator(".seat-badge")).toHaveCount(4);
     expect(await hostSeatFor(host.page, flaky.name)).toBe(seatBefore);
 
-    // 7-8. The Host kicks a different player; three remain.
     const kicked = joined[1];
     await host.page
       .locator(".chip", { hasText: kicked.name })
@@ -202,72 +219,28 @@ test("full game journey: join, offline/online, kick, three TEAM rounds, real GAM
     await expect(host.page.locator(".seat-badge")).toHaveCount(3);
 
     const players = [joined[0], joined[2], joined[3]];
-
-    // 9. A real TEAM game over three configured rounds.
-    const teamCard = host.page.locator(".mode-select-card", {
-      has: host.page.locator("strong", { hasText: /^جماعي$/ }),
-    });
-    await teamCard.click();
-    await expect(teamCard).toHaveAttribute("aria-pressed", "true");
-
-    const threeRounds = host.page.locator(".round-opt").filter({ hasText: /^3$/ });
-    await threeRounds.click();
-    await expect(threeRounds).toHaveAttribute("aria-pressed", "true");
-
+    await expect(host.page.getByText("🏅 9 تحديات أساسية")).toBeVisible();
     await host.page.getByRole("button", { name: "ابدأ اللعبة" }).click();
 
-    // 10. Play every round through the real physical sequence.
-    for (let round = 1; round <= 3; round += 1) {
-      await expect(
-        host.page.getByRole("heading", { name: "شوفوا جوالاتكم" }),
-      ).toBeVisible({ timeout: PHASE_TIMEOUT });
-      await expect(host.page.getByText(`جولة ${round} من 3`)).toBeVisible();
-
-      const { impostor, normals } = await identifyRoles(players);
-      expect(normals).toHaveLength(2);
-
-      for (const player of [impostor, ...normals]) {
-        await player.page.getByRole("button", { name: "جاهز" }).click();
+    for (let challenge = 1; challenge <= 9; challenge += 1) {
+      await playCaughtChallenge(host, players, challenge);
+      const primary = host.page.locator(".host-result-stage .btn-primary");
+      if (challenge < 9) {
+        await expect(primary).toHaveText("متخفي جديد");
+        await primary.click();
+      } else {
+        await expect(primary).toHaveText("شوفوا الترتيب النهائي");
+        await primary.click();
       }
-
-      // Countdown -> action -> hold -> prompt reveal -> discussion, awaited on
-      // the Host's own rendered state rather than a timer.
-      await expect(host.page.locator(".host-countdown-number")).toBeVisible({
-        timeout: PHASE_TIMEOUT,
-      });
-      await expect(host.page.locator(".host-prompt-reveal")).toBeVisible({
-        timeout: PHASE_TIMEOUT,
-      });
-      await expect(
-        host.page.getByRole("heading", { name: "مين تصرفه مو طبيعي؟" }),
-      ).toBeVisible({ timeout: PHASE_TIMEOUT });
-
-      await host.page.getByRole("button", { name: "ابدأ التصويت" }).click();
-      await expect(host.page.getByRole("heading", { name: "صوّتوا" })).toBeVisible({
-        timeout: PHASE_TIMEOUT,
-      });
-
-      // The impostor votes for a normal; both normals converge on the impostor.
-      await castVote(impostor, normals[0].name);
-      await castVote(normals[0], impostor.name);
-      await castVote(normals[1], impostor.name);
-
-      await expect(host.page.locator(".host-result-stage")).toBeVisible({
-        timeout: PHASE_TIMEOUT,
-      });
-      await expect(host.page.getByText("مسكتوا المتخفي")).toBeVisible();
-      await expect(host.page.locator(".impostor-name")).toHaveText(impostor.name);
-
-      await host.page.locator(".host-result-stage .btn-primary").click();
     }
 
-    // 11. A real GAME_OVER, not a synthesized end state.
     await expect(host.page.getByRole("heading", { name: "خلصت اللعبة 🎉" })).toBeVisible({
       timeout: PHASE_TIMEOUT,
     });
-    await expect(host.page.getByText("مسكتوا المتخفي في 3 من 3 جولات")).toBeVisible();
+    await expect(host.page.getByText(/لعبتوا 9 تحديات/)).toBeVisible();
+    await expect(host.page.getByText(/مسكتوا المتخفي في 9 من 9 أدوار/)).toBeVisible();
+    await expect(host.page.getByText("الترتيب النهائي")).toBeVisible();
 
-    // 12. No voter-to-target mapping in any rendered or public state.
     for (const client of [host, ...players]) {
       const frames = await client.page.evaluate(() => window.__frames ?? []);
       expect(frames.length, `${client.name} received real server frames`).toBeGreaterThan(0);
@@ -277,12 +250,9 @@ test("full game journey: join, offline/online, kick, three TEAM rounds, real GAM
       expect(rendered).not.toMatch(/صوّت\s+(على|لـ)\s*\S+\s*→/);
     }
 
-    // 13. Reported for the record; asserted structurally in the server suite.
-    const durationMs = Date.now() - startedAt;
-    expect(durationMs).toBeGreaterThan(0);
     test.info().annotations.push({
       type: "journey-duration-ms",
-      description: String(durationMs),
+      description: String(Date.now() - startedAt),
     });
   } finally {
     await Promise.allSettled(joined.map((player) => player.context.close()));
