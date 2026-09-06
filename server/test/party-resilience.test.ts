@@ -25,8 +25,8 @@ test("legitimate multi-challenge voting cannot exhaust the per-player limiter", 
   const abuse = new AbuseGuard({ now: () => 0 });
   const uid = testUid(1);
 
-  // Maximum configured game: 10 rounds x up to 3 Challenges = 30 legitimate
-  // vote submissions. Keep extra headroom for retries while retaining a cap.
+  // The shipped match has nine base Challenges and may finish an active stint,
+  // so normal play is far below this deliberately generous 40-vote allowance.
   for (let vote = 1; vote <= 40; vote += 1) {
     assert.equal(abuse.allowMessage(uid, "SUBMIT_VOTE"), true, `vote ${vote}`);
   }
@@ -47,8 +47,6 @@ test("active Host UI exposes player management and Player UI exposes explicit le
   assert.ok(app.includes("إنهاء اللعبة"));
   assert.ok(app.includes("مكانه محفوظ"));
 
-  // A transport disconnect must mark the seat offline in-place. It must not
-  // silently call the explicit removal/redeal path.
   const disconnectBlock = manager.slice(
     manager.indexOf("disconnect(conn: Connection)"),
     manager.indexOf("handle(conn: Connection"),
@@ -67,20 +65,20 @@ test("room exit controls stay single-owner on Player and Host game-over screens"
   ]);
 
   // Player exit is owned globally by App so every room phase gets the same
-  // confirmation semantics and Player screens cannot render a second control.
-  assert.equal((app.match(/label="الخروج من الغرفة"/g) ?? []).length, 1);
+  // confirmation semantics, remains reachable outside the disabled game fieldset,
+  // and Player screens cannot render a second control.
+  assert.equal((app.match(/ariaLabel="الخروج من الغرفة"/g) ?? []).length, 1);
+  assert.equal((app.match(/label="🚪 خروج"/g) ?? []).length, 1);
   assert.ok(app.includes('view?.self.role === "player"'));
   assert.equal(player.includes("function LeaveLink"), false);
   assert.equal(player.includes("<LeaveLink />"), false);
   assert.equal(player.includes("مغادرة الغرفة"), false);
 
-  // Lobby/Discussion/Game Over own their Host close/navigation UI. Other active
-  // phases still fall through to the fixed App-level "إنهاء اللعبة" control.
   assert.ok(app.includes('["LOBBY", "DISCUSSION", "GAME_OVER"].includes(view.room.phase)'));
   assert.ok(app.includes('view?.self.role === "host" && !hostAlreadyHasClose'));
   assert.ok(app.includes('label="إنهاء اللعبة"'));
   assert.ok(host.includes("function HostGameOver"));
-  assert.ok(host.includes("الرئيسية"));
+  assert.ok(host.includes("إغلاق الغرفة"));
 });
 
 test("short in-game mode labels are retired in favor of explicit actions", async () => {
