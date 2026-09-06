@@ -118,13 +118,14 @@ button:disabled {
   min-height: 44px;
 }
 
-/* The global connection bar owns y=0 while transport is down. Move the
-   player utility below it instead of letting the higher-z banner cover Exit. */
-.connection-offline .floating-exit {
+/* .conn is a preceding sibling of the player utility while the transport
+   banner is rendered. Reserve its vertical space without coupling App state
+   to presentation-only CSS. */
+.conn ~ .floating-exit {
   top: calc(46px + env(safe-area-inset-top));
 }
 
-.connection-offline .host-disconnect-banner {
+.conn ~ .host-disconnect-banner {
   top: calc(100px + env(safe-area-inset-top));
 }
 
