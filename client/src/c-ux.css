@@ -87,7 +87,6 @@ button:disabled {
 .host-disconnect-banner,
 .offline-player-banner {
   position: fixed;
-  top: calc(14px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   width: min(calc(100% - 24px), 720px);
@@ -96,16 +95,91 @@ button:disabled {
   text-align: center;
 }
 
+.offline-player-banner { top: calc(14px + env(safe-area-inset-top)); }
+/* Player exit owns the top-left utility slot, so keep this banner below it. */
+.host-disconnect-banner { top: calc(68px + env(safe-area-inset-top)); }
+
 .floating-players,
 .floating-exit {
   position: fixed;
-  bottom: calc(14px + env(safe-area-inset-bottom));
   z-index: 35;
   opacity: 0.96;
 }
 
-.floating-players { right: calc(14px + env(safe-area-inset-right)); }
-.floating-exit { left: calc(14px + env(safe-area-inset-left)); }
+.floating-players {
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+.floating-exit {
+  left: calc(14px + env(safe-area-inset-left));
+  top: calc(14px + env(safe-area-inset-top));
+  min-width: 72px;
+  min-height: 44px;
+}
+
+.home-rules {
+  width: min(100%, 820px);
+  margin-inline: auto;
+}
+
+.home-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.home-tab {
+  min-height: 44px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.home-tab.active,
+.home-tab[aria-selected="true"] {
+  border-color: rgba(248,225,108,0.78);
+  background: rgba(248,225,108,0.12);
+  box-shadow: 0 0 0 1px rgba(248,225,108,0.24);
+}
+
+.home-tab-panel {
+  min-height: 190px;
+  padding: 8px 2px 2px;
+}
+
+.home-mode-list { gap: 10px; }
+
+.home-mode-row {
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.home-mode-row:last-child { border-bottom: 0; }
+
+.player-cue-screen {
+  min-height: 100dvh;
+  justify-content: center;
+  gap: 18px;
+}
+
+.player-countdown-number {
+  font-size: clamp(92px, 34vw, 160px);
+  font-weight: 1000;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-action-title {
+  font-size: clamp(44px, 14vw, 76px);
+  text-align: center;
+}
 
 .vote-opt[aria-checked="true"] {
   box-shadow: 0 0 0 3px rgba(248,225,108,0.78), var(--glow);
@@ -140,6 +214,8 @@ button:disabled {
     padding-inline-start: max(18px, env(safe-area-inset-left));
     padding-inline-end: max(18px, env(safe-area-inset-right));
   }
+  .home-tab { font-size: 0.9rem; padding-inline: 6px; }
+  .home-tab-panel { min-height: 230px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
