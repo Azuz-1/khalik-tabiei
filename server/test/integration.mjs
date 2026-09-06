@@ -248,7 +248,7 @@ async function main() {
 
   ok(host.view?.room?.playStyle === "INDIVIDUAL", "single product ruleset is competitive scoring");
   ok(host.view?.room?.targetChallenges === 9, "match advertises nine base Challenges");
-  ok(host.view?.challenge?.maxChallenges === 2, "three-player impostor stint has two-Challenge maximum");
+  ok(host.view?.challenge?.max === 2, "three-player impostor stint has two-Challenge maximum");
 
   console.log("\n[first stint] C1 survival then C2 catch tests 2/1 scoring + survival point:");
   let current = await physical(host, players, "C1", players[0]);
