@@ -18,7 +18,10 @@ export const ANSWER_MAX = 40;
 export const UID_RE = /^u_[a-f0-9]{24}$/;
 export const ROUND_OPTIONS = [3, 5, 7, 10] as const;
 export const DEFAULT_ROUNDS = 5;
+/** Competitive match target. The final impostor stint is always completed even if it runs past this count. */
+export const BASE_CHALLENGES = 9;
 export const MAX_CHALLENGES_PER_ROUND = 3;
+export const MAX_CHALLENGES_THREE_PLAYERS = 2;
 
 export const GAME_MODES: GameModeInfo[] = [
   {
@@ -69,10 +72,12 @@ export const GAME_MODES: GameModeInfo[] = [
 export const GAME_MODE_IDS: GameMode[] = GAME_MODES.map((mode) => mode.id);
 export const DEFAULT_GAME_MODES: GameMode[] = [...GAME_MODE_IDS];
 
-/** INDIVIDUAL scoring values. TEAM gameplay remains score-free. */
+/** Competitive scoring values. TEAM remains protocol-compatible but is no longer exposed by the product UI. */
 export const SCORING = {
   POINT_CORRECT_VOTE: 1,
+  /** Legacy full-stint value retained for compatibility with old tests/clients; new scoring uses per-challenge survival. */
   POINT_IMPOSTOR_SURVIVES: 2,
+  POINT_IMPOSTOR_SURVIVES_CHALLENGE: 1,
 } as const;
 
 export const TIMERS = {
