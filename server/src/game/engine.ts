@@ -221,6 +221,10 @@ function maxChallengesForParticipantCount(participantCount: number): number {
   return participantCount === 3 ? MAX_CHALLENGES_THREE_PLAYERS : MAX_CHALLENGES_PER_ROUND;
 }
 
+function resolvedMaxChallenges(round: RoundState): number {
+  return round.maxChallenges ?? MAX_CHALLENGES_PER_ROUND;
+}
+
 function prepareChallenge(
   room: RoomState,
   impostorUid: string,
@@ -594,8 +598,9 @@ function updateCorrectVoteStreaks(
 }
 
 function awardContinuousDiscoveryScores(room: RoomState, round: RoundState): void {
+  const maxChallenges = resolvedMaxChallenges(round);
   for (const [uid, startChallenge] of room.correctVoteStreakStart) {
-    const points = Math.max(0, round.maxChallenges - startChallenge + 1);
+    const points = Math.max(0, maxChallenges - startChallenge + 1);
     if (points > 0) addPendingScore(room, uid, points);
   }
 }
@@ -618,7 +623,8 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
   const found = (tally.get(round.impostorUid) ?? 0) >= requiredVotes;
 
   round.groupFound = found;
-  round.roundComplete = round.kind === "TEXT_PAIR" || found || round.challengeIndex >= round.maxChallenges;
+  round.roundComplete =
+    round.kind === "TEXT_PAIR" || found || round.challengeIndex >= resolvedMaxChallenges(round);
   round.roundScores = new Map();
   round.resultRequiredVotes = requiredVotes;
 
@@ -683,7 +689,7 @@ export function nextRound(room: RoomState, uid: string, deps: EngineDeps = defau
       round.impostorUid,
       round.challengeIndex + 1,
       round.participantUids,
-      round.maxChallenges,
+      resolvedMaxChallenges(round),
       mode,
       deps,
     );
