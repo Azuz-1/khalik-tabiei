@@ -139,7 +139,7 @@ test("rate limiters are bounded, expire, and enforce action limits", () => {
   for (const key of ["b", "c", "d", "e"]) limiter.allow(key);
   assert.ok(limiter.size <= 3);
 
-  const abuse = new AbuseGuard(() => now);
+  const abuse = new AbuseGuard({ now: () => now });
   assert.equal(abuse.allowMessage(testUid(1), "CREATE_ROOM"), true);
   assert.equal(abuse.allowMessage(testUid(1), "CREATE_ROOM"), true);
   assert.equal(abuse.allowMessage(testUid(1), "CREATE_ROOM"), true);

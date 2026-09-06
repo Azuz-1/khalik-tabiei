@@ -81,7 +81,8 @@ test("removed player with an earlier pending point never becomes a ghost scorebo
   const view = lastMessage(host.socket, "STATE")!.view;
   assert.ok(view.scoreboard);
   assert.equal(view.scoreboard.some((row) => row.uid === departing.uid), false);
-  assert.equal(JSON.stringify(view).includes(departing.uid), false, "removed uid is absent from final view");
+  assert.equal(view.players.some((row) => row.uid === departing.uid), false, "removed uid is absent from current roster");
+  assert.equal(view.blockedPlayers?.some((row) => row.uid === departing.uid), true, "Host-only kick block can retain the signed identity for readmission control");
 
   manager.dispose();
 });

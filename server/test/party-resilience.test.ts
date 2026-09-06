@@ -5,7 +5,7 @@ import { AbuseGuard } from "../src/security/rateLimit.js";
 import { testUid } from "./helpers.js";
 
 test("shared Wi-Fi can carry a full party reconnect burst without IP lockout", () => {
-  const abuse = new AbuseGuard(() => 0);
+  const abuse = new AbuseGuard({ now: () => 0 });
   const ip = "203.0.113.44";
 
   // Ten devices waking/reconnecting several times in the same minute should
@@ -22,7 +22,7 @@ test("shared Wi-Fi can carry a full party reconnect burst without IP lockout", (
 });
 
 test("legitimate multi-challenge voting cannot exhaust the per-player limiter", () => {
-  const abuse = new AbuseGuard(() => 0);
+  const abuse = new AbuseGuard({ now: () => 0 });
   const uid = testUid(1);
 
   // Maximum configured game: 10 rounds x up to 3 Challenges = 30 legitimate
@@ -47,14 +47,16 @@ test("active Host UI exposes player management and Player UI exposes explicit le
   assert.ok(app.includes("إنهاء اللعبة"));
   assert.ok(app.includes("مكانه محفوظ"));
 
-  // A transport disconnect must not silently call the old redeal/removal path.
+  // A transport disconnect must mark the seat offline in-place. It must not
+  // silently call the explicit removal/redeal path.
   const disconnectBlock = manager.slice(
     manager.indexOf("disconnect(conn: Connection)"),
     manager.indexOf("handle(conn: Connection"),
   );
   assert.equal(disconnectBlock.includes("redealCurrentRound"), false);
   assert.equal(disconnectBlock.includes("removePlayer(room"), false);
-  assert.ok(disconnectBlock.includes("Keep the seat"));
+  assert.ok(disconnectBlock.includes("player.connected = false"));
+  assert.ok(disconnectBlock.includes("player.disconnectGeneration += 1"));
 });
 
 test("room exit controls stay single-owner on Player and Host game-over screens", async () => {
