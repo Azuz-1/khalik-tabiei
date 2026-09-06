@@ -1,0 +1,152 @@
+:root {
+  --muted: #c9bdea;
+  --muted-2: #ac9dce;
+  --focus-ring: #f8e16c;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+[aria-disabled="true"],
+button:disabled {
+  cursor: not-allowed;
+}
+
+.seat-badge {
+  display: inline-flex;
+  min-width: 1.8em;
+  height: 1.8em;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.1);
+  color: var(--text);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding:
+    calc(20px + env(safe-area-inset-top))
+    calc(20px + env(safe-area-inset-right))
+    calc(20px + env(safe-area-inset-bottom))
+    calc(20px + env(safe-area-inset-left));
+  background: rgba(4, 2, 10, 0.82);
+}
+
+.confirm-dialog {
+  width: min(100%, 520px);
+  max-height: min(82dvh, 720px);
+  overflow: auto;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.confirm-error {
+  margin: 0;
+  color: #fecdd3;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.player-manager-panel {
+  width: min(calc(100% - 28px), 620px);
+  max-height: min(86dvh, 820px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: calc(22px + env(safe-area-inset-bottom));
+}
+
+.manager-subcard,
+.manager-player-row { padding: 12px; }
+
+.host-disconnect-banner,
+.offline-player-banner {
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100% - 24px), 720px);
+  z-index: 40;
+  padding: 12px 16px;
+  text-align: center;
+}
+
+.floating-players,
+.floating-exit {
+  position: fixed;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 35;
+  opacity: 0.96;
+}
+
+.floating-players { right: calc(14px + env(safe-area-inset-right)); }
+.floating-exit { left: calc(14px + env(safe-area-inset-left)); }
+
+.vote-opt[aria-checked="true"] {
+  box-shadow: 0 0 0 3px rgba(248,225,108,0.78), var(--glow);
+}
+
+.vote-card,
+.manager-player-row,
+.chip {
+  contain: layout paint;
+}
+
+[data-game-surface][inert],
+[data-app-content][inert] {
+  pointer-events: none;
+  user-select: none;
+}
+
+.screen {
+  padding-inline-start: max(20px, env(safe-area-inset-left));
+  padding-inline-end: max(20px, env(safe-area-inset-right));
+}
+
+.screen.host {
+  padding-inline-start: max(40px, env(safe-area-inset-left));
+  padding-inline-end: max(40px, env(safe-area-inset-right));
+}
+
+@media (max-width: 620px) {
+  .confirm-actions { grid-template-columns: 1fr; }
+  .row.between.manager-player-row { align-items: flex-start; gap: 10px; }
+  .screen.host {
+    padding-inline-start: max(18px, env(safe-area-inset-left));
+    padding-inline-end: max(18px, env(safe-area-inset-right));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
