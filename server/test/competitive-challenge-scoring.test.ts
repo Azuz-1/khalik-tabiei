@@ -59,6 +59,7 @@ test("three-player stint uses two Challenges and awards 2/1 continuous discovery
   const room = roomWithPlayers(3);
   engine.startGame(room, "host", deps);
   assert.equal(room.round?.maxChallenges, 2);
+  assert.equal(buildView(room, "host", "http://game/join/PTS01").challenge?.max, 2, "wire projection exposes the two-Challenge cap");
 
   const impostor = room.round!.impostorUid;
   const normals = room.round!.participantUids.filter((uid) => uid !== impostor);
@@ -82,6 +83,7 @@ test("four-player stint awards 3/2/1 discovery and +1 per survived Challenge", (
   const room = roomWithPlayers(4);
   engine.startGame(room, "host", deps);
   assert.equal(room.round?.maxChallenges, 3);
+  assert.equal(buildView(room, "host", "http://game/join/PTS01").challenge?.max, 3, "wire projection exposes the three-Challenge cap");
 
   const impostor = room.round!.impostorUid;
   const normals = room.round!.participantUids.filter((uid) => uid !== impostor);
