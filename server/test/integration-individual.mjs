@@ -171,7 +171,7 @@ async function main() {
   host.send({ t: "START_GAME" });
   await waitForAll([host, ...players], (client) => client.phase() === "QUESTION", "Challenge 1 QUESTION");
   ok(host.view?.room?.playStyle === "INDIVIDUAL", "one competitive ruleset is active");
-  ok(host.view?.challenge?.maxChallenges === 3, "four-player stint allows three Challenges");
+  ok(host.view?.challenge?.max === 3, "four-player stint allows three Challenges");
 
   let current = await physical(host, players, "C1");
   const impostorUid = current.impostor.uid;
