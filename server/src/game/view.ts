@@ -1,8 +1,7 @@
 import type { ClientView, PublicPlayer, RevealedAnswer, Role } from "../../../shared/types.js";
-import { CATEGORIES, GAME_MODES, MAX_CHALLENGES_PER_ROUND } from "../../../shared/constants.js";
+import { CATEGORIES, GAME_MODES } from "../../../shared/constants.js";
 import { activePlayers, roundParticipants, type RoomState } from "./state.js";
 import { questionFor, ranking, requiredVotesFor } from "./engine.js";
-import { aggregateVoteTally } from "./votes.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
 const PUBLIC_PROMPT_PHASES = new Set(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
@@ -55,6 +54,8 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       phase: room.phase,
       currentRound: room.currentRound,
       totalRounds: room.totalRounds,
+      targetChallenges: room.targetChallenges,
+      completedChallenges: room.completedChallenges,
       maxPlayers: room.maxPlayers,
       minPlayers: room.minPlayers,
       hostUid: room.hostUid,
@@ -79,7 +80,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   }
 
   if (round?.kind === "IMITATION" && room.phase !== "GAME_OVER") {
-    view.challenge = { mode: round.mode, index: round.challengeIndex, max: MAX_CHALLENGES_PER_ROUND };
+    view.challenge = { mode: round.mode, index: round.challengeIndex, max: round.maxChallenges };
   }
 
   if (round?.kind === "TEXT_PAIR" && (room.phase === "QUESTION" || room.phase === "ANSWERING")) {
@@ -119,11 +120,8 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       total: participants.length,
       requiredVotes: requiredVotesFor(participants.length),
     };
-    if (role === "host") {
-      // Aggregate-only but intentionally live on the shared TV. Timing correlation
-      // is therefore possible; voter->target mappings never cross buildView.
-      view.liveVoteTally = aggregateVoteTally(participants, round.votes);
-    }
+    // Deliberately do not serialize live target totals. During voting the shared
+    // screen shows only submitted/total so later voters cannot follow a live leader.
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
       view.voteTargets = participants.filter((player) => player.uid !== uid).map((player) => ({ uid: player.uid, name: player.name }));
       view.myVoteSubmitted = round.votes.has(uid) || Boolean(round.resolutionSealed);
@@ -137,7 +135,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       groupFound: round.groupFound ?? false,
       roundComplete: round.roundComplete,
       challengeIndex: round.challengeIndex,
-      maxChallenges: round.kind === "IMITATION" ? MAX_CHALLENGES_PER_ROUND : 1,
+      maxChallenges: round.maxChallenges,
       mode: round.mode,
       requiredVotes: round.resultRequiredVotes ?? 0,
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
@@ -146,15 +144,26 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
     if (room.playStyle === "INDIVIDUAL" && revealIdentity) {
       view.scoreboard = ranking(room).map((row) => ({ ...row, roundDelta: round.roundScores.get(row.uid) ?? 0 }));
     }
-    if (role === "host" && round.roundComplete && room.currentRound < room.totalRounds && activePlayers(room).length < room.minPlayers) {
-      view.nextRoundWarning = "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية وتنمسح نقاطها.";
+    if (
+      role === "host" &&
+      round.roundComplete &&
+      room.completedChallenges < room.targetChallenges &&
+      activePlayers(room).length < room.minPlayers
+    ) {
+      view.nextRoundWarning = "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية.";
     }
   }
 
   if (room.phase === "GAME_OVER") {
     const caughtRounds = room.roundOutcomes.filter((outcome) => outcome.caught).length;
     const escapedRounds = room.roundOutcomes.filter((outcome) => !outcome.caught).length;
-    view.gameOver = { totalRounds: room.totalRounds, caughtRounds, escapedRounds };
+    view.gameOver = {
+      totalRounds: room.roundOutcomes.length,
+      caughtRounds,
+      escapedRounds,
+      targetChallenges: room.targetChallenges,
+      completedChallenges: room.completedChallenges,
+    };
     if (room.playStyle === "INDIVIDUAL") view.scoreboard = ranking(room);
   }
 
