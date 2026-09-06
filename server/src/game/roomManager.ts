@@ -55,6 +55,7 @@ export class RoomManager {
   private readonly connsByUid = new Map<string, Set<Connection>>();
   private readonly timers = new Map<string, Map<string, NodeJS.Timeout>>();
   private readonly requestsByUid = new Map<string, Map<string, CachedRequest>>();
+  private draining = false;
   private readonly deps: Deps;
   private readonly gcTimer: NodeJS.Timeout;
 
@@ -209,6 +210,9 @@ export class RoomManager {
   private dispatch(conn: Connection, message: ClientMessage): void {
     const uid = conn.uid;
     if (!uid) throw new GameError("UNAUTHORIZED");
+    if (this.draining && (message.t === "CREATE_ROOM" || message.t === "JOIN_ROOM" || message.t === "START_GAME" || message.t === "REMATCH")) {
+      throw new GameError("SERVER_RESTARTING", "server is draining");
+    }
     switch (message.t) {
       case "HELLO": throw new GameError("BAD_REQUEST", "connection already authenticated");
       case "PING": return;
@@ -720,6 +724,9 @@ export class RoomManager {
   private ridField(message: ClientMessage): { rid?: string } {
     return "rid" in message && message.rid ? { rid: message.rid } : {};
   }
+
+  setDraining(draining = true): void { this.draining = draining; }
+  isDrainingForTests(): boolean { return this.draining; }
 
   dispose(): void {
     clearInterval(this.gcTimer);

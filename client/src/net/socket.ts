@@ -223,6 +223,11 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
     case "KICKED":
       set({ view: null, notice: "المضيف طلعك من الغرفة" });
       break;
+    case "SERVER_RESTARTING": {
+      const deadline = new Date(message.deadlineMs).toLocaleTimeString("ar-SA", { hour: "numeric", minute: "2-digit" });
+      feedback(`الخادم بيتعاد تشغيله. ما راح تبدأ لعبة جديدة، والاتصال الحالي بيتقفل تقريبًا ${deadline}.`);
+      break;
+    }
     case "PONG":
       if (message.sampleId && message.serverMs !== undefined) {
         serverClock.acceptSample(message.sampleId, message.serverMs, performance.now());

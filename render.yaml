@@ -1,15 +1,16 @@
-# One-click deploy to Render (https://render.com). Push this repo to GitHub,
-# then "New +" → "Blueprint" and point it at the repo. Render builds and runs
-# it, and gives you a public https URL (with WebSocket support) to test on
-# phones anywhere.
+# One-click Render Blueprint. The production service uses the same verified
+# multi-stage, non-root Docker runtime exercised in CI.
 services:
   - type: web
     name: khalik-tabiei
-    runtime: node
+    runtime: docker
     plan: free
-    buildCommand: npm ci --include=dev && npm run build
-    startCommand: npm start
-    healthCheckPath: /healthz
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /readyz
+    # Application drain defaults to 10 seconds; leave process-level headroom
+    # before Render is allowed to force termination.
+    maxShutdownDelaySeconds: 15
     envVars:
       - key: NODE_ENV
         value: production
@@ -17,5 +18,3 @@ services:
         generateValue: true
       - key: PUBLIC_ORIGIN
         sync: false
-      - key: NODE_VERSION
-        value: "22"

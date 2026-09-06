@@ -1,10 +1,12 @@
 import type { GameMode } from "../../../shared/types.js";
 import { EXTRA_IMITATION_PROMPTS } from "./imitationPrompts.extra.js";
+import { classifyPromptFamily, type PromptFamily } from "./promptMetadata.js";
 
 export interface ImitationPrompt {
   id: string;
   mode: GameMode;
   text: string;
+  family?: PromptFamily;
   flags?: string[];
 }
 
@@ -24,10 +26,10 @@ export const BASE_IMITATION_PROMPTS: ImitationPrompt[] = [
   { id: "P03", mode: "POINT", text: "أشر على اللي بيرد على رسايلك بأسرع وقت." },
   { id: "P04", mode: "POINT", text: "أشر على اللي طلبه في المطعم دايم نفس الشي." },
   { id: "P05", mode: "POINT", text: "أشر على اللي لو دخل مقهى بيطلب أغرب شي بالمنيو." },
-  { id: "P06", mode: "POINT", text: "أشر على اللي ممكن يوصل آخر واحد للموعد.", flags: ["HIGH_CONSENSUS_RISK"] },
+  { id: "P06", mode: "POINT", text: "أشر على اللي لو تغيّر موعد الطلعة قبلها بساعة غالبًا يحتاج أكثر وقت يعيد ترتيب نفسه.", flags: ["HIGH_CONSENSUS_RISK"] },
   { id: "P07", mode: "POINT", text: "أشر على اللي بيحفظ كلمات الأغاني كاملة." },
   { id: "P08", mode: "POINT", text: "أشر على اللي لو انقطع النت أسبوع بيكون أهدى واحد فيكم." },
-  { id: "P09", mode: "POINT", text: "أشر على اللي دايم معه شاحن.", flags: ["HIGH_CONSENSUS_RISK"] },
+  { id: "P09", mode: "POINT", text: "أشر على اللي لو بطارية واحد فيكم صارت 5٪ غالبًا بيكون عنده حل أو شاحن.", flags: ["HIGH_CONSENSUS_RISK"] },
   { id: "P10", mode: "POINT", text: "أشر على اللي لو سولفتوا عن شي قديم بيتذكر التفاصيل كلها." },
   { id: "N01", mode: "NUMBER", text: "من آخر 5 أيام، كم يوم شربت قهوة؟" },
   { id: "N02", mode: "NUMBER", text: "من آخر 5 أيام، كم يوم قمت من أول منبّه؟" },
@@ -44,4 +46,7 @@ export const BASE_IMITATION_PROMPTS: ImitationPrompt[] = [
 export const IMITATION_PROMPTS: ImitationPrompt[] = [
   ...BASE_IMITATION_PROMPTS,
   ...EXTRA_IMITATION_PROMPTS,
-];
+].map((prompt) => ({
+  ...prompt,
+  family: prompt.family ?? classifyPromptFamily(prompt.text, prompt.mode),
+}));
