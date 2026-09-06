@@ -151,7 +151,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       room.completedChallenges < room.targetChallenges &&
       activePlayers(room).length < room.minPlayers
     ) {
-      view.nextRoundWarning = "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية.";
+      view.nextRoundWarning = "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية وتنمسح نقاطها.";
     }
   }
 
