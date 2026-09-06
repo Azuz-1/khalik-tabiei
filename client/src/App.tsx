@@ -1,112 +1,118 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { PublicPlayer } from "../../shared/types.js";
+import { useEffect, useRef, useState } from "react";
+import type { ClientView, PublicPlayer } from "../../shared/types.js";
+import { ConfirmDialog } from "./components/ConfirmDialog.js";
+import { HostAudioLayer } from "./audio/HostAudioLayer.js";
+import { Host, type ConfirmActionRequest } from "./screens/Host.js";
+import { Home } from "./screens/Home.js";
+import { Player } from "./screens/Player.js";
 import {
   actions,
-  clearNotice,
-  clearTransportFeedback,
+  clearActionFeedback,
+  ensureSocket,
+  onConnection,
+  onError,
+  onPendingActions,
+  onState,
   resetToHome,
-  useGame,
+  type ActionType,
+  type PendingActions,
+  type SocketStatus,
 } from "./net/socket.js";
-import { errorText } from "./i18n/errors.js";
-import { HostAudioLayer } from "./audio/HostAudioLayer.js";
-import { ConfirmDialog, type ConfirmDialogState } from "./components/ConfirmDialog.js";
-import { Home } from "./screens/Home.js";
-import { Host, type ConfirmActionRequest } from "./screens/Host.js";
-import { Player } from "./screens/Player.js";
 
-interface ActiveConfirm extends ConfirmDialogState, ConfirmActionRequest {
-  roomCode: string;
-  errorBaseline: number;
-  phaseBaseline: string;
-  roundBaseline: number;
-  challengeBaseline?: number;
+interface UiError {
+  id: number;
+  code: string;
+  message: string;
+  actionType?: ActionType;
 }
 
+type ConfirmRequest = ConfirmActionRequest & {
+  pending: boolean;
+  roomCode: string;
+  errorBaseline: number;
+  phaseBaseline: ClientView["room"]["phase"];
+  roundBaseline: number;
+  challengeBaseline?: number;
+};
+
 export function App() {
-  const { view, status, error, notice, transportFeedback, pendingActions } = useGame();
-  const [toast, setToast] = useState<{ text: string; id: string } | null>(null);
-  const [showConn, setShowConn] = useState(false);
+  const [view, setView] = useState<ClientView | null>(null);
+  const [error, setError] = useState<UiError | null>(null);
+  const [status, setStatus] = useState<SocketStatus>("connecting");
   const [showHostPlayers, setShowHostPlayers] = useState(false);
-  const [confirmRequest, setConfirmRequest] = useState<ActiveConfirm | null>(null);
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [pendingActions, setPendingActions] = useState<PendingActions>({});
+  const errorSequence = useRef(0);
+  const wasOnline = useRef(false);
 
   useEffect(() => {
-    if (!error) return;
-    const id = `e-${error.id}`;
-    setToast({ text: errorText(error.code), id });
-    const h = setTimeout(() => setToast((current) => current?.id === id ? null : current), 3_200);
-    return () => clearTimeout(h);
-  }, [error]);
-
-  useEffect(() => {
-    if (!transportFeedback) return;
-    const id = `t-${transportFeedback.id}`;
-    setToast({ text: transportFeedback.text, id });
-    const h = setTimeout(() => {
-      setToast((current) => current?.id === id ? null : current);
-      clearTransportFeedback();
-    }, 4_000);
-    return () => clearTimeout(h);
-  }, [transportFeedback]);
-
-  useEffect(() => {
-    if (status === "online") {
-      setShowConn(false);
-      return;
-    }
-    const h = setTimeout(() => setShowConn(true), 1_200);
-    return () => clearTimeout(h);
-  }, [status]);
-
-  useEffect(() => {
-    if (view && location.pathname.startsWith("/join/")) {
-      try { history.replaceState(null, "", "/"); } catch { /* ignore */ }
-    }
-  }, [view]);
-
-  useEffect(() => {
-    if (view?.self.role !== "host") setShowHostPlayers(false);
-  }, [view?.self.role]);
+    const offState = onState((next) => {
+      setView(next);
+      if (next.room.phase === "CLOSED") {
+        setShowHostPlayers(false);
+        setConfirmRequest(null);
+      }
+    });
+    const offError = onError((code, message, meta) => {
+      errorSequence.current += 1;
+      setError({ id: errorSequence.current, code, message, actionType: meta?.actionType });
+    });
+    const offConnection = onConnection((next) => {
+      setStatus(next);
+      if (next === "online") wasOnline.current = true;
+    });
+    const offPending = onPendingActions(setPendingActions);
+    ensureSocket();
+    return () => {
+      offState();
+      offError();
+      offConnection();
+      offPending();
+    };
+  }, []);
 
   useEffect(() => {
     if (!confirmRequest) return;
-    if (!view || view.room.code !== confirmRequest.roomCode) {
+    if (view == null || view.room.phase === "CLOSED" || view.room.code !== confirmRequest.roomCode) {
       setConfirmRequest(null);
       return;
     }
-    if (confirmRequest.targetUid && !view.players.some((player) => player.uid === confirmRequest.targetUid)) {
+
+    const sameContext =
+      view.room.currentRound === confirmRequest.roundBaseline &&
+      view.challenge?.index === confirmRequest.challengeBaseline;
+    const staleSensitive = new Set<ActionType>(["KICK_PLAYER", "LEAVE_ROOM", "NEXT_ROUND"]);
+    if (sameContext && staleSensitive.has(confirmRequest.actionType) && view.room.phase !== confirmRequest.phaseBaseline) {
       setConfirmRequest(null);
       return;
     }
-    if (confirmRequest.actionType === "NEXT_ROUND" && confirmRequest.pending) {
-      const progressed = view.room.phase !== confirmRequest.phaseBaseline ||
-        view.room.currentRound !== confirmRequest.roundBaseline ||
-        view.challenge?.index !== confirmRequest.challengeBaseline;
-      if (progressed) {
+
+    if (confirmRequest.actionType === "KICK_PLAYER" && confirmRequest.targetUid) {
+      if (!view.players.some((player) => player.uid === confirmRequest.targetUid)) {
         setConfirmRequest(null);
         return;
       }
     }
-    if (confirmRequest.pending && error && error.id > confirmRequest.errorBaseline) {
-      setConfirmRequest((current) => current ? {
-        ...current,
-        pending: false,
-        error: errorText(error.code),
-        errorBaseline: error.id,
-      } : null);
+
+    if (confirmRequest.actionType === "CLOSE_ROOM" && view.room.phase === "CLOSED") {
+      setConfirmRequest(null);
       return;
     }
-    if (!confirmRequest.pending || pendingActions.includes(confirmRequest.actionType)) return;
-    const h = window.setTimeout(() => {
-      setConfirmRequest((current) => {
-        if (!current?.pending || pendingActions.includes(current.actionType)) return current;
-        return {
-          ...current,
-          pending: false,
-          error: "ما قدرنا نتأكد من تنفيذ الطلب. راجع حالة الغرفة وحاول مرة ثانية.",
-        };
-      });
-    }, 350);
-    return () => window.clearTimeout(h);
+
+    const pending = Boolean(pendingActions[confirmRequest.actionType]);
+    const failedAfterOpen =
+      error != null &&
+      error.id > confirmRequest.errorBaseline &&
+      error.actionType === confirmRequest.actionType;
+
+    if (confirmRequest.pending && !pending && !failedAfterOpen) {
+      setConfirmRequest(null);
+      return;
+    }
+
+    if (failedAfterOpen) {
+      setConfirmRequest((current) => current ? { ...current, pending: false } : current);
+    }
   }, [confirmRequest, error, pendingActions, view]);
 
   const openConfirm = (request: ConfirmActionRequest) => {
@@ -130,6 +136,7 @@ export function App() {
     ? new Date(view.room.hostCloseDeadline).toLocaleTimeString("ar-SA", { hour: "numeric", minute: "2-digit" })
     : null;
   const disableGameSurface = view != null && status !== "online";
+  const showConnectionBanner = status !== "online" && wasOnline.current;
 
   const requestPlayerExit = () => {
     if (!view || view.self.role !== "player") return;
@@ -146,9 +153,9 @@ export function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app${showConnectionBanner ? " connection-offline" : ""}`}>
       <div data-app-content>
-        {showConn ? <div className="conn" role="status">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
+        {showConnectionBanner ? <div className="conn" role="status">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
 
         {showHostDisconnected ? (
           <div className="card host-disconnect-banner" role="status">
@@ -208,174 +215,146 @@ export function App() {
         {view?.self.role === "host" && showHostPlayers ? (
           <HostPlayerManager
             players={view.players}
-            active={activeRoom}
-            lobby={view.room.phase === "LOBBY"}
-            admissionLocked={view.room.admissionLocked}
             blockedPlayers={view.blockedPlayers ?? []}
-            onConfirm={openConfirm}
             onClose={() => setShowHostPlayers(false)}
+            onKick={(uid) => {
+              const player = view.players.find((candidate) => candidate.uid === uid);
+              if (!player) return;
+              openConfirm({
+                title: `إخراج ${player.name}؟`,
+                description: "بيطلع من الغرفة وما يقدر يرجع بنفس الهوية إلا إذا سمحت له من إدارة اللاعبين.",
+                confirmLabel: "إخراج",
+                actionType: "KICK_PLAYER",
+                targetUid: uid,
+                run: () => actions.kick(uid),
+              });
+            }}
+            onUnblock={(uid) => actions.unblock(uid)}
           />
-        ) : null}
-
-        {toast ? <div className="toast" role="status">{toast.text}</div> : null}
-
-        {notice ? (
-          <div className="overlay" role="dialog" aria-modal="true" aria-label="تنبيه الغرفة">
-            <div className="card center stack" style={{ maxWidth: 420 }}>
-              <h2 className="title">{notice}</h2>
-              <button className="btn btn-primary" onClick={() => { clearNotice(); resetToHome(); }}>الرئيسية</button>
-            </div>
-          </div>
         ) : null}
       </div>
 
-      <ConfirmDialog
-        state={confirmRequest}
-        onCancel={() => {
-          if (!confirmRequest?.pending) setConfirmRequest(null);
-        }}
-        onConfirm={() => {
-          if (!confirmRequest || confirmRequest.pending) return;
-          const rid = confirmRequest.run();
-          if (!rid) {
-            setConfirmRequest((current) => current ? { ...current, error: "الاتصال مو جاهز، لذلك ما أرسلنا الطلب." } : null);
-            return;
+      {confirmRequest ? (
+        <ConfirmDialog
+          title={confirmRequest.title}
+          description={confirmRequest.description}
+          confirmLabel={confirmRequest.confirmLabel}
+          pending={confirmRequest.pending || Boolean(pendingActions[confirmRequest.actionType])}
+          error={
+            error != null &&
+            error.id > confirmRequest.errorBaseline &&
+            error.actionType === confirmRequest.actionType
+              ? error.message
+              : undefined
           }
-          setConfirmRequest((current) => current ? { ...current, pending: true, error: undefined } : null);
-        }}
-      />
+          onCancel={() => {
+            clearActionFeedback(confirmRequest.actionType);
+            setConfirmRequest(null);
+          }}
+          onConfirm={() => {
+            clearActionFeedback(confirmRequest.actionType);
+            const requestId = confirmRequest.run();
+            if (requestId) {
+              setConfirmRequest((current) => current ? { ...current, pending: true } : current);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 function HostPlayerManager({
   players,
-  active,
-  lobby,
-  admissionLocked,
   blockedPlayers,
-  onConfirm,
   onClose,
+  onKick,
+  onUnblock,
 }: {
   players: PublicPlayer[];
-  active: boolean;
-  lobby: boolean;
-  admissionLocked: boolean;
   blockedPlayers: Array<{ uid: string; name: string }>;
-  onConfirm: (request: ConfirmActionRequest) => void;
   onClose: () => void;
+  onKick: (uid: string) => void;
+  onUnblock: (uid: string) => void;
 }) {
-  const titleId = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const orderedPlayers = useMemo(
-    () => [...players].sort((a, b) => Number(a.connected) - Number(b.connected) || a.seatNumber - b.seatNumber),
-    [players],
-  );
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const surface = document.querySelector<HTMLElement>("[data-game-surface]");
-    surface?.setAttribute("inert", "");
-    surface?.setAttribute("aria-hidden", "true");
-    const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 0);
-    return () => {
-      window.clearTimeout(focusTimer);
-      surface?.removeAttribute("inert");
-      surface?.removeAttribute("aria-hidden");
-      if (previous?.isConnected) previous.focus();
-    };
-  }, []);
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const background = document.querySelector<HTMLElement>("[data-game-surface]");
+    background?.setAttribute("inert", "");
+    closeRef.current?.focus();
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const panel = panelRef.current;
-    if (!panel) return;
-    const focusable = [...panel.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
-    if (focusable.length === 0) {
-      event.preventDefault();
-      panel.focus();
-      return;
-    }
-    const first = focusable[0]!;
-    const last = focusable[focusable.length - 1]!;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusables = panelRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      const ordered = focusables ? [...focusables] : [];
+      if (!ordered.length) return;
+      const first = ordered[0];
+      const last = ordered.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      background?.removeAttribute("inert");
+      openerRef.current?.focus();
+    };
+  }, [onClose]);
+
+  const sorted = [...players].sort(
+    (a, b) => Number(a.connected) - Number(b.connected) || a.seatNumber - b.seatNumber,
+  );
 
   return (
-    <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div
-        ref={panelRef}
-        className="card stack player-manager-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-      >
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="player-manager-title">
+      <div className="card player-manager-panel" ref={panelRef}>
         <div className="row between">
           <div>
-            <h2 id={titleId} className="title" style={{ marginBottom: 4 }}>اللاعبين</h2>
-            <p className="helper">المنقطعين يظهرون أول عشان يسهل التعامل معهم.</p>
+            <div className="eyebrow">المضيف</div>
+            <h2 id="player-manager-title" className="title">اللاعبين</h2>
           </div>
           <button ref={closeRef} type="button" className="btn btn-ghost btn-sm" onClick={onClose}>إغلاق</button>
         </div>
-
-        {lobby ? (
-          <div className="card stack manager-subcard">
-            <div className="row between">
-              <div><strong>دخول لاعبين جدد</strong><div className="helper">{admissionLocked ? "موقوف مؤقتًا" : "مفتوح"}</div></div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.setAdmission(!admissionLocked)}>{admissionLocked ? "فتح الدخول" : "إيقاف الدخول"}</button>
+        <div className="stack" style={{ marginTop: 18 }}>
+          {sorted.map((player) => (
+            <div key={player.uid} className="manager-player-row card tight row between">
+              <div>
+                <strong>{player.name}</strong>
+                <div className="helper">مقعد {player.seatNumber} · {player.connected ? "متصل" : "منقطع"}</div>
+              </div>
+              <button type="button" className="btn btn-danger btn-sm" onClick={() => onKick(player.uid)}>إخراج</button>
             </div>
-            <p className="helper">القفل يمنع الهويات الجديدة فقط. اللاعب اللي له مقعد محفوظ يقدر يرجع بنفس هويته.</p>
-          </div>
-        ) : null}
-
-        {orderedPlayers.map((player) => (
-          <div key={player.uid} className="row between card manager-player-row">
-            <div><strong>مقعد {player.seatNumber} · {player.name}</strong><div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div></div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => onConfirm({
-                title: `إخراج ${player.name}؟`,
-                description: active
-                  ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع للّوبي. غير كذا تكملون بنفس المتخفي والتحدّي."
-                  : "بيطلع من الغرفة وما يقدر يرجع بنفس الهوية إلا إذا سمحت له من إدارة اللاعبين.",
-                confirmLabel: "إخراج",
-                actionType: "KICK_PLAYER",
-                targetUid: player.uid,
-                run: () => actions.kick(player.uid),
-              })}
-            >
-              إخراج
-            </button>
-          </div>
-        ))}
-
-        {players.length === 0 ? <p className="subtitle center">ما فيه لاعبين الحين.</p> : null}
-
-        {blockedPlayers.length > 0 ? (
-          <div className="card stack manager-subcard">
-            <strong>هويات ممنوعة من الرجوع</strong>
+          ))}
+        </div>
+        {blockedPlayers.length ? (
+          <div className="stack" style={{ marginTop: 20 }}>
+            <div className="code-label">هويات ممنوعة من الرجوع</div>
             {blockedPlayers.map((player) => (
-              <div key={player.uid} className="row between">
-                <span>{player.name}</span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>السماح له يرجع</button>
+              <div key={player.uid} className="manager-subcard card tight row between">
+                <div>
+                  <strong>{player.name}</strong>
+                  <div className="helper">محظور من الرجوع بنفس الجلسة</div>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => onUnblock(player.uid)}>السماح بالرجوع</button>
               </div>
             ))}
-            <p className="helper">المنع مرتبط بالهوية المجهولة الموقّعة في هذا المتصفح، مو بالشخص أو عنوان IP. هوية جديدة تعتبر مستخدمًا مختلفًا.</p>
           </div>
         ) : null}
       </div>
