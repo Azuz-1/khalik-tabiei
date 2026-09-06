@@ -179,7 +179,9 @@ async function playCaughtChallenge(host, players, globalChallenge) {
 test("full game journey: reconnect, kick, competitive scoring, nine Challenges, real GAME_OVER", async ({
   browser,
 }) => {
-  test.setTimeout(260_000);
+  // Nine production-timed Challenges take roughly 7–8 minutes end-to-end.
+  // Keep the real timers here so this journey validates the shipped physical cadence.
+  test.setTimeout(600_000);
   const startedAt = Date.now();
 
   const host = await createHost(browser);
