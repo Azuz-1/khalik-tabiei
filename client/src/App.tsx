@@ -129,6 +129,21 @@ export function App() {
   const hostDeadline = view?.room.hostCloseDeadline
     ? new Date(view.room.hostCloseDeadline).toLocaleTimeString("ar-SA", { hour: "numeric", minute: "2-digit" })
     : null;
+  const disableGameSurface = view != null && status !== "online";
+
+  const requestPlayerExit = () => {
+    if (!view || view.self.role !== "player") return;
+    const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
+    openConfirm({
+      title: "الخروج من الغرفة؟",
+      description: active
+        ? "إذا خروجك يمنع استمرار دور المتخفي الحالي، ممكن ترجع اللعبة للّوبي. إذا الاتصال مقطوع ما راح ندّعي أن الخروج تسجّل إلا بعد رجوع الاتصال."
+        : "بتطلع من الغرفة وترجع للرئيسية. إذا الاتصال مقطوع نحتاج يرجع قبل ما نأكد الخروج على الخادم.",
+      confirmLabel: "اخرج",
+      actionType: "LEAVE_ROOM",
+      run: actions.leaveRoom,
+    });
+  };
 
   return (
     <div className="app">
@@ -152,8 +167,8 @@ export function App() {
 
         <fieldset
           data-game-surface
-          disabled={status !== "online"}
-          aria-busy={status !== "online"}
+          disabled={disableGameSurface}
+          aria-busy={disableGameSurface}
           style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
         >
           {view == null ? (
@@ -172,23 +187,7 @@ export function App() {
             <button type="button" className="btn btn-ghost btn-sm floating-players" onClick={() => setShowHostPlayers(true)}>اللاعبين</button>
           ) : null}
 
-          {view?.self.role === "player" ? (
-            <RoomExitButton
-              label="الخروج من الغرفة"
-              onClick={() => {
-                const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
-                openConfirm({
-                  title: "الخروج من الغرفة؟",
-                  description: active
-                    ? "إذا كنت المتخفي أو صار عدد اللاعبين أقل من 3، المجموعة بترجع للّوبي. غير كذا تكمل لعبتهم بنفس المتخفي."
-                    : "بتطلع من الغرفة وترجع للرئيسية.",
-                  confirmLabel: "اخرج",
-                  actionType: "LEAVE_ROOM",
-                  run: actions.leaveRoom,
-                });
-              }}
-            />
-          ) : view?.self.role === "host" && !hostAlreadyHasClose ? (
+          {view?.self.role === "host" && !hostAlreadyHasClose ? (
             <RoomExitButton
               label="إنهاء اللعبة"
               onClick={() => openConfirm({
@@ -201,6 +200,10 @@ export function App() {
             />
           ) : null}
         </fieldset>
+
+        {view?.self.role === "player" ? (
+          <RoomExitButton label="🚪 خروج" ariaLabel="الخروج من الغرفة" onClick={requestPlayerExit} />
+        ) : null}
 
         {view?.self.role === "host" && showHostPlayers ? (
           <HostPlayerManager
@@ -380,8 +383,8 @@ function HostPlayerManager({
   );
 }
 
-function RoomExitButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return <button type="button" className="btn btn-ghost btn-sm floating-exit" onClick={onClick}>{label}</button>;
+function RoomExitButton({ label, ariaLabel, onClick }: { label: string; ariaLabel?: string; onClick: () => void }) {
+  return <button type="button" aria-label={ariaLabel} className="btn btn-ghost btn-sm floating-exit" onClick={onClick}>{label}</button>;
 }
 
 function Spectator() {
@@ -389,7 +392,7 @@ function Spectator() {
     <div className="screen center stack">
       <div className="spacer" />
       <h2 className="title">اللعبة شغّالة الحين</h2>
-      <p className="subtitle">ما تقدر تدخل لين تخلص الجولة الحالية. تابع الشاشة لين تخلص.</p>
+      <p className="subtitle">ما تقدر تدخل لين يخلص دور المتخفي الحالي. تابع الشاشة لين يخلص.</p>
       <button className="btn btn-ghost" onClick={() => resetToHome()}>الرئيسية</button>
       <div className="spacer" />
     </div>
