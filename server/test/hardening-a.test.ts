@@ -185,7 +185,9 @@ test("non-final insufficient roster warns then abandons/reset match only on Host
   const { manager, host, room, normals } = await completeManagerResult(3);
   manager.handle(host.conn, { t: "KICK_PLAYER", uid: normals[0]!.uid });
   assert.equal(room.phase, "RESULT");
-  assert.match(lastMessage(host.socket, "STATE")!.view.nextRoundWarning ?? "", /نحتاج 3 لاعبين/);
+  const warning = lastMessage(host.socket, "STATE")!.view.nextRoundWarning ?? "";
+  assert.match(warning, /نحتاج 3 لاعبين/);
+  assert.match(warning, /نقاط/, "score-wiping advance must explicitly warn about points");
   manager.handle(host.conn, { t: "NEXT_ROUND" });
   assert.equal(room.phase, "LOBBY");
   assert.equal(room.round, null);
