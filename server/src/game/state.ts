@@ -42,8 +42,8 @@ export interface RoundState {
   impostorUid: string;
   participantUids: string[];
   challengeIndex: number;
-  /** Fixed when this impostor stint starts so roster changes do not rewrite its scoring tier. */
-  maxChallenges: number;
+  /** Fixed for new impostor stints. Optional only for legacy/manual fixtures, which fall back to 3. */
+  maxChallenges?: number;
   mode: GameMode;
   promptId: string;
   prompt: string;
