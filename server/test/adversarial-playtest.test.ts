@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { GamePhase } from "../../shared/types.js";
+import { BASE_CHALLENGES } from "../../shared/constants.js";
 import { RoomManager } from "../src/game/roomManager.js";
 import type { RoomState } from "../src/game/state.js";
 import {
@@ -33,11 +34,9 @@ function setup(manager: RoomManager, count = 4) {
 function startGame(
   manager: RoomManager,
   host: ReturnType<typeof createRoom>,
-  rounds = 3,
 ): void {
   manager.handle(host.conn, {
     t: "SET_SETTINGS",
-    totalRounds: rounds,
     selectedModes: ["HANDS", "POINT", "NUMBER"],
   });
   manager.handle(host.conn, { t: "START_GAME" });
@@ -75,7 +74,7 @@ function voteToCatch(
   assert.equal(room.round!.roundComplete, true);
 }
 
-test("three complete games survive rematches without stale round/game state", async () => {
+test("three complete games survive rematches without stale match/challenge state", async () => {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 2,
@@ -86,31 +85,33 @@ test("three complete games survive rematches without stale round/game state", as
   const { host, players, room } = setup(manager, 4);
 
   for (let game = 1; game <= 3; game += 1) {
-    startGame(manager, host, 3);
+    startGame(manager, host);
     assert.equal(room.currentRound, 1);
+    assert.equal(room.completedChallenges, 0);
     assert.equal(room.phase, "QUESTION");
     assert.equal(room.roundOutcomes.length, 0);
 
-    for (let round = 1; round <= 3; round += 1) {
+    for (let challenge = 1; challenge <= BASE_CHALLENGES; challenge += 1) {
       await advanceToDiscussion(manager, room, players);
       voteToCatch(manager, host.conn, room, players);
-      assert.equal(room.currentRound, round);
+      assert.equal(room.completedChallenges, challenge);
       manager.handle(host.conn, { t: "NEXT_ROUND" });
 
-      if (round < 3) {
+      if (challenge < BASE_CHALLENGES) {
         assert.equal(room.phase, "QUESTION");
-        assert.equal(room.currentRound, round + 1);
+        assert.equal(room.completedChallenges, challenge);
       }
     }
 
     assert.equal(room.phase, "GAME_OVER");
-    assert.equal(room.roundOutcomes.length, 3);
+    assert.equal(room.roundOutcomes.length, BASE_CHALLENGES);
     assert.ok(room.roundOutcomes.every((outcome) => outcome.caught));
 
     if (game < 3) {
       manager.handle(host.conn, { t: "REMATCH" });
       assert.equal(room.phase, "LOBBY");
       assert.equal(room.currentRound, 0);
+      assert.equal(room.completedChallenges, 0);
       assert.equal(room.round, null);
       assert.equal(room.roundOutcomes.length, 0);
     }
@@ -128,7 +129,7 @@ test("player drop and reconnect during COUNTDOWN keeps the exact challenge synch
     promptRevealMs: 5,
   });
   const { host, players, room } = setup(manager, 4);
-  startGame(manager, host, 3);
+  startGame(manager, host);
 
   for (const player of players) manager.handle(player.conn, { t: "MARK_READY" });
   assert.equal(room.phase, "COUNTDOWN");
@@ -165,7 +166,7 @@ test("player drop and reconnect during COUNTDOWN keeps the exact challenge synch
 test("player disconnect never auto-removes the seat or silently redeals the impostor", async () => {
   const manager = new RoomManager({ rng: () => 0 });
   const { host, players, room } = setup(manager, 4);
-  startGame(manager, host, 3);
+  startGame(manager, host);
 
   const roundBefore = room.round!;
   const leaving = players.find((player) => player.uid !== roundBefore.impostorUid)!;
@@ -191,7 +192,7 @@ test("player disconnect never auto-removes the seat or silently redeals the impo
 test("Host can remove a slow normal player in QUESTION and continue the same challenge", () => {
   const manager = new RoomManager({ rng: () => 0, countdownMs: 40 });
   const { host, players, room } = setup(manager, 4);
-  startGame(manager, host, 3);
+  startGame(manager, host);
 
   const roundBefore = room.round!;
   const slow = players.find((player) => player.uid !== roundBefore.impostorUid)!;
@@ -223,7 +224,7 @@ test("Host can remove a missing normal voter and finish VOTING without a redeal"
     promptRevealMs: 2,
   });
   const { host, players, room } = setup(manager, 4);
-  startGame(manager, host, 3);
+  startGame(manager, host);
   await advanceToDiscussion(manager, room, players);
   manager.handle(host.conn, { t: "START_VOTING" });
 
@@ -254,7 +255,7 @@ test("Host can remove a missing normal voter and finish VOTING without a redeal"
 test("removing the current impostor is an explicit Lobby reset, never a hidden redeal", () => {
   const manager = new RoomManager({ rng: () => 0 });
   const { host, room } = setup(manager, 4);
-  startGame(manager, host, 3);
+  startGame(manager, host);
 
   const impostorUid = room.round!.impostorUid;
   manager.handle(host.conn, { t: "KICK_PLAYER", uid: impostorUid });
@@ -270,7 +271,7 @@ test("removing the current impostor is an explicit Lobby reset, never a hidden r
 test("a normal player's explicit leave does not change the hidden impostor", () => {
   const manager = new RoomManager({ rng: () => 0, countdownMs: 40 });
   const { host, players, room } = setup(manager, 4);
-  startGame(manager, host, 3);
+  startGame(manager, host);
 
   const roundBefore = room.round!;
   const leaving = players.find((player) => player.uid !== roundBefore.impostorUid)!;
@@ -298,7 +299,7 @@ test("host reconnect inside grace keeps the running sequence and room alive", as
     hostDisconnectGraceMs: 100,
   });
   const { host, players, room } = setup(manager, 3);
-  startGame(manager, host, 3);
+  startGame(manager, host);
   for (const player of players) manager.handle(player.conn, { t: "MARK_READY" });
   assert.equal(room.phase, "COUNTDOWN");
 
