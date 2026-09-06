@@ -65,6 +65,7 @@ export type ErrorCode =
   | "RATE_LIMITED"
   | "BAD_REQUEST"
   | "UNAUTHORIZED"
+  | "SERVER_RESTARTING"
   | "INTERNAL";
 
 export interface PublicPlayer {
@@ -214,6 +215,7 @@ export type ServerMessage =
   | { t: "ERROR"; code: ErrorCode; message?: string; rid?: RequestId }
   | { t: "ROOM_CLOSED"; reason?: string }
   | { t: "KICKED" }
+  | { t: "SERVER_RESTARTING"; deadlineMs: number }
   | { t: "PONG"; sampleId?: string; serverMs?: number };
 
 export type AnalyticsEvent =

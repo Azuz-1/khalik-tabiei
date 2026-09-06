@@ -10,15 +10,18 @@
   ],
   "scripts": {
     "install:all": "npm install",
-    "build": "npm run build --workspace client",
+    "build": "npm run build --workspace client && npm run build --workspace server",
     "start": "npm run start --workspace server",
     "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev --workspace server\" \"npm:dev --workspace client\"",
     "test": "npm run test --workspace server",
-    "test:integration": "node server/test/integration.mjs && node server/test/integration-individual.mjs && node server/test/integration-transport.mjs",
+    "test:integration": "node server/test/integration.mjs && node server/test/integration-individual.mjs && node server/test/integration-transport.mjs && node server/test/integration-drain.mjs",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
+  },
+  "overrides": {
+    "qs": "6.16.0"
   },
   "engines": {
     "node": ">=20.19.0"
