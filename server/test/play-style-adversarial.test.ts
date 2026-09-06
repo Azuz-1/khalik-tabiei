@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { BASE_CHALLENGES } from "../../shared/constants.js";
 import { HostAudioEventController } from "../../client/src/audio/hostAudioEvents.js";
 import * as engine from "../src/game/engine.js";
 import { RoomManager } from "../src/game/roomManager.js";
@@ -32,11 +33,9 @@ function addPlayer(room: RoomState, index: number): InternalPlayer {
   return player;
 }
 
-function directRoom(count = 3, rounds = 3): RoomState {
+function directRoom(count = 3): RoomState {
   const room = createRoomState("ADV01", "host", 1_000);
   for (let index = 1; index <= count; index += 1) addPlayer(room, index);
-  room.totalRounds = rounds;
-  room.playStyle = "INDIVIDUAL";
   return room;
 }
 
@@ -50,7 +49,7 @@ function toVoting(room: RoomState): void {
   engine.startVoting(room, "host", deps);
 }
 
-function catchCurrentRound(room: RoomState): void {
+function catchCurrentStint(room: RoomState): void {
   toVoting(room);
   const round = room.round!;
   const impostor = round.impostorUid;
@@ -87,9 +86,7 @@ async function setupManager(count = 3) {
   const room = manager.roomForTests(host.code)!;
   manager.handle(host.conn, {
     t: "SET_SETTINGS",
-    totalRounds: 3,
     selectedModes: ["HANDS", "POINT", "NUMBER"],
-    playStyle: "INDIVIDUAL",
   });
   manager.handle(host.conn, { t: "START_GAME" });
   return { manager, host, players, room };
@@ -111,28 +108,31 @@ async function managerToVoting(
   assert.equal(room.phase, "VOTING");
 }
 
-test("five consecutive INDIVIDUAL games survive rematch without stale score state", () => {
-  const room = directRoom(3, 3);
+test("five consecutive competitive games survive rematch without stale score state", () => {
+  const room = directRoom(3);
 
   for (let game = 1; game <= 5; game += 1) {
     engine.startGame(room, "host", deps);
     assert.equal(room.currentRound, 1);
     assert.equal(room.playStyle, "INDIVIDUAL");
+    assert.equal(room.completedChallenges, 0);
     assert.equal(room.pendingRoundScores.size, 0);
+    assert.equal(room.correctVoteStreakStart.size, 0);
     assert.ok([...room.players.values()].every((player) => player.score === 0));
 
-    for (let round = 1; round <= 3; round += 1) {
-      assert.equal(room.currentRound, round);
-      catchCurrentRound(room);
+    for (let challenge = 1; challenge <= BASE_CHALLENGES; challenge += 1) {
+      catchCurrentStint(room);
       const resultView = buildView(room, "host", "http://game/join/ADV01");
       assert.equal(resultView.scoreboard?.length, 3);
       assert.equal(
         resultView.scoreboard?.reduce((sum, row) => sum + (row.roundDelta ?? 0), 0),
-        2,
-        "each caught three-player round awards exactly two normal-vote points",
+        4,
+        "a Challenge-1 catch with three players awards +2 to each of the two correct normals",
       );
       assert.equal(JSON.stringify(resultView).includes("pendingRoundScores"), false);
+      assert.equal(JSON.stringify(resultView).includes("correctVoteStreakStart"), false);
       engine.nextRound(room, "host", deps);
+      if (challenge < BASE_CHALLENGES) assert.equal(room.phase, "QUESTION");
     }
 
     assert.equal(room.phase, "GAME_OVER");
@@ -140,14 +140,16 @@ test("five consecutive INDIVIDUAL games survive rematch without stale score stat
     assert.equal(final.scoreboard?.length, 3);
     assert.equal(
       final.scoreboard?.reduce((sum, row) => sum + row.score, 0),
-      6,
-      "weighted selection may repeat an impostor, but exactly-once score totals stay invariant",
+      BASE_CHALLENGES * 4,
+      "role repeats may move points between players, but total awarded points remain invariant",
     );
 
     engine.rematch(room, "host", deps);
     assert.equal(room.phase, "LOBBY");
     assert.equal(room.playStyle, "INDIVIDUAL");
+    assert.equal(room.completedChallenges, 0);
     assert.equal(room.pendingRoundScores.size, 0);
+    assert.equal(room.correctVoteStreakStart.size, 0);
     assert.equal(room.round, null);
     assert.ok([...room.players.values()].every((player) => player.score === 0));
     assert.equal(buildView(room, "host", "http://game/join/ADV01").scoreboard, undefined);
@@ -160,7 +162,7 @@ test("transport reconnect after a committed correct vote preserves one ballot an
 
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  const voter = normals[0];
+  const voter = normals[0]!;
 
   manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
   assert.equal(room.round!.votes.get(voter.uid), impostor.uid);
@@ -174,13 +176,13 @@ test("transport reconnect after a committed correct vote preserves one ballot an
   assert.equal(votingView.room.phase, "VOTING");
   assert.equal(votingView.myVoteSubmitted, true, "reconnect restores submitted-vote state");
 
-  manager.handle(normals[1].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0].uid });
+  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.groupFound, true);
-  assert.equal(room.players.get(voter.uid)?.score, 1, "reconnect cannot duplicate the +1");
-  assert.equal(room.players.get(normals[1].uid)?.score, 1);
+  assert.equal(room.players.get(voter.uid)?.score, 2, "reconnect cannot duplicate the Challenge-1 +2 award");
+  assert.equal(room.players.get(normals[1]!.uid)?.score, 2);
   assert.equal(room.players.get(impostor.uid)?.score, 0);
   manager.dispose();
 });
@@ -191,20 +193,20 @@ test("two live tabs for one player cannot submit two votes or double-score", asy
 
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  const voter = normals[0];
+  const voter = normals[0]!;
   const secondTab = authenticatedConnection(manager, voter.uid);
 
   manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(secondTab.conn, { t: "SUBMIT_VOTE", targetUid: normals[1].uid });
+  manager.handle(secondTab.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
   assert.equal(lastMessage(secondTab.socket, "ERROR")?.code, "VOTE_ALREADY_SUBMITTED");
   assert.equal(room.round!.votes.get(voter.uid), impostor.uid, "first committed ballot wins");
 
-  manager.handle(normals[1].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1].uid });
+  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
   assert.equal(room.phase, "RESULT");
-  assert.equal(room.players.get(voter.uid)?.score, 1);
-  assert.equal(room.round!.roundScores.get(voter.uid), 1);
+  assert.equal(room.players.get(voter.uid)?.score, 2);
+  assert.equal(room.round!.roundScores.get(voter.uid), 2);
   manager.dispose();
 });
 
@@ -214,9 +216,9 @@ test("Host reconnect on a completed scored RESULT preserves the exact scoreboard
 
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  manager.handle(normals[0].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[1].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0].uid });
+  manager.handle(normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
   assert.equal(room.phase, "RESULT");
 
   const before = lastMessage(host.socket, "STATE")!.view;
@@ -238,27 +240,33 @@ test("Host reconnect on a completed scored RESULT preserves the exact scoreboard
     scoresBefore,
   );
   assert.equal(room.pendingRoundScores.size, 0);
+  assert.equal(room.correctVoteStreakStart.size, 0);
   manager.dispose();
 });
 
-test("impostor leaving after hidden Challenge points aborts to a clean Lobby", async () => {
+test("impostor leaving after hidden Challenge state aborts to a clean Lobby", async () => {
   const { manager, host, players, room } = await setupManager(4);
   await managerToVoting(manager, host, players, room);
 
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
 
-  // Two correct guesses are below the four-player majority of three, so the
-  // points become hidden pending state and the same impostor should continue.
-  manager.handle(normals[0].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[1].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[2].conn, { t: "SUBMIT_VOTE", targetUid: normals[0].uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1].uid });
+  // Two correct guesses are below the four-player majority of three. Their
+  // streak starts stay secret, while the impostor gets one hidden survival point.
+  manager.handle(normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(normals[2]!.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, false);
-  assert.equal(room.pendingRoundScores.size, 2);
+  assert.equal(room.correctVoteStreakStart.size, 2);
+  assert.equal(room.pendingRoundScores.size, 1);
+  assert.equal(room.pendingRoundScores.get(impostor.uid), 1);
   assert.ok([...room.players.values()].every((player) => player.score === 0));
+  const hiddenWire = JSON.stringify(lastMessage(host.socket, "STATE")!.view);
+  assert.equal(hiddenWire.includes("correctVoteStreakStart"), false);
+  assert.equal(hiddenWire.includes("pendingRoundScores"), false);
 
   manager.handle(host.conn, { t: "NEXT_ROUND" });
   assert.equal(room.phase, "QUESTION");
@@ -271,12 +279,13 @@ test("impostor leaving after hidden Challenge points aborts to a clean Lobby", a
   assert.equal(room.currentRound, 0);
   assert.equal(room.playStyle, "INDIVIDUAL");
   assert.equal(room.pendingRoundScores.size, 0);
+  assert.equal(room.correctVoteStreakStart.size, 0);
   assert.ok([...room.players.values()].every((player) => player.score === 0));
   assert.equal(lastMessage(host.socket, "STATE")!.view.scoreboard, undefined);
   manager.dispose();
 });
 
-test("seat reconnecting after a new Round started stays TV-directed instead of rendering invalid actions", async () => {
+test("seat reconnecting after a new impostor stint started gets an explicit wait screen and no invalid actions", async () => {
   const { manager, host, players, room } = await setupManager(4);
   await managerToVoting(manager, host, players, room);
 
@@ -285,7 +294,7 @@ test("seat reconnecting after a new Round started stays TV-directed instead of r
   for (const normal of normals) {
     manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
   }
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0].uid });
+  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, true);
 
@@ -323,8 +332,8 @@ test("seat reconnecting after a new Round started stays TV-directed instead of r
     "utf8",
   );
   assert.ok(
-    playerSource.includes("if (view.myReady === undefined) return <PlayerWatchScreen />;"),
-    "non-participant QUESTION must stay on the TV-directed screen",
+    playerSource.includes("if (view.myReady === undefined) return <PlayerWaitNext />;"),
+    "non-participant QUESTION should explain that the player waits for the next stint",
   );
   assert.ok(
     playerSource.includes("view.voteTargets === undefined && view.myVoteSubmitted === undefined"),
@@ -333,27 +342,28 @@ test("seat reconnecting after a new Round started stays TV-directed instead of r
   manager.dispose();
 });
 
-test("switching from an INDIVIDUAL game to TEAM after rematch cannot leak old scores", () => {
-  const room = directRoom(3, 1);
+test("legacy TEAM selection after rematch cannot revive TEAM scoring semantics or leak old scores", () => {
+  const room = directRoom(3);
   engine.startGame(room, "host", deps);
-  catchCurrentRound(room);
+  room.targetChallenges = 1;
+  catchCurrentStint(room);
   assert.ok(buildView(room, "host", "http://game/join/ADV01").scoreboard);
   engine.nextRound(room, "host", deps);
   assert.equal(room.phase, "GAME_OVER");
 
   engine.rematch(room, "host", deps);
   engine.setSettings(room, "host", { playStyle: "TEAM" }, deps);
+  assert.equal(room.playStyle, "TEAM", "legacy protocol value may exist in Lobby");
   engine.startGame(room, "host", deps);
-  catchCurrentRound(room);
 
-  assert.equal(room.playStyle, "TEAM");
+  assert.equal(room.playStyle, "INDIVIDUAL", "starting the product always restores the one competitive ruleset");
   assert.ok([...room.players.values()].every((player) => player.score === 0));
   assert.equal(room.pendingRoundScores.size, 0);
-  assert.equal(room.round!.roundScores.size, 0);
+  assert.equal(room.correctVoteStreakStart.size, 0);
   assert.equal(buildView(room, "host", "http://game/join/ADV01").scoreboard, undefined);
 });
 
-test("INDIVIDUAL score rerenders and Host reconnect into RESULT do not replay result audio", () => {
+test("competitive score rerenders and Host reconnect into RESULT do not replay result audio", () => {
   const controller = new HostAudioEventController();
   const voting = {
     roomCode: "ADV01",
