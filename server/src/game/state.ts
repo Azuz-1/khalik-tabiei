@@ -25,6 +25,18 @@ export interface InternalPlayer {
   isHost: boolean;
 }
 
+export interface SealedParticipant {
+  uid: string;
+  name: string;
+}
+
+export interface PauseState {
+  reason: "HOST_DISCONNECTED";
+  originalPhase: GamePhase;
+  remainingMs?: number;
+  generation: number;
+}
+
 /**
  * Legacy and current rounds still share one state interface because generic
  * room/reconnect helpers consume both shapes. TEXT_PAIR remains legacy-only and
@@ -51,6 +63,14 @@ export interface RoundState {
   answers: Map<string, string>;
 
   votes: Map<string, string>;
+  /**
+   * Once every currently eligible voter has voted, the resolving ballot is
+   * sealed before any membership-dependent work. This lets a Host reconnect
+   * publish exactly the ballot that completed while the Host was offline.
+   */
+  resolutionSealed?: boolean;
+  sealedParticipants?: SealedParticipant[];
+  sealedVotes?: Map<string, string>;
   resultComputed: boolean;
   groupFound?: boolean;
   /** Majority threshold that actually governed this computed result. */
@@ -73,6 +93,10 @@ export interface RoomState {
   code: string;
   hostUid: string;
   hostConnected: boolean;
+  /** Server-provided grace deadline; transport reconnects never extend it via heartbeat. */
+  hostCloseDeadline?: number;
+  /** Publicly projectable pause status without exposing hidden game state. */
+  pause?: PauseState;
   phase: GamePhase;
   createdAt: number;
   updatedAt: number;
@@ -98,6 +122,8 @@ export interface RoomState {
   impostorHistory: string[];
   roundOutcomes: RoundOutcome[];
   phaseEndsAt?: number;
+  /** Invalidates callbacks from an older physical sequence/reset. */
+  timerGeneration: number;
   closed: boolean;
 }
 
@@ -124,6 +150,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     usedPromptIds: new Set(),
     impostorHistory: [],
     roundOutcomes: [],
+    timerGeneration: 0,
     closed: false,
   };
 }

@@ -146,6 +146,11 @@ export interface ClientView {
     minPlayers: number;
     hostUid: string;
     hostConnected: boolean;
+    hostCloseDeadline?: number;
+    hostPause?: {
+      reason: "HOST_DISCONNECTED";
+      originalPhase: GamePhase;
+    };
     playStyle: PlayStyle;
     selectedModes: GameMode[];
     availableModes: GameModeInfo[];
@@ -156,6 +161,8 @@ export interface ClientView {
   };
   players: PublicPlayer[];
   settingsEditable?: boolean;
+  /** Host-only warning shown before NEXT_ROUND would abandon/reset the match. */
+  nextRoundWarning?: string;
   challenge?: {
     mode: GameMode;
     index: number;

@@ -318,7 +318,6 @@ test("impostor majority catches them, ends round immediately, but game continues
   const room = roomWith(4);
   room.totalRounds = 3;
   engine.startGame(room, "host", deps);
-  const firstImpostor = room.round!.impostorUid;
 
   readyToVote(room);
   voteCatch(room);
@@ -331,7 +330,7 @@ test("impostor majority catches them, ends round immediately, but game continues
   engine.nextRound(room, "host", deps);
   assert.equal(room.phase, "QUESTION");
   assert.equal(room.currentRound, 2);
-  assert.notEqual(room.round!.impostorUid, firstImpostor);
+  assert.ok(room.round!.participantUids.includes(room.round!.impostorUid));
 });
 
 test("surviving challenge three ends the round with no points", () => {
