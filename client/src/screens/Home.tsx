@@ -3,6 +3,7 @@ import { unlockAudio } from "../audio/gameAudio.js";
 import { actions, useGame } from "../net/socket.js";
 import { errorText } from "../i18n/errors.js";
 import {
+  BASE_CHALLENGES,
   GAME_MODES,
   NAME_MAX,
   NAME_MIN,
@@ -11,6 +12,7 @@ import {
 } from "../../../shared/constants.js";
 
 type Step = "home" | "code" | "name";
+type InfoTab = "how" | "modes" | "points";
 
 function readDeepLinkCode(): string | null {
   const match = location.pathname.match(/^\/join\/([A-Za-z0-9]+)/);
@@ -40,8 +42,88 @@ function hasVisibleContent(value: string): boolean {
   return value.replace(/\s/gu, "").replace(/\p{Default_Ignorable_Code_Point}/gu, "").length > 0;
 }
 
+function RulesTabs() {
+  const [tab, setTab] = useState<InfoTab>("how");
+  const tabs: Array<{ id: InfoTab; label: string }> = [
+    { id: "how", label: "كيف نلعب؟" },
+    { id: "modes", label: "التحديات" },
+    { id: "points", label: "النقاط" },
+  ];
+
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, current: number) => {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowLeft" ? 1 : -1;
+    const next = (current + direction + tabs.length) % tabs.length;
+    setTab(tabs[next]!.id);
+    document.getElementById(`home-tab-${tabs[next]!.id}`)?.focus();
+  };
+
+  return (
+    <section className="card stack home-rules" aria-labelledby="home-rules-title">
+      <div className="center stack" style={{ gap: 6 }}>
+        <div className="eyebrow">اعرفها بسرعة</div>
+        <h2 className="title" id="home-rules-title">كل اللي تحتاجه قبل تبدأ</h2>
+      </div>
+      <div className="home-tabs" role="tablist" aria-label="شرح اللعبة">
+        {tabs.map((item, index) => (
+          <button
+            key={item.id}
+            id={`home-tab-${item.id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            aria-controls={`home-panel-${item.id}`}
+            tabIndex={tab === item.id ? 0 : -1}
+            className={`home-tab${tab === item.id ? " active" : ""}`}
+            onClick={() => setTab(item.id)}
+            onKeyDown={(event) => onTabKeyDown(event, index)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <div id={`home-panel-${tab}`} role="tabpanel" aria-labelledby={`home-tab-${tab}`} className="home-tab-panel">
+        {tab === "how" ? (
+          <div className="stack" style={{ gap: 10 }}>
+            <p className="subtitle" style={{ margin: 0 }}>١. كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</p>
+            <p className="subtitle" style={{ margin: 0 }}>٢. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
+            <p className="subtitle" style={{ margin: 0 }}>٣. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
+            <p className="subtitle" style={{ margin: 0 }}>٤. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي للتحدّي اللي بعده.</p>
+            <p className="helper" style={{ margin: 0 }}>نلعب {BASE_CHALLENGES} تحديات أساسية، ونكمّل دور آخر متخفي إذا كان باقي له فرص.</p>
+          </div>
+        ) : null}
+
+        {tab === "modes" ? (
+          <div className="stack home-mode-list">
+            {GAME_MODES.map((mode) => (
+              <div className="row home-mode-row" key={mode.id}>
+                <span className="mode-explainer-icon" aria-hidden="true">{mode.icon}</span>
+                <div>
+                  <strong>{mode.fullLabel}</strong>
+                  <p className="helper" style={{ margin: 0 }}>{mode.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {tab === "points" ? (
+          <div className="stack home-points-copy" style={{ gap: 10 }}>
+            <p className="subtitle" style={{ margin: 0 }}><strong>3 لاعبين:</strong> إذا بدأت تصوّت صح من أول فرصة واستمرّيت = +2، ومن الثانية = +1.</p>
+            <p className="subtitle" style={{ margin: 0 }}><strong>4–10 لاعبين:</strong> من أول فرصة = +3، من الثانية = +2، من الثالثة = +1.</p>
+            <p className="subtitle" style={{ margin: 0 }}><strong>المتخفي:</strong> +1 عن كل تحدّي ينجو منه.</p>
+            <p className="helper" style={{ margin: 0 }}>إذا غيّرت تصويتك وصار غلط، تنقطع سلسلتك. النقاط وتوزيع الأصوات ما تظهر إلا بعد نهاية دور المتخفي.</p>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export function Home() {
-  const { error, status } = useGame();
+  const { error, status, pendingActions } = useGame();
   const deepCode = useMemo(readDeepLinkCode, []);
   const [step, setStep] = useState<Step>(deepCode ? "name" : "home");
   const [code, setCode] = useState(deepCode ?? "");
@@ -52,7 +134,9 @@ export function Home() {
     if (error) setLocalErr(errorText(error.code));
   }, [error]);
 
-  const disabled = status !== "online";
+  const offline = status !== "online";
+  const creating = pendingActions.includes("CREATE_ROOM");
+  const joining = pendingActions.includes("JOIN_ROOM");
 
   if (step === "home") {
     return (
@@ -60,54 +144,28 @@ export function Home() {
         <div className="spacer" />
         <div className="center stack home-hero">
           <h1 className="brand">خلك طبيعي</h1>
-          <p className="subtitle">واحد منكم متخفي وما يعرف المطلوب. امسكوه قبل لا يخلّص التحدّيات.</p>
+          <p className="subtitle">واحد منكم متخفي وما يعرف المطلوب. اكتشفه بدري واجمع نقاط أكثر.</p>
+          <span className="pill-note">3–10 لاعبين · شاشة مشتركة وجوال لكل لاعب</span>
         </div>
 
         <div className="stack home-actions">
           <button
             className="btn btn-primary"
-            disabled={disabled}
+            disabled={offline || creating}
             onClick={() => {
               void unlockAudio();
               actions.createRoom();
             }}
           >
-            سوّ غرفة
+            {creating ? "جاري إنشاء الغرفة…" : "سوّ غرفة"}
           </button>
-          <button className="btn btn-ghost" disabled={disabled} onClick={() => { setLocalErr(null); setStep("code"); }}>
+          <button className="btn btn-ghost" disabled={offline} onClick={() => { setLocalErr(null); setStep("code"); }}>
             ادخل غرفة
           </button>
           <p className="helper" style={{ margin: 0 }}>بدون تحميل ولا تسجيل</p>
         </div>
 
-        <section className="stack mode-explainer" aria-labelledby="mode-explainer-title">
-          <div className="center stack" style={{ gap: 6 }}>
-            <div className="eyebrow">طرق اللعب</div>
-            <h2 className="title" id="mode-explainer-title">اعرف طرق اللعب قبل تبدأ</h2>
-          </div>
-          <div className="mode-explainer-grid">
-            {GAME_MODES.map((mode) => (
-              <article className="mode-explainer-card" key={mode.id}>
-                <div className="mode-explainer-icon" aria-hidden="true">{mode.icon}</div>
-                <h3>{mode.fullLabel}</h3>
-                <div className="mode-explainer-copy">
-                  {mode.onboardingInstructions.map((instruction) => <p key={instruction}>{instruction}</p>)}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <div className="card stack home-story">
-          <div className="eyebrow">وش السالفة؟</div>
-          <div className="stack" style={{ gap: 10 }}>
-            <p className="subtitle" style={{ margin: 0 }}>١. المضيف يختار طرق اللعب، وكل تحدّي ياخذ طريقة من اختياراته.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٢. كل اللاعبين يشوفون المطلوب بجوالهم، إلا المتخفي. هو يعرف إنه المتخفي، بس ما يعرف المطلوب.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٣. وقت العد، الكل يطالع الشاشة وينفذ الحركة بنفس اللحظة.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٤. بعدها ينكشف المطلوب، تتناقشون، وتصوّتون.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٥. إذا أكثر من نصف اللاعبين صوّتوا على المتخفي، ينكشف. إذا نجا، يكمل للتحدّي اللي بعده، وإذا انتهت الجولة تبدأ جولة جديدة.</p>
-          </div>
-        </div>
+        <RulesTabs />
         <div className="spacer" />
       </div>
     );
@@ -161,11 +219,11 @@ export function Home() {
         autoFocus
         placeholder="اسمك"
         onChange={(event) => { setName(event.target.value); setLocalErr(null); }}
-        onKeyDown={(event) => { if (event.key === "Enter" && ok) actions.joinRoom(code, cleanedName); }}
+        onKeyDown={(event) => { if (event.key === "Enter" && ok && !joining && !offline) actions.joinRoom(code, cleanedName); }}
       />
       <p className="helper" aria-live="polite">الاسم من {NAME_MIN} إلى {NAME_MAX} محرفًا مرئيًا؛ الإيموجي المركب يُحسب محرفًا واحدًا.</p>
       {localErr ? <p className="helper" role="alert" style={{ color: "var(--bad)" }}>{localErr}</p> : null}
-      <button className="btn btn-primary" disabled={!ok || disabled} onClick={() => actions.joinRoom(code, cleanedName)}>دخول الغرفة</button>
+      <button className="btn btn-primary" disabled={!ok || offline || joining} onClick={() => actions.joinRoom(code, cleanedName)}>{joining ? "جاري الدخول…" : "دخول الغرفة"}</button>
       <div className="spacer" />
     </div>
   );
