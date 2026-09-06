@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { ClientView, GameMode, GameModeInfo, ScoreEntry } from "../../../shared/types.js";
-import { MIN_PLAYERS, ROUND_OPTIONS } from "../../../shared/constants.js";
+import { MIN_PLAYERS } from "../../../shared/constants.js";
 import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
 import { Qr } from "../components/Qr.js";
 import { Players, Progress } from "../components/Players.js";
-import { ResultBody, VoteBoard, roundLabel } from "../components/Bits.js";
+import { ResultBody, roundLabel } from "../components/Bits.js";
 
 export interface ConfirmActionRequest {
   title: string;
@@ -80,7 +80,6 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
   const [copied, setCopied] = useState(false);
   const active = view.players.filter((player) => player.connected).length;
   const modes = new Set(view.room.selectedModes);
-  const totalRounds = view.room.totalRounds || 5;
   const canStart = active >= MIN_PLAYERS && modes.size > 0;
   const missingPlayers = Math.max(0, MIN_PLAYERS - active);
 
@@ -143,20 +142,12 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
           </div>
 
           <div className="card stack">
-            <span className="code-label">طريقة احتساب الفوز</span>
-            <div className="mode-select-grid">
-              <button className={`mode-select-card${view.room.playStyle === "TEAM" ? " selected" : ""}`} aria-pressed={view.room.playStyle === "TEAM"} onClick={() => actions.setSettings({ playStyle: "TEAM" })}>
-                <span className="mode-select-icon" aria-hidden="true">🤝</span>
-                <strong>جماعي</strong>
-                <span className="mode-select-description">مثل اللعب الحالي: لازم أكثر من نصف المجموعة تصوّت على المتخفي عشان ينكشف. بدون نقاط فردية.</span>
-                <span className="mode-select-state">{view.room.playStyle === "TEAM" ? "مختار ✓" : "اضغط للاختيار"}</span>
-              </button>
-              <button className={`mode-select-card${view.room.playStyle === "INDIVIDUAL" ? " selected" : ""}`} aria-pressed={view.room.playStyle === "INDIVIDUAL"} onClick={() => actions.setSettings({ playStyle: "INDIVIDUAL" })}>
-                <span className="mode-select-icon" aria-hidden="true">🏅</span>
-                <strong>فردي بالنقاط</strong>
-                <span className="mode-select-description">كل واحد يحسب اختياره لنفسه: التصويت الصحيح +1، والمتخفي إذا نجا من الجولة +2. الأغلبية تظل تحدد نهاية الجولة.</span>
-                <span className="mode-select-state">{view.room.playStyle === "INDIVIDUAL" ? "مختار ✓" : "اضغط للاختيار"}</span>
-              </button>
+            <span className="code-label">المباراة</span>
+            <div className="manager-subcard card stack" style={{ gap: 8 }}>
+              <strong>🏅 {view.room.targetChallenges} تحديات أساسية</strong>
+              <span className="helper">نكمّل دور آخر متخفي حتى ينمسك أو يخلص فرصه.</span>
+              <span className="helper">3 لاعبين: حدّه تحدّيين · 4–10 لاعبين: حدّه 3 تحديات.</span>
+              <span className="helper">كل لاعب يجمع نقاطه، والأغلبية هي اللي تمسك المتخفي.</span>
             </div>
 
             <span className="code-label" style={{ marginTop: 8 }}>اختر طرق اللعب</span>
@@ -174,15 +165,6 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
               })}
             </div>
             <p className="helper center mode-summary">{modeSummary}</p>
-
-            <span className="code-label" style={{ marginTop: 8 }}>عدد الجولات</span>
-            <div className="rounds">
-              {ROUND_OPTIONS.map((rounds) => (
-                <button key={rounds} className={`round-opt${totalRounds === rounds ? " on" : ""}`} aria-pressed={totalRounds === rounds} onClick={() => actions.setSettings({ totalRounds: rounds })}>
-                  {rounds}
-                </button>
-              ))}
-            </div>
           </div>
 
           <button className="btn btn-primary" disabled={!canStart} onClick={() => actions.startGame()}>{startLabel}</button>
@@ -254,7 +236,6 @@ function HostDiscussion({ view, confirmAction }: { view: ClientView; confirmActi
 
 function HostVoting({ view }: { view: ClientView }) {
   const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
-  const liveRows = view.liveVoteTally ?? view.players.map((player) => ({ uid: player.uid, name: player.name, votes: 0 }));
   const percent = progress.total ? (progress.submitted / progress.total) * 100 : 0;
   return (
     <HostStage className="host-voting-stage">
@@ -266,10 +247,11 @@ function HostVoting({ view }: { view: ClientView }) {
           <i style={{ width: `${percent}%` }} />
         </div>
       </div>
-      <VoteBoard rows={liveRows} live />
-      {progress.requiredVotes > 0 ? (
-        <p className="vote-majority-note">{view.room.playStyle === "INDIVIDUAL" ? `كل تصويت صحيح ينحسب لصاحبه، و${progress.requiredVotes} أصوات تكشف المتخفي جماعيًا` : `يحتاج المتخفي ${progress.requiredVotes} أصوات عشان ينكشف`}</p>
-      ) : null}
+      <div className="card center stack" style={{ width: "min(100%, 680px)" }}>
+        <strong>الأصوات مخفية للحين</strong>
+        <p className="subtitle" style={{ margin: 0 }}>ما يظهر اتجاه التصويت إلا بعد نهاية دور المتخفي.</p>
+      </div>
+      {progress.requiredVotes > 0 ? <p className="vote-majority-note">يحتاج {progress.requiredVotes} أصوات عشان ينمسك</p> : null}
     </HostStage>
   );
 }
@@ -277,7 +259,7 @@ function HostVoting({ view }: { view: ClientView }) {
 function Scoreboard({ rows, round }: { rows: ScoreEntry[]; round?: boolean }) {
   return (
     <div className="card stack" style={{ width: "min(100%, 680px)" }}>
-      <div className="code-label">{round ? "النقاط بعد الجولة" : "الترتيب النهائي"}</div>
+      <div className="code-label">{round ? "النقاط بعد دور المتخفي" : "الترتيب النهائي"}</div>
       {rows.map((row) => <div key={row.uid} className="row between host-summary-row"><span>#{row.rank} {row.name}</span><strong>{row.score} نقطة{round && (row.roundDelta ?? 0) > 0 ? ` (+${row.roundDelta})` : ""}</strong></div>)}
     </div>
   );
@@ -285,9 +267,10 @@ function Scoreboard({ rows, round }: { rows: ScoreEntry[]; round?: boolean }) {
 
 function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
   const result = view.result;
+  const targetReached = view.room.completedChallenges >= view.room.targetChallenges;
   const next = result?.roundComplete
-    ? view.room.currentRound >= view.room.totalRounds ? "شوفوا ملخص اللعبة" : "الجولة الجاية"
-    : result ? `التحدّي ${Math.min(result.challengeIndex + 1, result.maxChallenges)}` : "التحدّي الجاي";
+    ? targetReached ? "شوفوا الترتيب النهائي" : "متخفي جديد"
+    : targetReached ? "إكمال دور المتخفي الأخير" : "التحدّي الجاي";
   const advance = () => {
     if (!view.nextRoundWarning) {
       actions.nextRound();
@@ -317,17 +300,17 @@ function HostGameOver({ view, confirmAction }: { view: ClientView; confirmAction
       <h1 className="brand">خلصت اللعبة 🎉</h1>
       {gameOver ? (
         <>
-          <p className="subtitle host-game-over-summary">مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات</p>
+          <p className="subtitle host-game-over-summary">لعبتوا {gameOver.completedChallenges} تحديات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار</p>
           <div className="card stack host-game-over-card">
-            <div className="row between host-summary-row"><span>انكشف</span><span>{gameOver.caughtRounds}</span></div>
-            <div className="row between host-summary-row"><span>نجا</span><span>{gameOver.escapedRounds}</span></div>
+            <div className="row between host-summary-row"><span>انمسك</span><span>{gameOver.caughtRounds}</span></div>
+            <div className="row between host-summary-row"><span>نجا من دوره</span><span>{gameOver.escapedRounds}</span></div>
           </div>
         </>
       ) : null}
       {view.scoreboard ? <Scoreboard rows={view.scoreboard} /> : null}
       <div className="row host-game-over-actions">
         <button className="btn btn-primary" onClick={() => actions.rematch()}>العبوا مرة ثانية</button>
-        <button className="btn btn-ghost" onClick={() => requestClose(confirmAction, "بتقفل الغرفة الحالية وترجع الكل للرئيسية.")}>الرئيسية</button>
+        <button className="btn btn-ghost" onClick={() => requestClose(confirmAction, "بتقفل الغرفة الحالية وترجع الكل للرئيسية.")}>إغلاق الغرفة</button>
       </div>
     </HostStage>
   );
