@@ -5,6 +5,7 @@ import type {
   ClientView,
   ErrorCode,
   GameMode,
+  PlayStyle,
   ServerMessage,
 } from "../../../shared/types.js";
 
@@ -168,6 +169,7 @@ export const actions = {
     totalRounds?: number;
     categories?: CategoryId[];
     selectedModes?: GameMode[];
+    playStyle?: PlayStyle;
   }) => send({ t: "SET_SETTINGS", ...patch }),
   startGame: () => send({ t: "START_GAME" }),
   markReady: () => send({ t: "MARK_READY" }),
