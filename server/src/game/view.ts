@@ -1,5 +1,5 @@
 import type { ClientView, PublicPlayer, RevealedAnswer, Role } from "../../../shared/types.js";
-import { CATEGORIES, GAME_MODES } from "../../../shared/constants.js";
+import { CATEGORIES, GAME_MODES, MAX_CHALLENGES_PER_ROUND } from "../../../shared/constants.js";
 import { activePlayers, roundParticipants, type RoomState } from "./state.js";
 import { questionFor, ranking, requiredVotesFor } from "./engine.js";
 
@@ -47,6 +47,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   const role = roleFor(room, uid);
   const self = room.players.get(uid);
   const round = room.round;
+  const roundMaxChallenges = round?.maxChallenges ?? MAX_CHALLENGES_PER_ROUND;
   const view: ClientView = {
     self: { uid, role, name: self?.name, connected: self?.connected ?? true },
     room: {
@@ -80,7 +81,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   }
 
   if (round?.kind === "IMITATION" && room.phase !== "GAME_OVER") {
-    view.challenge = { mode: round.mode, index: round.challengeIndex, max: round.maxChallenges };
+    view.challenge = { mode: round.mode, index: round.challengeIndex, max: roundMaxChallenges };
   }
 
   if (round?.kind === "TEXT_PAIR" && (room.phase === "QUESTION" || room.phase === "ANSWERING")) {
@@ -135,7 +136,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       groupFound: round.groupFound ?? false,
       roundComplete: round.roundComplete,
       challengeIndex: round.challengeIndex,
-      maxChallenges: round.maxChallenges,
+      maxChallenges: roundMaxChallenges,
       mode: round.mode,
       requiredVotes: round.resultRequiredVotes ?? 0,
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
