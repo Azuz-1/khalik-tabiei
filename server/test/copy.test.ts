@@ -59,19 +59,19 @@ test("current player-facing copy excludes retired or unclear wording", () => {
     "يشوف سره",
     "يشوف دوره",
     "لقّطوه",
-    "مب",
     "ورّونا",
     "طلّع أصابعك",
     "طلّعوا أصابعكم",
   ]) {
     assert.equal(combined.includes(retired), false, `retired copy returned: ${retired}`);
   }
+  assert.equal(/(^|[\s،.!؟])مب(?=$|[\s،.!؟])/m.test(combined), false, "retired standalone «مب» returned");
 
   assert.ok(combined.includes("سوّ غرفة"));
   assert.ok(combined.includes("مين تصرفه مو طبيعي؟"));
 });
 
-test("TV countdown keeps a mode action instruction while phone keeps countdown off-screen", () => {
+test("TV and player phone both carry synchronized countdown/action cues", () => {
   const host = source("client/src/screens/Host.tsx");
   const player = source("client/src/screens/Player.tsx");
 
@@ -80,11 +80,12 @@ test("TV countdown keeps a mode action instruction while phone keeps countdown o
   assert.ok(host.includes("عند «أشروا!»، أشر على شخص واحد."));
   assert.ok(host.includes("عند «ارفعوا أصابعكم!»، ارفع أصابعك بالعدد اللي اخترته."));
 
-  assert.match(
-    player,
-    /case "COUNTDOWN":\s*case "ACTION":\s*case "HOLD":\s*return <PlayerWatchScreen \/>;/,
-  );
-  assert.ok(player.includes("طالع الشاشة"));
+  assert.ok(player.includes('case "COUNTDOWN": return <PlayerCountdown view={view} />;'));
+  assert.ok(player.includes('case "ACTION": return <PlayerAction view={view} />;'));
+  assert.ok(player.includes('case "HOLD": return <PlayerHold />;'));
+  assert.ok(player.includes("visibleCountdownSecond"));
+  assert.ok(player.includes("player-countdown-number"));
+  assert.ok(player.includes("modeInfo(view)?.actionLabel"));
 });
 
 test("copy pass leaves physical phase timings unchanged", () => {
