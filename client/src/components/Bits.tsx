@@ -1,28 +1,13 @@
-import type {
-  ClientView,
-  RoundResult,
-  VoteTallyEntry,
-} from "../../../shared/types.js";
+import type { ClientView, RoundResult, VoteTallyEntry } from "../../../shared/types.js";
 
-export function VoteBoard({
-  rows,
-  live = false,
-}: {
-  rows: VoteTallyEntry[];
-  live?: boolean;
-}) {
+export function VoteBoard({ rows, live = false }: { rows: VoteTallyEntry[]; live?: boolean }) {
   return (
-    <div className="vote-board" data-count={rows.length}>
+    <div className="vote-board" data-count={rows.length} aria-live={live ? "polite" : undefined}>
       {rows.map((row) => (
-        <div className="vote-card" key={row.uid}>
+        <div className="vote-card" key={row.uid} data-player-uid={row.uid}>
           <div className="vote-card-name">{row.name}</div>
           <div className="vote-card-count">
-            <span
-              className={`vote-count-value${live ? " live" : ""}`}
-              key={live ? `${row.uid}:${row.votes}` : row.uid}
-            >
-              {row.votes}
-            </span>
+            <span className={`vote-count-value${live ? " live" : ""}`}>{row.votes}</span>
             <span className="vote-count-label">{row.votes === 1 ? "صوت" : "أصوات"}</span>
           </div>
         </div>
@@ -65,8 +50,6 @@ export function ResultBody({ result }: { result: RoundResult }) {
 }
 
 export function roundLabel(view: ClientView): string {
-  const challenge = view.challenge
-    ? ` · تحدّي ${view.challenge.index}/${view.challenge.max}`
-    : "";
+  const challenge = view.challenge ? ` · تحدّي ${view.challenge.index}/${view.challenge.max}` : "";
   return `جولة ${view.room.currentRound} من ${view.room.totalRounds}${challenge}`;
 }

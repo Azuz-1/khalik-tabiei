@@ -50,3 +50,32 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
         env:
           NODE_ENV: development
+
+  browser:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install pinned Playwright test runner
+        run: npm install --no-save --ignore-scripts @playwright/test@1.62.1
+      - name: Install pinned Chromium runtime
+        run: npx playwright@1.62.1 install --with-deps chromium
+      - name: Run real browser Host and Player flows
+        run: npx playwright@1.62.1 test --config=playwright.config.mjs
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage-c-browser-failure
+          path: |
+            playwright-report
+            test-results/browser
+          if-no-files-found: ignore
+          retention-days: 7

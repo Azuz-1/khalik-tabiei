@@ -399,6 +399,21 @@ if (typeof window !== "undefined") {
     }
   });
   window.addEventListener("online", connect);
+
+  window.addEventListener("offline", () => {
+    // Losing connectivity does not close an idle WebSocket: nothing is flowing,
+    // so the socket can sit in OPEN long after the phone left the network. The
+    // UI would keep offering actions that silently go nowhere. Treat the
+    // browser's own offline signal as authoritative, drop the socket, and let
+    // the normal reconnect path own recovery so pending requests fail visibly.
+    const socket = ws;
+    if (!socket) {
+      set({ status: "offline" });
+      scheduleReconnect();
+      return;
+    }
+    try { socket.close(4003, "device offline"); } catch { /* close race */ }
+  });
 }
 
 export function useGame(): GameState {

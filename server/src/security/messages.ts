@@ -3,8 +3,6 @@ import {
   ANSWER_MAX,
   CATEGORY_IDS,
   GAME_MODE_IDS,
-  NAME_MAX,
-  NAME_MIN,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
   ROUND_OPTIONS,
@@ -14,6 +12,7 @@ import {
 type JsonObject = Record<string, unknown>;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SAMPLE_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+const RAW_NAME_MAX_CODE_POINTS = 128;
 
 function isObject(value: unknown): value is JsonObject {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -73,7 +72,9 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
       if (!exactKeys(value, ["t", "code", "name"], ["rid"]) || !validRid(value)) return null;
       const codeRe = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
       if (typeof value.code !== "string" || !codeRe.test(value.code.toUpperCase())) return null;
-      if (!boundedString(value.name, NAME_MIN, NAME_MAX)) return null;
+      // This is only a cheap abuse bound. cleanName() performs NFC cleaning,
+      // visible-content validation and grapheme-cluster length checks server-side.
+      if (!boundedString(value.name, 1, RAW_NAME_MAX_CODE_POINTS)) return null;
       return value as ClientMessage;
     }
 
