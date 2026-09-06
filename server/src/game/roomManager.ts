@@ -686,7 +686,7 @@ export class RoomManager {
 
   private requestContext(uid: string, message: ClientMessage): string {
     const room = this.roomOf(uid);
-    if (room) return `${room.code}:g${room.matchGeneration}:r${room.currentRound}:${room.phase}`;
+    if (room) return `${room.code}:g${room.matchGeneration}:r${room.currentRound}:c${room.round?.challengeIndex ?? 0}:${room.phase}`;
     return message.t === "JOIN_ROOM" ? `join:${normalizeCode(message.code)}` : "outside-room";
   }
 
