@@ -42,12 +42,12 @@ function addPlayer(room: RoomState, uid: string, name: string): void {
   room.players.set(uid, player);
 }
 
-function roomWithThreePlayers(): RoomState {
+function roomWithFourPlayers(): RoomState {
   const room = createRoomState("ABCDE", "host", NOW());
   addPlayer(room, "p1", "لاعب1");
   addPlayer(room, "p2", "لاعب2");
   addPlayer(room, "p3", "لاعب3");
-  room.totalRounds = 3;
+  addPlayer(room, "p4", "لاعب4");
   return room;
 }
 
@@ -163,7 +163,7 @@ test("new prompt copy excludes retired Saudi wording", () => {
 });
 
 test("prompt picker uses the combined bank and resets only after full mode exhaustion", () => {
-  const room = roomWithThreePlayers();
+  const room = roomWithFourPlayers();
   engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
   engine.startGame(room, "host", deps);
 
