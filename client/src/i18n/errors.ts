@@ -5,6 +5,7 @@ export const ERROR_AR: Record<ErrorCode, string> = {
   ROOM_FULL: "الغرفة ممتلئة الحين",
   ROOM_CLOSED: "الغرفة مقفلة",
   ROOM_NOT_IN_LOBBY: "اللعبة بدأت، ما تقدر تدخل الحين",
+  ROOM_LOCKED: "المضيف موقف دخول لاعبين جدد الحين",
   DUPLICATE_NAME: "فيه لاعب بنفس الاسم، غيّره شوي",
   INVALID_NAME: "اسمك لازم يكون من حرفين إلى ١٦ حرف",
   NOT_HOST: "هذي الخطوة للمضيف بس",

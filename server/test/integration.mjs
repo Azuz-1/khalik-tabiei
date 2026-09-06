@@ -479,7 +479,7 @@ async function main() {
   const roundTwoImpostorUid = impostor.uid;
   const roundTwoMode = host.view.challenge?.mode;
   const roundTwoPrompt = currentPrompt(normals, roundTwoMode);
-  ok(roundTwoImpostorUid !== roundOneImpostorUid, "round 2 gets a new fair impostor");
+  ok(players.some((player) => player.uid === roundTwoImpostorUid), "round 2 weighted selection chooses an active player");
   ok(
     roundTwoMode !== roundOneModes.at(-1),
     "refilled Challenge mode bag avoids an immediate repeat across the bag boundary",
@@ -504,7 +504,7 @@ async function main() {
   const roundThreeImpostorUid = impostor.uid;
   const roundThreeMode = host.view.challenge?.mode;
   const roundThreePrompt = currentPrompt(normals, roundThreeMode);
-  ok(roundThreeImpostorUid !== roundTwoImpostorUid, "round 3 advances fairness to another impostor");
+  ok(players.some((player) => player.uid === roundThreeImpostorUid), "round 3 weighted selection chooses an active player; repeats remain allowed");
   ok(roundThreeMode !== roundTwoMode, "Challenge-level bag does not repeat round 2 mode immediately");
 
   await runPhysicalSequence(host, players, 1, roundThreePrompt);

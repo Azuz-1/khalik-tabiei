@@ -1,19 +1,6 @@
-import type {
-  ClientView,
-  PublicPlayer,
-  RevealedAnswer,
-  Role,
-} from "../../../shared/types.js";
-import {
-  CATEGORIES,
-  GAME_MODES,
-  MAX_CHALLENGES_PER_ROUND,
-} from "../../../shared/constants.js";
-import {
-  activePlayers,
-  roundParticipants,
-  type RoomState,
-} from "./state.js";
+import type { ClientView, PublicPlayer, RevealedAnswer, Role } from "../../../shared/types.js";
+import { CATEGORIES, GAME_MODES, MAX_CHALLENGES_PER_ROUND } from "../../../shared/constants.js";
+import { activePlayers, roundParticipants, type RoomState } from "./state.js";
 import { questionFor, ranking, requiredVotesFor } from "./engine.js";
 import { aggregateVoteTally } from "./votes.js";
 
@@ -27,24 +14,16 @@ function roleFor(room: RoomState, uid: string): Role {
 }
 
 function publicPlayers(room: RoomState): PublicPlayer[] {
-  return [...room.players.values()].map((player) => ({
-    uid: player.uid,
-    name: player.name,
-    connected: player.connected,
-    isHost: false,
-  }));
+  return [...room.players.values()].map((player) => ({ uid: player.uid, name: player.name, connected: player.connected, isHost: false }));
 }
 
 function revealAnswers(room: RoomState): RevealedAnswer[] {
   const round = room.round;
   if (!round) return [];
-
   const answers: RevealedAnswer[] = [];
   for (const player of room.players.values()) {
     const answer = round.answers.get(player.uid);
-    if (answer !== undefined) {
-      answers.push({ uid: player.uid, name: player.name, answer });
-    }
+    if (answer !== undefined) answers.push({ uid: player.uid, name: player.name, answer });
   }
   return answers;
 }
@@ -53,14 +32,8 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   const role = roleFor(room, uid);
   const self = room.players.get(uid);
   const round = room.round;
-
   const view: ClientView = {
-    self: {
-      uid,
-      role,
-      name: self?.name,
-      connected: self?.connected ?? true,
-    },
+    self: { uid, role, name: self?.name, connected: self?.connected ?? true },
     room: {
       code: room.code,
       phase: room.phase,
@@ -70,6 +43,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       minPlayers: room.minPlayers,
       hostUid: room.hostUid,
       hostConnected: room.hostConnected,
+      admissionLocked: room.admissionLocked,
       playStyle: room.playStyle,
       selectedModes: room.selectedModes,
       availableModes: GAME_MODES,
@@ -78,70 +52,40 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       joinUrl,
       ...(room.phaseEndsAt ? { phaseEndsAt: room.phaseEndsAt } : {}),
       ...(room.hostCloseDeadline ? { hostCloseDeadline: room.hostCloseDeadline } : {}),
-      ...(room.pause
-        ? {
-            hostPause: {
-              reason: room.pause.reason,
-              originalPhase: room.pause.originalPhase,
-            },
-          }
-        : {}),
+      ...(room.pause ? { hostPause: { reason: room.pause.reason, originalPhase: room.pause.originalPhase } } : {}),
     },
     players: publicPlayers(room),
   };
 
-  if (role === "host" && room.phase === "LOBBY") {
-    view.settingsEditable = true;
+  if (role === "host") {
+    view.blockedPlayers = [...room.kickedIdentities].map(([blockedUid, name]) => ({ uid: blockedUid, name }));
+    if (room.phase === "LOBBY") view.settingsEditable = true;
   }
 
   if (round?.kind === "IMITATION" && room.phase !== "GAME_OVER") {
-    view.challenge = {
-      mode: round.mode,
-      index: round.challengeIndex,
-      max: MAX_CHALLENGES_PER_ROUND,
-    };
+    view.challenge = { mode: round.mode, index: round.challengeIndex, max: MAX_CHALLENGES_PER_ROUND };
   }
 
-  if (
-    round?.kind === "TEXT_PAIR" &&
-    (room.phase === "QUESTION" || room.phase === "ANSWERING")
-  ) {
+  if (round?.kind === "TEXT_PAIR" && (room.phase === "QUESTION" || room.phase === "ANSWERING")) {
     const participants = roundParticipants(room);
-    view.answersProgress = {
-      submitted: round.answers.size,
-      total: participants.length,
-    };
-
+    view.answersProgress = { submitted: round.answers.size, total: participants.length };
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
       view.myQuestion = questionFor(round, uid);
       view.myAnswerSubmitted = round.answers.has(uid);
     }
   }
 
-  if (
-    round?.kind === "TEXT_PAIR" &&
-    ["REVEAL", "DISCUSSION", "VOTING", "RESULT"].includes(room.phase)
-  ) {
+  if (round?.kind === "TEXT_PAIR" && ["REVEAL", "DISCUSSION", "VOTING", "RESULT"].includes(room.phase)) {
     view.reveal = revealAnswers(room);
   }
 
   if (round?.kind === "IMITATION" && SECRET_IMITATION_PHASES.has(room.phase)) {
     const participants = roundParticipants(room);
-
-    if (room.phase === "QUESTION") {
-      view.readyProgress = {
-        submitted: round.readyUids.size,
-        total: participants.length,
-      };
-    }
-
+    if (room.phase === "QUESTION") view.readyProgress = { submitted: round.readyUids.size, total: participants.length };
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
       view.myReady = round.readyUids.has(uid);
-      if (uid === round.impostorUid) {
-        // The impostor knows their role and mode, but the server intentionally
-        // omits prompt text, promptId, and prompt-derived metadata pre-reveal.
-        view.isImpostor = true;
-      } else {
+      if (uid === round.impostorUid) view.isImpostor = true;
+      else {
         view.isImpostor = false;
         view.myPrompt = { mode: round.mode, text: round.prompt };
       }
@@ -159,79 +103,43 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       total: participants.length,
       requiredVotes: requiredVotesFor(participants.length),
     };
-
     if (role === "host") {
-      // Deliberately live for the shared TV. This is aggregate-only: the
-      // voter->target Map stays server-internal and is never projected. A live
-      // aggregate can reveal timing correlation and is intentionally not
-      // described as fully anonymous.
+      // Aggregate-only but intentionally live on the shared TV. Timing correlation
+      // is therefore possible; voter->target mappings never cross buildView.
       view.liveVoteTally = aggregateVoteTally(participants, round.votes);
     }
-
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
-      view.voteTargets = participants
-        .filter((player) => player.uid !== uid)
-        .map((player) => ({ uid: player.uid, name: player.name }));
+      view.voteTargets = participants.filter((player) => player.uid !== uid).map((player) => ({ uid: player.uid, name: player.name }));
       view.myVoteSubmitted = round.votes.has(uid) || Boolean(round.resolutionSealed);
     }
   }
 
   if (room.phase === "RESULT" && round && round.resultComputed) {
     const revealIdentity = round.roundComplete;
-
     view.result = {
-      ...(revealIdentity
-        ? {
-            impostorUid: round.impostorUid,
-            impostorName: round.resultImpostorName ?? "—",
-          }
-        : {}),
+      ...(revealIdentity ? { impostorUid: round.impostorUid, impostorName: round.resultImpostorName ?? "—" } : {}),
       groupFound: round.groupFound ?? false,
       roundComplete: round.roundComplete,
       challengeIndex: round.challengeIndex,
       maxChallenges: round.kind === "IMITATION" ? MAX_CHALLENGES_PER_ROUND : 1,
       mode: round.mode,
       requiredVotes: round.resultRequiredVotes ?? 0,
-      ...(round.kind === "TEXT_PAIR"
-        ? {
-            normalQuestion: round.normalQuestion,
-            impostorQuestion: round.impostorQuestion,
-            category: round.category,
-          }
-        : {}),
+      ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
       voteTally: revealIdentity ? round.resultVoteTally ?? [] : [],
     };
-
     if (room.playStyle === "INDIVIDUAL" && revealIdentity) {
-      view.scoreboard = ranking(room).map((row) => ({
-        ...row,
-        roundDelta: round.roundScores.get(row.uid) ?? 0,
-      }));
+      view.scoreboard = ranking(room).map((row) => ({ ...row, roundDelta: round.roundScores.get(row.uid) ?? 0 }));
     }
-
-    if (
-      role === "host" &&
-      round.roundComplete &&
-      room.currentRound < room.totalRounds &&
-      activePlayers(room).length < room.minPlayers
-    ) {
-      view.nextRoundWarning =
-        "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية وتنمسح نقاطها.";
+    if (role === "host" && round.roundComplete && room.currentRound < room.totalRounds && activePlayers(room).length < room.minPlayers) {
+      view.nextRoundWarning = "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية وتنمسح نقاطها.";
     }
   }
 
   if (room.phase === "GAME_OVER") {
     const caughtRounds = room.roundOutcomes.filter((outcome) => outcome.caught).length;
     const escapedRounds = room.roundOutcomes.filter((outcome) => !outcome.caught).length;
-    view.gameOver = {
-      totalRounds: room.totalRounds,
-      caughtRounds,
-      escapedRounds,
-    };
-
-    if (room.playStyle === "INDIVIDUAL") {
-      view.scoreboard = ranking(room);
-    }
+    view.gameOver = { totalRounds: room.totalRounds, caughtRounds, escapedRounds };
+    if (room.playStyle === "INDIVIDUAL") view.scoreboard = ranking(room);
   }
 
   return view;
