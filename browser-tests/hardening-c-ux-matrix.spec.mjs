@@ -76,7 +76,6 @@ test("Host at 1920x1080 renders a full ten-player roster in RTL without horizont
     const seats = await host.page.locator(".seat-badge").allTextContents();
     expect(new Set(seats).size, "every seat number is distinct").toBe(10);
 
-    // The whole ten-player roster must be laid out inside the viewport.
     await expectRtlAndNoOverflow(host.page, "Host 1920x1080 with 10 players");
     for (const chip of await host.page.locator(".chip").all()) {
       const box = await chip.boundingBox();
@@ -106,12 +105,14 @@ test("small and large phone viewports render the Player UI in RTL without horizo
       expect(player.page.viewportSize()).toEqual(viewport);
       await expectRtlAndNoOverflow(player.page, `${label} player lobby`);
 
-      // The primary exit affordance must be reachable inside the viewport.
       const exit = player.page.getByRole("button", { name: "الخروج من الغرفة" });
       await expect(exit).toBeVisible();
       const box = await exit.boundingBox();
       expect(box.x).toBeGreaterThanOrEqual(-1);
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+      expect(box.y).toBeGreaterThanOrEqual(-1);
+      expect(box.y, `${label} Exit should live in the top utility area`).toBeLessThan(120);
+      expect(box.height, `${label} Exit touch target`).toBeGreaterThanOrEqual(44);
     }
   } finally {
     await Promise.allSettled(players.map((player) => player.context.close()));
@@ -131,14 +132,12 @@ test("a valid near-NAME_MAX Arabic display name is accepted and rendered intact"
     const player = await joinPlayer(browser, host.code, longName, PHONE_SMALL);
     players.push(player);
 
-    // Rendered intact on the player's own device and on the shared Host screen.
     await expect(player.page.locator(".chip", { hasText: `${longName} (أنت)` })).toBeVisible();
     await expect(host.page.locator(".chip", { hasText: longName })).toHaveCount(1);
 
     await expectRtlAndNoOverflow(player.page, "small phone with a long Arabic name");
     await expectRtlAndNoOverflow(host.page, "Host roster with a long Arabic name");
 
-    // One character past the ceiling must be refused before it can be sent.
     const rejected = await newContext(browser, { viewport: PHONE_SMALL });
     try {
       const page = await rejected.newPage();
@@ -160,7 +159,7 @@ test("a valid near-NAME_MAX Arabic display name is accepted and rendered intact"
   }
 });
 
-test("a real network loss shows Arabic reconnect UI, disables game actions, and surfaces visible failure feedback", async ({
+test("network loss disables gameplay but keeps Exit reachable and reports unsent leave visibly", async ({
   browser,
 }) => {
   test.setTimeout(120_000);
@@ -174,40 +173,28 @@ test("a real network loss shows Arabic reconnect UI, disables game actions, and 
     const banner = player.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…");
     const surface = player.page.locator("[data-game-surface]");
 
-    // 1. Genuinely lose the network at the browser-context level.
     await player.context.setOffline(true);
     await expect(banner, "Arabic reconnect UI").toBeVisible({ timeout: 30_000 });
-    // Game actions really are unavailable, not merely styled as unavailable.
     await expect(surface).toHaveAttribute("disabled", "");
-    await expect(exit, "in-game actions are disabled while offline").toBeDisabled();
+    await expect(surface).toHaveAttribute("aria-busy", "true");
 
-    // 2. Recover, then open a real confirmation while online.
-    await player.context.setOffline(false);
-    await expect(banner).toBeHidden({ timeout: 30_000 });
-    await expect(exit).toBeEnabled();
+    // Exit intentionally sits outside the disabled game fieldset so a stranded
+    // player can still understand their options while offline.
+    await expect(exit, "Exit remains reachable while gameplay is offline").toBeEnabled();
     await exit.click();
     const dialog = player.page.getByRole("dialog", { name: "الخروج من الغرفة؟" });
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("الاتصال");
 
-    // 3. Lose the network again with the request still unsent. The dialog is
-    //    outside the inert app content, so it stays operable by design — the
-    //    exit button below is queried by CSS because inert hides it from
-    //    role-based queries while a dialog is open.
-    await player.context.setOffline(true);
-    await expect(banner).toBeVisible({ timeout: 30_000 });
-    await expect(surface).toHaveAttribute("disabled", "");
-    await expect(player.page.locator("button.floating-exit")).toBeDisabled();
-
-    // Confirming an action that cannot reach the server must fail visibly.
+    // We never fake a successful server leave. Confirming while offline must
+    // report that the request was not sent and keep the player in-room locally.
     await dialog.getByRole("button", { name: "اخرج" }).click();
     await expect(player.page.locator(".confirm-error")).toBeVisible();
     await expect(player.page.locator(".confirm-error")).toHaveText(
       "الاتصال مو جاهز، لذلك ما أرسلنا الطلب.",
     );
-    // The player is still in the room: a failed request changed nothing.
     await expect(player.page.getByRole("button", { name: "سوّ غرفة" })).toHaveCount(0);
 
-    // Recovery restores the UI once the dialog is dismissed.
     await dialog.getByRole("button", { name: "إلغاء" }).click();
     await expect(dialog).toBeHidden();
     await player.context.setOffline(false);
