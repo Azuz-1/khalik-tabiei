@@ -164,12 +164,17 @@ async function completeManagerResult(playerCount = 3) {
   return { manager, host, players, room, impostor, normals };
 }
 
-test("completed RESULT survives removal below minimum and final advance reaches GAME_OVER", async () => {
+test("completed final RESULT survives removal below minimum and advances to GAME_OVER", async () => {
   const { manager, host, room, normals } = await completeManagerResult(3);
   const historical = JSON.stringify(lastMessage(host.socket, "STATE")!.view.result);
   manager.handle(host.conn, { t: "KICK_PLAYER", uid: normals[0]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(JSON.stringify(lastMessage(host.socket, "STATE")!.view.result), historical);
+
+  // This test synthesizes a final completed result after snapshotting it. The
+  // product's authoritative completion axis is now completed Challenges; the
+  // currentRound sentinel remains only for RoomManager's compatibility guard.
+  room.completedChallenges = room.targetChallenges;
   room.currentRound = room.totalRounds;
   manager.handle(host.conn, { t: "NEXT_ROUND" });
   assert.equal(room.phase, "GAME_OVER");
