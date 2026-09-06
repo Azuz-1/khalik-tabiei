@@ -32,6 +32,7 @@ function snapshotFromView(view: ClientView): HostAudioSnapshot {
     challengeIndex: view.challenge?.index,
     submittedVotes: view.votesProgress?.submitted,
     totalVotes: view.votesProgress?.total,
+    phaseEndsAt: view.room.phaseEndsAt,
     playerUids: view.players.map((player) => player.uid),
     result: view.result
       ? {

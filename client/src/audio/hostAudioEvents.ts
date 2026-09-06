@@ -22,6 +22,14 @@ export interface HostAudioSnapshot {
   challengeIndex?: number;
   submittedVotes?: number;
   totalVotes?: number;
+  /**
+   * Authoritative server deadline for the current phase. For COUNTDOWN this is
+   * a per-attempt constant, so it doubles as public countdown-attempt identity:
+   * a Host reconnect restarts the same Challenge's countdown without any phase
+   * change, and only a fresh deadline distinguishes that new attempt from more
+   * snapshots of the old one.
+   */
+  phaseEndsAt?: number;
   playerUids: string[];
   result?: {
     groupFound: boolean;
@@ -68,6 +76,8 @@ export class HostAudioEventController {
   private seenPlayerUids = new Set<string>();
   private playedResultKeys = new Set<string>();
   private lastCountdownStep: CountdownStep | null = null;
+  private countdownDeadline: number | null = null;
+  private countdownPaused = false;
 
   update(snapshot: HostAudioSnapshot): HostAudioEvent[] {
     if (!this.initialized || snapshot.roomCode !== this.roomCode) {
@@ -110,6 +120,29 @@ export class HostAudioEventController {
     if (snapshot.phase === "LOBBY" && newPlayers > 0) {
       events.push({ type: "join", count: newPlayers });
     }
+
+    // A Host reconnect restarts the same physical Challenge from COUNTDOWN, so
+    // the phase-transition reset below never fires (COUNTDOWN -> COUNTDOWN) and
+    // the restarted attempt's first tick would be swallowed as a duplicate
+    // step. Identify the attempt from authoritative public state instead: a
+    // paused countdown publishes no deadline, and a resumed one publishes a
+    // fresh deadline, so either a pause gap or a changed deadline marks a new
+    // attempt while repeated snapshots of one attempt stay de-duplicated.
+    // This resets the countdown-step dedupe ONLY: result, join and voting
+    // dedupe must survive a reconnect so historical sounds are never replayed.
+    const countdownDeadline =
+      snapshot.phase === "COUNTDOWN" ? snapshot.phaseEndsAt ?? null : null;
+    const countdownPaused = snapshot.phase === "COUNTDOWN" && countdownDeadline === null;
+    const restartedCountdown =
+      snapshot.phase === "COUNTDOWN" &&
+      previousPhase === "COUNTDOWN" &&
+      countdownDeadline !== null &&
+      (this.countdownPaused ||
+        (this.countdownDeadline !== null && countdownDeadline !== this.countdownDeadline));
+    if (restartedCountdown) this.lastCountdownStep = null;
+    this.countdownPaused = countdownPaused;
+    if (countdownDeadline !== null) this.countdownDeadline = countdownDeadline;
+    else if (snapshot.phase !== "COUNTDOWN") this.countdownDeadline = null;
 
     if (snapshot.phase !== previousPhase) {
       if (snapshot.phase === "COUNTDOWN" || previousPhase === "COUNTDOWN") {
@@ -203,6 +236,8 @@ export class HostAudioEventController {
     this.totalVotes = 0;
     this.votingPlayerUids.clear();
     this.lastCountdownStep = null;
+    this.countdownDeadline = null;
+    this.countdownPaused = false;
   }
 
   private resetCurrentRoundDedupe(round: number): void {
@@ -214,6 +249,8 @@ export class HostAudioEventController {
     this.totalVotes = 0;
     this.votingPlayerUids.clear();
     this.lastCountdownStep = null;
+    this.countdownDeadline = null;
+    this.countdownPaused = false;
   }
 
   private prime(snapshot: HostAudioSnapshot): void {
@@ -230,6 +267,9 @@ export class HostAudioEventController {
     this.seenPlayerUids = new Set(snapshot.playerUids);
     this.playedResultKeys = new Set<string>();
     this.lastCountdownStep = null;
+    this.countdownDeadline =
+      snapshot.phase === "COUNTDOWN" ? snapshot.phaseEndsAt ?? null : null;
+    this.countdownPaused = snapshot.phase === "COUNTDOWN" && this.countdownDeadline === null;
 
     if (snapshot.phase === "RESULT") {
       const key = resultKey(snapshot);
