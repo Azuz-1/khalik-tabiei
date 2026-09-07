@@ -54,7 +54,7 @@ function PlayerLobby({ view }: { view: ClientView }) {
         <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>أنت داخل 🎉</h1>
         <span className="pill-note" style={{ direction: "ltr", marginInline: "auto" }}>غرفة {view.room.code}</span>
         <span className="chip">🏅 منافسة بالنقاط</span>
-        <p className="subtitle">{view.room.targetChallenges} تحديات أساسية، ونكمّل دور آخر متخفي. الأغلبية تمسكه، وكل لاعب يجمع نقاطه بنفسه.</p>
+        <p className="subtitle">{view.room.targetChallenges} تحديات بالضبط. كل متخفي حدّه 3 تحديات، والأغلبية هي اللي تمسكه.</p>
         <div className="players">{selectedModes.map((mode) => <span className="chip" key={mode.id}>{mode.icon} {mode.label}</span>)}</div>
       </div>
       <div className="card">
@@ -225,16 +225,18 @@ function PlayerVote({ view }: { view: ClientView }) {
 }
 
 function PlayerResult({ view }: { view: ClientView }) {
-  const finalStint = Boolean(view.result?.roundComplete && view.room.completedChallenges >= view.room.targetChallenges);
+  const matchFinished = view.room.completedChallenges >= view.room.targetChallenges;
   return (
     <div className="screen">
       <div className="spacer" />
       {view.result ? <div className="card"><ResultBody result={view.result} /></div> : null}
       {view.result?.roundComplete && view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} round /> : null}
       <p className="subtitle center">
-        {view.result?.roundComplete
-          ? finalStint ? "انتهى دور المتخفي الأخير… ننتظر الترتيب النهائي" : "ننتظر المضيف يبدأ دور متخفي جديد…"
-          : view.room.completedChallenges >= view.room.targetChallenges ? "نفس المتخفي مكمل… نكمّل دوره الأخير" : "نفس المتخفي مكمل… ننتظر التحدّي الجاي"}
+        {matchFinished
+          ? "خلصت التحديات… ننتظر الترتيب النهائي"
+          : view.result?.roundComplete
+            ? "ننتظر المضيف يبدأ دور متخفي جديد…"
+            : "نفس المتخفي مكمل… ننتظر التحدّي الجاي"}
       </p>
       <div className="spacer" />
     </div>
