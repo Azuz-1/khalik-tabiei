@@ -90,8 +90,8 @@ function RulesTabs() {
             <p className="subtitle" style={{ margin: 0 }}>١. كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</p>
             <p className="subtitle" style={{ margin: 0 }}>٢. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
             <p className="subtitle" style={{ margin: 0 }}>٣. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٤. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي للتحدّي اللي بعده.</p>
-            <p className="helper" style={{ margin: 0 }}>المضيف يختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي أساسي، ونكمّل دور آخر متخفي إذا كان باقي له فرص.</p>
+            <p className="subtitle" style={{ margin: 0 }}>٤. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي، وبحد أقصى 3 تحديات في دوره.</p>
+            <p className="helper" style={{ margin: 0 }}>المضيف يختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
           </div>
         ) : null}
 
@@ -111,10 +111,10 @@ function RulesTabs() {
 
         {tab === "points" ? (
           <div className="stack home-points-copy" style={{ gap: 10 }}>
-            <p className="subtitle" style={{ margin: 0 }}><strong>3 لاعبين:</strong> إذا بدأت تصوّت صح من أول فرصة واستمرّيت = +2، ومن الثانية = +1.</p>
-            <p className="subtitle" style={{ margin: 0 }}><strong>4–10 لاعبين:</strong> من أول فرصة = +3، من الثانية = +2، من الثالثة = +1.</p>
-            <p className="subtitle" style={{ margin: 0 }}><strong>المتخفي:</strong> +1 عن كل تحدّي ينجو منه.</p>
-            <p className="helper" style={{ margin: 0 }}>إذا غيّرت تصويتك وصار غلط، تنقطع سلسلتك. النقاط وتوزيع الأصوات ما تظهر إلا بعد نهاية دور المتخفي.</p>
+            <p className="subtitle" style={{ margin: 0 }}><strong>الطبيعي:</strong> آخر سلسلة تصويتات صحيحة متتالية على المتخفي تساوي نقاطك: تحدّي واحد = +1، تحدّيين = +2، ثلاثة = +3.</p>
+            <p className="subtitle" style={{ margin: 0 }}>إذا انمسك المتخفي من أول تحدّي وأنت مصوّت عليه صح، تاخذ +1 فقط. وإذا قفطته من بدري واستمرّيت صح إلى نهاية دوره، تكبر نقاطك.</p>
+            <p className="subtitle" style={{ margin: 0 }}><strong>المتخفي:</strong> +1 عن كل تحدّي ينجو منه؛ إذا نجا من الثلاثة ياخذ +3.</p>
+            <p className="helper" style={{ margin: 0 }}>التصويت الغلط يقطع سلسلتك، وإذا كان آخر تصويتك غلط تاخذ 0 عن الدور. مو لازم الأغلبية توافقك عشان تنحسب لك نقاطك.</p>
           </div>
         ) : null}
       </div>
