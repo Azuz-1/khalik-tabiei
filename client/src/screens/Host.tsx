@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { ClientView, GameMode, GameModeInfo, ScoreEntry } from "../../../shared/types.js";
-import { MIN_PLAYERS } from "../../../shared/constants.js";
+import { MIN_PLAYERS, ROUND_OPTIONS } from "../../../shared/constants.js";
 import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
@@ -18,6 +18,13 @@ export interface ConfirmActionRequest {
 }
 
 type ConfirmAction = (request: ConfirmActionRequest) => void;
+
+const MATCH_LENGTH_LABELS: Record<(typeof ROUND_OPTIONS)[number], string> = {
+  3: "سريعة",
+  6: "خفيفة",
+  9: "عادية",
+  12: "طويلة",
+};
 
 export function Host({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
   switch (view.room.phase) {
@@ -145,10 +152,30 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
             <span className="code-label">المباراة</span>
             <div className="manager-subcard card stack" style={{ gap: 8 }}>
               <strong>🏅 {view.room.targetChallenges} تحديات أساسية</strong>
-              <span className="helper">نكمّل دور آخر متخفي حتى ينمسك أو يخلص فرصه.</span>
+              <span className="helper">نكمل دور آخر متخفي، حتى لو تجاوزنا العدد المختار.</span>
               <span className="helper">3 لاعبين: حدّه تحدّيين · 4–10 لاعبين: حدّه 3 تحديات.</span>
               <span className="helper">كل لاعب يجمع نقاطه، والأغلبية هي اللي تمسك المتخفي.</span>
             </div>
+
+            <span className="code-label" style={{ marginTop: 8 }}>طول المباراة</span>
+            <div role="group" aria-label="طول المباراة" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+              {ROUND_OPTIONS.map((length) => {
+                const selected = view.room.targetChallenges === length;
+                return (
+                  <button
+                    key={length}
+                    type="button"
+                    className={`btn ${selected ? "btn-primary" : "btn-ghost"}`}
+                    aria-pressed={selected}
+                    onClick={() => actions.setSettings({ totalRounds: length })}
+                    style={{ minWidth: 0, paddingInline: 8 }}
+                  >
+                    {length} · {MATCH_LENGTH_LABELS[length]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="helper center" style={{ margin: 0 }}>9 تحديات هي الاختيار الافتراضي.</p>
 
             <span className="code-label" style={{ marginTop: 8 }}>اختر طرق اللعب</span>
             <div className="mode-select-grid">
