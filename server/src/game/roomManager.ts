@@ -379,10 +379,10 @@ export class RoomManager {
       const previousMatchOrdinal = analytics.matchOrdinal;
       const startsAfterCompletedMatch = previousMatchOrdinal > 0 && analytics.completedMatchOrdinal === previousMatchOrdinal;
 
+      engine.startGame(room, uid, this.deps);
       room.completedChallengeSummaries = [];
       room.feedbackEligibleUids.clear();
       room.feedbackSubmittedUids.clear();
-      engine.startGame(room, uid, this.deps);
       room.matchGeneration += 1;
       analytics.matchOrdinal += 1;
       analytics.matchStartedAt = this.deps.now();

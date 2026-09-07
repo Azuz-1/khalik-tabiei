@@ -170,6 +170,40 @@ test("ineligible player and unknown challenge cannot influence feedback analytic
   manager.dispose();
 });
 
+test("rejected start requests preserve completed-match feedback and eligibility", () => {
+  const recorded = recorder();
+  const manager = new RoomManager({ analytics: recorded.track, rng: () => 0 });
+  try {
+    const { host, players, room } = finishMatch(manager);
+    assert.equal(manager.handle(players[0]!.conn, { t: "SUBMIT_FEEDBACK", rating: "GOOD" }), true);
+
+    const challenges = room.completedChallengeSummaries.map((challenge) => ({ ...challenge }));
+    const eligible = [...room.feedbackEligibleUids];
+    const submitted = [...room.feedbackSubmittedUids];
+
+    // Neither a player without Host permission nor a Host outside the Lobby
+    // may erase feedback when START_GAME is rejected.
+    for (const connection of [players[1]!.conn, host.conn]) {
+      assert.equal(manager.handle(connection, { t: "START_GAME" }), false);
+      assert.equal(room.phase, "GAME_OVER");
+      assert.deepEqual(room.completedChallengeSummaries, challenges);
+      assert.deepEqual([...room.feedbackEligibleUids], eligible);
+      assert.deepEqual([...room.feedbackSubmittedUids], submitted);
+    }
+
+    assert.equal(manager.handle(players[1]!.conn, {
+      t: "SUBMIT_FEEDBACK",
+      rating: "NEEDS_WORK",
+      challengeOrdinal: challenges[0]!.ordinal,
+      issueReason: "UNCLEAR",
+    }), true);
+    assert.equal(recorded.events.filter((entry) => entry.event === "feedback_rating").length, 2);
+    assert.equal(recorded.events.filter((entry) => entry.event === "feedback_challenge_issue").length, 1);
+  } finally {
+    manager.dispose();
+  }
+});
+
 test("feedback state resets across rematch and analytics sink failure never blocks acknowledgement", () => {
   const manager = new RoomManager({
     analytics: () => { throw new Error("analytics unavailable"); },
