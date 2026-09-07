@@ -46,6 +46,9 @@ const ACTION_LIMITS: Partial<Record<ClientMessage["t"], [number, number]>> = {
   SUBMIT_VOTE: [40, 60_000],
   NEXT_ROUND: [30, 60_000],
   KICK_PLAYER: [20, 60_000],
+  // One accepted feedback response exists per player/match. Keep retries roomy
+  // enough for transport ambiguity while preventing invalid-message spam.
+  SUBMIT_FEEDBACK: [5, 60_000],
 };
 
 /** One fixed-window quota: `limit` events allowed per `windowMs`. */

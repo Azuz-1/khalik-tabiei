@@ -166,6 +166,15 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       completedChallenges: room.completedChallenges,
     };
     if (room.playStyle === "INDIVIDUAL") view.scoreboard = ranking(room);
+    if (role === "player" && self && room.feedbackEligibleUids.has(uid)) {
+      const submitted = room.feedbackSubmittedUids.has(uid);
+      view.feedback = {
+        submitted,
+        challenges: submitted
+          ? []
+          : room.completedChallengeSummaries.map(({ ordinal, mode, prompt }) => ({ ordinal, mode, prompt })),
+      };
+    }
   }
 
   return view;

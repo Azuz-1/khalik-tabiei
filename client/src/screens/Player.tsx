@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import type { ClientView, GameModeInfo, ScoreEntry } from "../../../shared/types.js";
+import type {
+  ClientView,
+  FeedbackIssueReason,
+  FeedbackRating,
+  GameModeInfo,
+  ScoreEntry,
+} from "../../../shared/types.js";
 import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
@@ -217,7 +223,7 @@ function PlayerVote({ view }: { view: ClientView }) {
           );
         })}
       </div>
-      <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{picked ? `أكّد التصويت` : "اختر شخص"}</button>
+      <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{picked ? "أكّد التصويت" : "اختر شخص"}</button>
       <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
       <div className="spacer" />
     </div>
@@ -241,6 +247,116 @@ function PlayerResult({ view }: { view: ClientView }) {
   );
 }
 
+const FEEDBACK_RATINGS: Array<{ value: FeedbackRating; label: string }> = [
+  { value: "EXCELLENT", label: "ممتازة" },
+  { value: "GOOD", label: "حلوة" },
+  { value: "OK", label: "عادية" },
+  { value: "NEEDS_WORK", label: "تحتاج تحسين" },
+];
+
+const FEEDBACK_REASONS: Array<{ value: FeedbackIssueReason; label: string }> = [
+  { value: "UNCLEAR", label: "مو واضح" },
+  { value: "TOO_REVEALING", label: "يكشف المتخفي بسرعة" },
+  { value: "TOO_SIMILAR", label: "يشبه تحدّي ثاني" },
+  { value: "NOT_SUITABLE", label: "مو مناسب" },
+];
+
+function PlayerFeedback({ view }: { view: ClientView }) {
+  const feedback = view.feedback;
+  const [rating, setRating] = useState<FeedbackRating | null>(null);
+  const [challengeOrdinal, setChallengeOrdinal] = useState<number | null>(null);
+  const [reason, setReason] = useState<FeedbackIssueReason | null>(null);
+
+  useEffect(() => {
+    if (challengeOrdinal !== null && !feedback?.challenges.some((challenge) => challenge.ordinal === challengeOrdinal)) {
+      setChallengeOrdinal(null);
+      setReason(null);
+    }
+  }, [challengeOrdinal, feedback]);
+
+  if (!feedback) return null;
+  if (feedback.submitted) {
+    return <div className="card center"><div className="ok-badge">شكراً، وصلنا تقييمك ✓</div></div>;
+  }
+
+  const canSubmit = rating !== null && (challengeOrdinal === null || reason !== null);
+  return (
+    <section className="card stack" aria-labelledby="feedback-title" style={{ width: "100%" }}>
+      <div className="center stack" style={{ gap: 5 }}>
+        <h2 className="title" id="feedback-title" style={{ fontSize: "clamp(22px,7vw,30px)", margin: 0 }}>وش رايك باللعبة؟</h2>
+        <p className="helper" style={{ margin: 0 }}>اختياري وما يأثر على نقاطك.</p>
+      </div>
+
+      <div className="vote-list" role="radiogroup" aria-label="تقييم اللعبة">
+        {FEEDBACK_RATINGS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={rating === option.value}
+            className={`vote-opt${rating === option.value ? " picked" : ""}`}
+            onClick={() => setRating(option.value)}
+          >
+            <span>{option.label}</span>{rating === option.value ? <span aria-hidden="true">✓</span> : null}
+          </button>
+        ))}
+      </div>
+
+      <label className="stack" style={{ gap: 6 }}>
+        <span className="code-label">في تحدّي ما ضبط؟ (اختياري)</span>
+        <select
+          className="input"
+          aria-label="التحدّي اللي يحتاج تحسين"
+          value={challengeOrdinal ?? ""}
+          onChange={(event) => {
+            const next = event.target.value ? Number(event.target.value) : null;
+            setChallengeOrdinal(next);
+            setReason(null);
+          }}
+        >
+          <option value="">ما عندي تحدّي محدد</option>
+          {feedback.challenges.map((challenge) => (
+            <option key={challenge.ordinal} value={challenge.ordinal}>
+              التحدّي {challenge.ordinal} · {challenge.prompt}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {challengeOrdinal !== null ? (
+        <div className="stack" style={{ gap: 8 }}>
+          <span className="code-label">وش المشكلة فيه؟</span>
+          <div className="vote-list" role="radiogroup" aria-label="سبب مشكلة التحدّي">
+            {FEEDBACK_REASONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={reason === option.value}
+                className={`vote-opt${reason === option.value ? " picked" : ""}`}
+                onClick={() => setReason(option.value)}
+              >
+                <span>{option.label}</span>{reason === option.value ? <span aria-hidden="true">✓</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <button
+        className="btn btn-primary"
+        disabled={!canSubmit}
+        onClick={() => {
+          if (!rating || !canSubmit) return;
+          actions.submitFeedback(rating, challengeOrdinal ?? undefined, reason ?? undefined);
+        }}
+      >
+        إرسال التقييم
+      </button>
+    </section>
+  );
+}
+
 function PlayerGameOver({ view }: { view: ClientView }) {
   const gameOver = view.gameOver;
   return (
@@ -258,6 +374,7 @@ function PlayerGameOver({ view }: { view: ClientView }) {
           </>
         ) : null}
         {view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} /> : null}
+        <PlayerFeedback view={view} />
         <p className="subtitle center">ننتظر المضيف يبدأ لعبة جديدة أو يقفل الغرفة</p>
       </div>
       <div className="spacer" />

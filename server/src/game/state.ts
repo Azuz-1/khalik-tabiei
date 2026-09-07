@@ -72,6 +72,14 @@ export interface RoundOutcome {
   challengeIndex: number;
 }
 
+export interface CompletedChallengeSummary {
+  ordinal: number;
+  challengeWithinStint: number;
+  promptId: string;
+  prompt: string;
+  mode: GameMode;
+}
+
 export interface RoomState {
   code: string;
   hostUid: string;
@@ -113,6 +121,12 @@ export interface RoomState {
   usedPromptIds: Set<string>;
   impostorHistory: string[];
   roundOutcomes: RoundOutcome[];
+  /** Compact current-match history used only for optional post-game challenge feedback. */
+  completedChallengeSummaries: CompletedChallengeSummary[];
+  /** Server-only UIDs that actually participated in at least one Challenge this match. */
+  feedbackEligibleUids: Set<string>;
+  /** Operational UID set prevents duplicate feedback; UIDs are never exported to analytics. */
+  feedbackSubmittedUids: Set<string>;
   phaseEndsAt?: number;
   timerGeneration: number;
   closed: boolean;
@@ -148,6 +162,9 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     usedPromptIds: new Set(),
     impostorHistory: [],
     roundOutcomes: [],
+    completedChallengeSummaries: [],
+    feedbackEligibleUids: new Set(),
+    feedbackSubmittedUids: new Set(),
     timerGeneration: 0,
     closed: false,
   };
@@ -213,8 +230,6 @@ function hasVisibleContent(input: string): boolean {
 /** Name length is measured in Unicode grapheme clusters after display cleaning. */
 export function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("INVALID_NAME");
-  // NFC preserves legitimate Arabic diacritics and emoji ZWJ sequences while
-  // normalizing canonically equivalent display spellings.
   const name = stripUnsafeTextControls(raw.normalize("NFC")).replace(/\s+/g, " ").trim();
   if (!hasVisibleContent(name)) throw new GameError("INVALID_NAME");
   const length = graphemeLength(name);

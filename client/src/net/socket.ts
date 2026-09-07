@@ -4,6 +4,8 @@ import type {
   ClientMessage,
   ClientView,
   ErrorCode,
+  FeedbackIssueReason,
+  FeedbackRating,
   GameMode,
   PlayStyle,
   ServerMessage,
@@ -155,6 +157,8 @@ function actionCompleted(entry: PendingAction, view: ClientView, previous: Clien
       return !view.players.some((player) => player.uid === message.uid);
     case "REMATCH":
       return view.room.phase === "LOBBY" && view.room.currentRound === 0;
+    case "SUBMIT_FEEDBACK":
+      return view.feedback?.submitted === true;
     case "LEAVE_ROOM":
     case "CLOSE_ROOM":
     case "SUBMIT_ANSWER":
@@ -452,4 +456,13 @@ export const actions = {
   kick: (uid: string) => sendAction({ t: "KICK_PLAYER", uid }),
   closeRoom: () => sendAction({ t: "CLOSE_ROOM" }),
   rematch: () => sendAction({ t: "REMATCH" }),
+  submitFeedback: (
+    rating: FeedbackRating,
+    challengeOrdinal?: number,
+    issueReason?: FeedbackIssueReason,
+  ) => sendAction({
+    t: "SUBMIT_FEEDBACK",
+    rating,
+    ...(challengeOrdinal !== undefined && issueReason !== undefined ? { challengeOrdinal, issueReason } : {}),
+  }),
 };
