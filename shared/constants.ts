@@ -16,15 +16,17 @@ export const NAME_MIN = 2;
 export const NAME_MAX = 16;
 export const ANSWER_MAX = 40;
 export const UID_RE = /^u_[a-f0-9]{24}$/;
-/** Host-selectable base Challenge targets. The active final impostor stint is always completed. */
+/** Host-selectable Challenge totals. The match ends exactly at the selected total. */
 export const CHALLENGE_OPTIONS = [3, 6, 9, 12] as const;
 /** Legacy protocol name retained because SET_SETTINGS still transports the selected target as totalRounds. */
 export const ROUND_OPTIONS = CHALLENGE_OPTIONS;
 export const DEFAULT_ROUNDS = 9;
 /** Default competitive match target when the Host does not change the Challenge count. */
 export const BASE_CHALLENGES = 9;
+/** Every impostor stint can last at most three Challenges, for every supported player count. */
 export const MAX_CHALLENGES_PER_ROUND = 3;
-export const MAX_CHALLENGES_THREE_PLAYERS = 2;
+/** Compatibility alias retained for older imports/tests; three-player stints now also use three Challenges. */
+export const MAX_CHALLENGES_THREE_PLAYERS = MAX_CHALLENGES_PER_ROUND;
 
 export const GAME_MODES: GameModeInfo[] = [
   {
