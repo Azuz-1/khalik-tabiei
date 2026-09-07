@@ -98,7 +98,8 @@ async function castVote(voter, targetName) {
     .toBe(true);
 }
 
-function assertNoVoterMapping(frames, label) {
+function assertNoPrivateWireFields(frames, label) {
+  const violations = [];
   const walk = (node, path) => {
     if (Array.isArray(node)) {
       node.forEach((item, index) => walk(item, `${path}[${index}]`));
@@ -106,20 +107,17 @@ function assertNoVoterMapping(frames, label) {
     }
     if (!node || typeof node !== "object") return;
     for (const [key, value] of Object.entries(node)) {
-      expect(
-        /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i.test(key),
-        `${label}: frame at ${path} exposed private key "${key}"`,
-      ).toBe(false);
+      if (/voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i.test(key)) {
+        violations.push(`${path}: private key ${key}`);
+      }
+      if (key === "liveVoteTally") violations.push(`${path}: live target totals serialized`);
+      if (key === "promptId") violations.push(`${path}: internal promptId serialized`);
       if (key === "voteTally" && Array.isArray(value)) {
         for (const entry of value) {
-          expect(Object.keys(entry).sort(), `${label}: voteTally stays aggregate-only`).toEqual([
-            "name",
-            "uid",
-            "votes",
-          ]);
+          const keys = Object.keys(entry).sort().join(",");
+          if (keys !== "name,uid,votes") violations.push(`${path}.voteTally: non-aggregate entry keys ${keys}`);
         }
       }
-      expect(key, `${label}: live target totals must never be serialized`).not.toBe("liveVoteTally");
       walk(value, `${path}.${key}`);
     }
   };
@@ -131,6 +129,8 @@ function assertNoVoterMapping(frames, label) {
       // Ignore non-JSON frames if any future transport metadata is introduced.
     }
   }
+
+  expect(violations, `${label}: WebSocket privacy violations`).toEqual([]);
 }
 
 async function playCaughtChallenge(host, players, globalChallenge) {
@@ -172,48 +172,33 @@ async function playCaughtChallenge(host, players, globalChallenge) {
   await expect(host.page.getByText("مسكتوا المتخفي")).toBeVisible();
   await expect(host.page.locator(".impostor-name")).toHaveText(impostor.name);
   await expect(host.page.getByText("النقاط بعد دور المتخفي")).toBeVisible();
-
-  return { impostor, normals };
 }
 
-test("full game journey: reconnect, kick, competitive scoring, nine Challenges, real GAME_OVER", async ({
-  browser,
-}) => {
-  // Nine production-timed Challenges take roughly 7–8 minutes end-to-end.
-  // Keep the real timers here so this journey validates the shipped physical cadence.
+test("full game journey: reconnect, kick, scoring, GAME_OVER, and optional feedback", async ({ browser }) => {
   test.setTimeout(600_000);
   const startedAt = Date.now();
 
   const host = await createHost(browser);
   const joined = [];
   try {
-    for (let index = 1; index <= 4; index += 1) {
-      joined.push(await joinPlayer(browser, host.code, `لاعب${index}`));
-    }
+    for (let index = 1; index <= 4; index += 1) joined.push(await joinPlayer(browser, host.code, `لاعب${index}`));
     await expect(host.page.locator(".seat-badge")).toHaveCount(4);
 
     const flaky = joined[3];
     const seatBefore = await hostSeatFor(host.page, flaky.name);
     await flaky.context.setOffline(true);
-    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeVisible({
-      timeout: PHASE_TIMEOUT,
-    });
+    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeVisible({ timeout: PHASE_TIMEOUT });
     await expect(flaky.page.locator("[data-game-surface]")).toHaveAttribute("disabled", "");
     await expect(flaky.page.getByRole("button", { name: "الخروج من الغرفة" })).toBeEnabled();
 
     await flaky.context.setOffline(false);
-    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeHidden({
-      timeout: PHASE_TIMEOUT,
-    });
+    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeHidden({ timeout: PHASE_TIMEOUT });
     await expect(flaky.page.locator("[data-game-surface]")).not.toHaveAttribute("disabled", "");
     await expect(flaky.page.locator(".chip", { hasText: `${flaky.name} (أنت)` })).toBeVisible();
     expect(await hostSeatFor(host.page, flaky.name)).toBe(seatBefore);
 
     const kicked = joined[1];
-    await host.page
-      .locator(".chip", { hasText: kicked.name })
-      .getByRole("button", { name: new RegExp(`^إخراج ${kicked.name}`) })
-      .click();
+    await host.page.locator(".chip", { hasText: kicked.name }).getByRole("button", { name: new RegExp(`^إخراج ${kicked.name}`) }).click();
     const kickDialog = host.page.getByRole("dialog", { name: `إخراج ${kicked.name}؟` });
     await expect(kickDialog).toBeVisible();
     await kickDialog.getByRole("button", { name: "إخراج", exact: true }).click();
@@ -236,26 +221,35 @@ test("full game journey: reconnect, kick, competitive scoring, nine Challenges, 
       }
     }
 
-    await expect(host.page.getByRole("heading", { name: "خلصت اللعبة 🎉" })).toBeVisible({
-      timeout: PHASE_TIMEOUT,
-    });
+    await expect(host.page.getByRole("heading", { name: "خلصت اللعبة 🎉" })).toBeVisible({ timeout: PHASE_TIMEOUT });
     await expect(host.page.getByText(/لعبتوا 9 تحديات/)).toBeVisible();
     await expect(host.page.getByText(/مسكتوا المتخفي في 9 من 9 أدوار/)).toBeVisible();
     await expect(host.page.getByText("الترتيب النهائي")).toBeVisible();
+    await expect(host.page.getByRole("heading", { name: "وش رايك باللعبة؟" })).toHaveCount(0);
+
+    for (const player of players) {
+      await expect(player.page.getByRole("heading", { name: "وش رايك باللعبة؟" })).toBeVisible({ timeout: PHASE_TIMEOUT });
+    }
+
+    await players[0].page.getByRole("radio", { name: "ممتازة" }).click();
+    await players[0].page.getByRole("button", { name: "إرسال التقييم" }).click();
+    await expect(players[0].page.getByText("شكراً، وصلنا تقييمك ✓")).toBeVisible({ timeout: PHASE_TIMEOUT });
+
+    await players[1].page.getByRole("radio", { name: "تحتاج تحسين" }).click();
+    await players[1].page.getByLabel("التحدّي اللي يحتاج تحسين").selectOption("1");
+    await players[1].page.getByRole("radio", { name: "مو واضح" }).click();
+    await players[1].page.getByRole("button", { name: "إرسال التقييم" }).click();
+    await expect(players[1].page.getByText("شكراً، وصلنا تقييمك ✓")).toBeVisible({ timeout: PHASE_TIMEOUT });
 
     for (const client of [host, ...players]) {
       const frames = await client.page.evaluate(() => window.__frames ?? []);
       expect(frames.length, `${client.name} received real server frames`).toBeGreaterThan(0);
-      assertNoVoterMapping(frames, client.name);
-
+      assertNoPrivateWireFields(frames, client.name);
       const rendered = await client.page.locator("body").innerText();
       expect(rendered).not.toMatch(/صوّت\s+(على|لـ)\s*\S+\s*→/);
     }
 
-    test.info().annotations.push({
-      type: "journey-duration-ms",
-      description: String(Date.now() - startedAt),
-    });
+    test.info().annotations.push({ type: "journey-duration-ms", description: String(Date.now() - startedAt) });
   } finally {
     await Promise.allSettled(joined.map((player) => player.context.close()));
     await host.context.close();
