@@ -90,7 +90,7 @@ export interface RoomState {
   maxPlayers: number;
   totalRounds: number;
   currentRound: number;
-  /** Competitive game length: play at least this many Challenges, then finish the active impostor stint. */
+  /** Exact Host-selected number of Challenges in the competitive match. */
   targetChallenges: number;
   /** Authoritative count of completed Challenges in the current match. */
   completedChallenges: number;
