@@ -88,6 +88,7 @@ export interface RoomState {
   matchGeneration: number;
   minPlayers: number;
   maxPlayers: number;
+  /** Legacy protocol field; in Lobby it stores the validated selectable Challenge target. */
   totalRounds: number;
   currentRound: number;
   /** Competitive game length: play at least this many Challenges, then finish the active impostor stint. */
@@ -130,7 +131,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     matchGeneration: 0,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
-    totalRounds: 0,
+    totalRounds: BASE_CHALLENGES,
     currentRound: 0,
     targetChallenges: BASE_CHALLENGES,
     completedChallenges: 0,
