@@ -1,4 +1,4 @@
-/** Real WebSocket E2E for INDIVIDUAL scoring and secrecy boundaries. */
+/** Real WebSocket E2E for four-player 3/2/1 streak scoring and secrecy. */
 import { WebSocket } from "ws";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
@@ -31,8 +31,8 @@ class Client {
     if (!response.ok) throw new Error(`${this.label}: session bootstrap failed`);
     const cookie = response.headers.get("set-cookie")?.split(";", 1)[0];
     if (!cookie) throw new Error(`${this.label}: session cookie missing`);
-
     this.ws = new WebSocket(URL, { headers: { Cookie: cookie, Origin: ORIGIN } });
+
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`${this.label}: auth timeout`)), TIMEOUT_MS);
       this.ws.once("error", reject);
@@ -84,178 +84,143 @@ async function waitFor(client, predicate, label, timeout = TIMEOUT_MS) {
   throw new Error(`timeout waiting for ${label}; ${client.label} phase=${client.phase()}`);
 }
 
-async function waitForAll(clients, predicate, label) {
-  await Promise.all(clients.map((client) => waitFor(client, predicate, `${client.label} ${label}`)));
+async function waitForAll(clients, predicate, label, timeout = TIMEOUT_MS) {
+  await Promise.all(clients.map((client) => waitFor(client, predicate, `${client.label} ${label}`, timeout)));
 }
 
 function roles(players) {
   const impostors = players.filter((player) => player.view?.isImpostor === true);
   const normals = players.filter((player) => player.view?.isImpostor === false);
-  ok(impostors.length === 1, "INDIVIDUAL still has exactly one private impostor");
-  ok(normals.length === 2, "INDIVIDUAL still has two normal players");
+  ok(impostors.length === 1, "four-player stint has exactly one private impostor");
+  ok(normals.length === 3, "four-player stint has three normals");
   return { impostor: impostors[0], normals };
 }
 
-function assertNoVoteMapping(client, label) {
+function assertNoInternals(client, label) {
   const raw = client.rawText();
-  ok(!raw.includes("voterUid"), `${label} wire has no voterUid`);
-  ok(!raw.includes("voterName"), `${label} wire has no voterName`);
-  ok(!raw.includes("targetUid"), `${label} wire has no voter-to-target mapping`);
-  ok(!raw.includes("voteBreakdown"), `${label} wire has no voteBreakdown`);
-}
-
-function assertNoScoreInternals(client, label) {
-  const raw = client.rawText();
-  ok(!raw.includes("pendingRoundScores"), `${label} wire has no pendingRoundScores`);
-  ok(!raw.includes("roundDelta"), `${label} wire has no intermediate roundDelta`);
+  ok(!raw.includes("voterUid"), `${label}: no voterUid`);
+  ok(!raw.includes("voterName"), `${label}: no voterName`);
+  ok(!raw.includes("targetUid"), `${label}: no voter-to-target mapping`);
+  ok(!raw.includes("voteBreakdown"), `${label}: no voteBreakdown`);
+  ok(!raw.includes("correctVoteStreakStart"), `${label}: no hidden streak state`);
+  ok(!raw.includes("pendingRoundScores"), `${label}: no pending score state`);
 }
 
 async function physical(host, players, label) {
-  const { impostor, normals } = roles(players);
-  const prompt = normals[0].view?.myPrompt?.text;
-  ok(typeof prompt === "string" && prompt.length > 0, `${label} normal prompt exists`);
-  ok(normals.every((normal) => normal.view?.myPrompt?.text === prompt), `${label} normals share prompt`);
-  ok(impostor.view?.myPrompt === undefined, `${label} impostor has no prompt`);
-  ok(host.view?.publicPrompt === undefined, `${label} host has no prompt before reveal`);
-  const impostorQuestionView = JSON.stringify(impostor.view);
-  ok(!impostorQuestionView.includes("promptId"), `${label} impostor QUESTION view has no promptId`);
-  ok(!impostorQuestionView.includes(prompt), `${label} impostor QUESTION view has no prompt text`);
+  const current = roles(players);
+  const prompt = current.normals[0].view?.myPrompt?.text;
+  ok(typeof prompt === "string" && prompt.length > 0, `${label}: normal prompt exists`);
+  ok(current.normals.every((normal) => normal.view?.myPrompt?.text === prompt), `${label}: normals share prompt`);
+  ok(current.impostor.view?.myPrompt === undefined, `${label}: impostor has no prompt`);
+  ok(host.view?.publicPrompt === undefined, `${label}: Host has no prompt before reveal`);
+  ok(!current.impostor.rawText().includes(prompt), `${label}: impostor raw wire has no secret prompt`);
+  ok(!current.impostor.rawText().includes("promptId"), `${label}: impostor raw wire has no promptId`);
 
   for (const player of players) player.send({ t: "MARK_READY" });
   await waitFor(host, (client) => client.phase() === "COUNTDOWN", `${label} countdown`);
-  ok(host.view?.publicPrompt === undefined, `${label} prompt remains secret during countdown`);
   await waitFor(host, (client) => client.phase() === "PROMPT_REVEAL", `${label} reveal`, 12_000);
-  ok(host.view?.publicPrompt?.text === prompt, `${label} prompt reveals at normal boundary`);
-  await waitFor(host, (client) => client.phase() === "DISCUSSION", `${label} discussion`, 6_000);
-  await waitForAll(players, (client) => client.phase() === "DISCUSSION", `${label} discussion`);
-  return { impostor, normals };
+  ok(host.view?.publicPrompt?.text === prompt, `${label}: prompt reveals only after physical sequence`);
+  await waitForAll([host, ...players], (client) => client.phase() === "DISCUSSION", `${label} discussion`, 6_000);
+  return current;
 }
 
-async function catchCurrentRound(host, players, label) {
-  const { impostor, normals } = await physical(host, players, label);
+async function vote(host, players, current, correctNormalCount, label) {
   for (const client of [host, ...players]) client.clearMessages();
   host.send({ t: "START_VOTING" });
   await waitForAll([host, ...players], (client) => client.phase() === "VOTING", `${label} voting`);
-  normals[0].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  normals[1].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  impostor.send({ t: "SUBMIT_VOTE", targetUid: normals[0].uid });
+  ok(host.view?.votesProgress?.requiredVotes === 3, `${label}: four players require three votes to catch`);
+  ok(host.view?.liveVoteTally === undefined, `${label}: Host sees no live target totals`);
+
+  for (let index = 0; index < current.normals.length; index += 1) {
+    const normal = current.normals[index];
+    const wrongTarget = current.normals[(index + 1) % current.normals.length];
+    normal.send({
+      t: "SUBMIT_VOTE",
+      targetUid: index < correctNormalCount ? current.impostor.uid : wrongTarget.uid,
+    });
+  }
+  current.impostor.send({ t: "SUBMIT_VOTE", targetUid: current.normals[0].uid });
+
   await waitForAll([host, ...players], (client) => client.phase() === "RESULT", `${label} result`);
-  ok(host.view?.result?.groupFound === true, `${label} majority catches impostor`);
-  ok(host.view?.result?.roundComplete === true, `${label} completes Round`);
-  ok(Array.isArray(host.view?.scoreboard), `${label} exposes completed-Round scoreboard`);
-  for (const client of [host, ...players]) assertNoVoteMapping(client, `${client.label} ${label}`);
-  return { impostor, normals };
+  for (const client of [host, ...players]) assertNoInternals(client, `${client.label} ${label}`);
 }
 
-async function main() {
-  console.log("Connecting INDIVIDUAL E2E host + 3 players…");
-  const host = new Client("HOST-INDIVIDUAL");
-  const players = [new Client("سلمان"), new Client("ناصر"), new Client("فيصل")];
-  await Promise.all([host.ready, ...players.map((player) => player.ready)]);
-
-  host.send({ t: "CREATE_ROOM" });
-  await waitFor(host, (client) => client.phase() === "LOBBY", "individual lobby");
-  const code = host.view.room.code;
-  for (const player of players) player.send({ t: "JOIN_ROOM", code, name: player.label });
-  await waitFor(host, (client) => client.view?.players?.length === 3, "individual players joined");
-
-  ok(host.view?.room?.playStyle === "TEAM", "TEAM remains the wire default");
-  host.send({
-    t: "SET_SETTINGS",
-    totalRounds: 3,
-    selectedModes: ["HANDS", "POINT", "NUMBER"],
-    playStyle: "INDIVIDUAL",
-  });
-  await waitFor(host, (client) => client.view?.room?.playStyle === "INDIVIDUAL", "individual setting accepted");
-  await waitForAll(players, (client) => client.view?.room?.playStyle === "INDIVIDUAL", "individual setting broadcast");
-  ok(true, "INDIVIDUAL setting travels through parser/server/view over real WebSockets");
-
-  host.send({ t: "START_GAME" });
-  await waitForAll([host, ...players], (client) => client.phase() === "QUESTION", "round 1 challenge 1");
-
-  console.log("\n[individual round 1 / challenge 1] one private correct guess, no group majority:");
-  let { impostor, normals } = await physical(host, players, "round 1 challenge 1");
-  const roundImpostorUid = impostor.uid;
-
-  for (const client of [host, ...players]) client.clearMessages();
-  host.send({ t: "START_VOTING" });
-  await waitForAll([host, ...players], (client) => client.phase() === "VOTING", "round 1 challenge 1 voting");
-
-  normals[0].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  normals[1].send({ t: "SUBMIT_VOTE", targetUid: normals[0].uid });
-  impostor.send({ t: "SUBMIT_VOTE", targetUid: normals[1].uid });
-  await waitForAll([host, ...players], (client) => client.phase() === "RESULT", "round 1 challenge 1 result");
-
-  ok(host.view?.result?.roundComplete === false, "one correct guess does not replace majority rule");
-  ok(host.view?.scoreboard === undefined, "intermediate Host result exposes no score clue");
-  assertNoScoreInternals(host, "Host challenge 1");
-  assertNoVoteMapping(host, "Host challenge 1");
-  for (const player of players) {
-    ok(player.view?.scoreboard === undefined, `${player.label} intermediate phone exposes no score clue`);
-    assertNoScoreInternals(player, `${player.label} challenge 1`);
-    assertNoVoteMapping(player, `${player.label} challenge 1`);
-  }
-
+async function nextChallenge(host, players, expectedIndex) {
   host.send({ t: "NEXT_ROUND" });
   await waitForAll(
     [host, ...players],
-    (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === 2,
-    "round 1 challenge 2",
+    (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === expectedIndex,
+    `Challenge ${expectedIndex} QUESTION`,
   );
+}
 
-  console.log("\n[individual round 1 / challenge 2] majority catch reveals accumulated personal points:");
-  ({ impostor, normals } = await physical(host, players, "round 1 challenge 2"));
-  ok(impostor.uid === roundImpostorUid, "same impostor remains through survived Challenge");
+async function main() {
+  console.log("Connecting four-player competitive scoring E2E…");
+  const host = new Client("HOST-SCORING");
+  const players = [new Client("سلمان"), new Client("ناصر"), new Client("فيصل"), new Client("خالد")];
+  await Promise.all([host.ready, ...players.map((player) => player.ready)]);
 
-  for (const client of [host, ...players]) client.clearMessages();
-  host.send({ t: "START_VOTING" });
-  await waitForAll([host, ...players], (client) => client.phase() === "VOTING", "round 1 challenge 2 voting");
-  normals[0].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  normals[1].send({ t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  impostor.send({ t: "SUBMIT_VOTE", targetUid: normals[0].uid });
-  await waitForAll([host, ...players], (client) => client.phase() === "RESULT", "round 1 caught result");
+  host.send({ t: "CREATE_ROOM" });
+  await waitFor(host, (client) => client.phase() === "LOBBY", "scoring lobby");
+  const code = host.view.room.code;
+  for (const player of players) player.send({ t: "JOIN_ROOM", code, name: player.label });
+  await waitFor(host, (client) => client.view?.players?.length === 4, "four players joined");
 
-  ok(host.view?.result?.groupFound === true, "majority still controls catch in INDIVIDUAL");
-  ok(host.view?.result?.roundComplete === true, "caught result completes Round");
-  ok(Array.isArray(host.view?.scoreboard) && host.view.scoreboard.length === 3, "completed Round exposes scoreboard");
-  const firstCorrect = host.view.scoreboard?.find((row) => row.uid === normals[0].uid);
-  const secondCorrect = host.view.scoreboard?.find((row) => row.uid === normals[1].uid);
-  const impostorScore = host.view.scoreboard?.find((row) => row.uid === impostor.uid);
-  ok(firstCorrect?.score === 2 && firstCorrect?.roundDelta === 2, "hidden Challenge 1 + Challenge 2 correct votes accumulate to +2");
-  ok(secondCorrect?.score === 1 && secondCorrect?.roundDelta === 1, "Challenge 2 correct vote awards +1");
-  ok(impostorScore?.score === 0, "caught impostor gets zero survival points");
-  for (const client of [host, ...players]) assertNoVoteMapping(client, `${client.label} round 1 result`);
+  host.send({ t: "SET_SETTINGS", selectedModes: ["HANDS", "POINT", "NUMBER"] });
+  await waitFor(host, (client) => client.view?.room?.selectedModes?.length === 3, "mode settings");
+  host.send({ t: "START_GAME" });
+  await waitForAll([host, ...players], (client) => client.phase() === "QUESTION", "Challenge 1 QUESTION");
+  ok(host.view?.room?.playStyle === "INDIVIDUAL", "one competitive ruleset is active");
+  ok(host.view?.challenge?.max === 3, "four-player stint allows three Challenges");
 
-  host.send({ t: "NEXT_ROUND" });
-  await waitForAll([host, ...players], (client) => client.phase() === "QUESTION" && client.view?.room?.currentRound === 2, "round 2 start");
-  console.log("\n[individual round 2] normal majority catch:");
-  await catchCurrentRound(host, players, "round 2 challenge 1");
+  let current = await physical(host, players, "C1");
+  const impostorUid = current.impostor.uid;
+  const normalUids = current.normals.map((normal) => normal.uid);
+  await vote(host, players, current, 1, "C1");
+  ok(host.view?.result?.groupFound === false, "one correct vote is below majority in C1");
+  ok(host.view?.result?.roundComplete === false, "stint continues after C1");
+  ok(host.view?.scoreboard === undefined, "C1 keeps all scoring hidden");
+  ok(host.view?.result?.voteTally?.length === 0, "C1 keeps aggregate distribution hidden");
 
-  host.send({ t: "NEXT_ROUND" });
-  await waitForAll([host, ...players], (client) => client.phase() === "QUESTION" && client.view?.room?.currentRound === 3, "round 3 start");
-  console.log("\n[individual round 3] normal majority catch:");
-  await catchCurrentRound(host, players, "round 3 challenge 1");
+  await nextChallenge(host, players, 2);
+  current = await physical(host, players, "C2");
+  ok(current.impostor.uid === impostorUid, "same impostor remains in C2");
+  ok(current.normals.map((normal) => normal.uid).join(",") === normalUids.join(","), "normal roster remains stable in stint");
+  await vote(host, players, current, 2, "C2");
+  ok(host.view?.result?.groupFound === false, "two correct votes are still below four-player majority");
+  ok(host.view?.result?.roundComplete === false, "stint continues after C2");
+  ok(host.view?.scoreboard === undefined, "C2 still hides scoring");
 
-  host.send({ t: "NEXT_ROUND" });
-  await waitForAll([host, ...players], (client) => client.phase() === "GAME_OVER", "individual GAME_OVER");
-  ok(Array.isArray(host.view?.scoreboard) && host.view.scoreboard.length === 3, "GAME_OVER exposes final ranking");
-  ok(host.view.scoreboard.every((row) => Number.isInteger(row.rank) && row.rank >= 1), "final ranking has stable numeric ranks");
-  ok(!JSON.stringify(host.view.scoreboard).includes("roundDelta"), "GAME_OVER ranking does not carry stale roundDelta");
+  await nextChallenge(host, players, 3);
+  current = await physical(host, players, "C3");
+  ok(current.impostor.uid === impostorUid, "same impostor remains through C3");
+  await vote(host, players, current, 3, "C3");
+
+  ok(host.view?.result?.groupFound === true, "three correct normals catch the impostor in C3");
+  ok(host.view?.result?.roundComplete === true, "C3 catch completes the stint");
+  ok(host.view?.result?.voteTally?.length === 4, "stint-end aggregate tally lists all four participants");
+  ok(Array.isArray(host.view?.scoreboard) && host.view.scoreboard.length === 4, "stint end exposes scoreboard");
+
+  const byUid = new Map(host.view.scoreboard.map((row) => [row.uid, row]));
+  ok(byUid.get(normalUids[0])?.roundDelta === 3, "normal correct continuously from C1 gets +3");
+  ok(byUid.get(normalUids[1])?.roundDelta === 2, "normal whose streak begins in C2 gets +2");
+  ok(byUid.get(normalUids[2])?.roundDelta === 1, "normal whose streak begins in C3 gets +1");
+  ok(byUid.get(impostorUid)?.roundDelta === 2, "impostor gets +2 for surviving C1 and C2");
+
   for (const client of [host, ...players]) {
-    ok(Array.isArray(client.view?.scoreboard) && client.view.scoreboard.length === 3, `${client.label} receives final ranking`);
-    assertNoVoteMapping(client, `${client.label} GAME_OVER`);
-    ok(!client.rawText().includes("pendingRoundScores"), `${client.label} never receives pendingRoundScores`);
+    assertNoInternals(client, `${client.label} final stint result`);
+    ok(!client.rawText().includes("promptId"), `${client.label}: promptId never appears on wire`);
   }
 
   host.send({ t: "CLOSE_ROOM" });
   await sleep(150);
   for (const client of [host, ...players]) client.close();
 
-  console.log(`\n${failures === 0 ? "INDIVIDUAL ALL PASSED ✅" : `${failures} INDIVIDUAL FAILED ❌`}`);
+  console.log(`\n${failures === 0 ? "4P SCORING E2E ALL PASSED ✅" : `${failures} 4P SCORING E2E FAILED ❌`}`);
   process.exit(failures === 0 ? 0 : 1);
 }
 
 main().catch((error) => {
-  console.error("INDIVIDUAL FATAL", error);
+  console.error("4P SCORING E2E FATAL", error);
   process.exit(1);
 });

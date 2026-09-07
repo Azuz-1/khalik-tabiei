@@ -118,9 +118,12 @@ export interface RoundResult {
 }
 
 export interface GameOverInfo {
+  /** Legacy stint count retained for protocol compatibility. */
   totalRounds: number;
   caughtRounds: number;
   escapedRounds: number;
+  targetChallenges: number;
+  completedChallenges: number;
 }
 
 export interface ClientView {
@@ -135,6 +138,8 @@ export interface ClientView {
     phase: GamePhase;
     currentRound: number;
     totalRounds: number;
+    targetChallenges: number;
+    completedChallenges: number;
     maxPlayers: number;
     minPlayers: number;
     hostUid: string;
@@ -174,6 +179,7 @@ export interface ClientView {
   reveal?: RevealedAnswer[];
   myVoteSubmitted?: boolean;
   votesProgress?: { submitted: number; total: number; requiredVotes: number };
+  /** Deprecated live aggregate tally. New product UI intentionally withholds target totals until stint end. */
   liveVoteTally?: VoteTallyEntry[];
   voteTargets?: Array<{ uid: string; name: string }>;
   result?: RoundResult;

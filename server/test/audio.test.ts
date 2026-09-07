@@ -305,12 +305,13 @@ test("unsupported AudioContext fails gracefully and gameplay-facing calls remain
   });
 });
 
-test("Player phone has no audio integration", async () => {
+test("Player phone has no audio playback integration", async () => {
   const playerSource = await readFile(
     new URL("../../client/src/screens/Player.tsx", import.meta.url),
     "utf8",
   );
-  assert.equal(playerSource.includes("/audio/"), false);
   assert.equal(playerSource.includes("gameAudio"), false);
   assert.equal(playerSource.includes("AudioContext"), false);
+  assert.equal(playerSource.includes("playCountdownTick"), false);
+  assert.equal(playerSource.includes("playAction"), false);
 });

@@ -9,7 +9,7 @@ async function waitForPhase(room: { phase: string }, phase: string): Promise<voi
   assert.equal(room.phase, phase);
 }
 
-test("removed player with an earlier pending point never becomes a ghost scoreboard entry", async () => {
+test("removed player with an earlier correct streak never becomes a ghost scoreboard entry", async () => {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 2,
@@ -25,9 +25,7 @@ test("removed player with an earlier pending point never becomes a ghost scorebo
 
   manager.handle(host.conn, {
     t: "SET_SETTINGS",
-    totalRounds: 3,
     selectedModes: ["HANDS", "POINT", "NUMBER"],
-    playStyle: "INDIVIDUAL",
   });
   manager.handle(host.conn, { t: "START_GAME" });
 
@@ -37,19 +35,20 @@ test("removed player with an earlier pending point never becomes a ghost scorebo
 
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  const departing = normals[2];
+  const departing = normals[2]!;
 
-  // Two correct guesses are below the 4-player majority of three. One belongs
-  // to the player who will leave before this Round completes.
-  manager.handle(normals[0].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  // Two correct guesses are below the 4-player majority of three. Their C1
+  // starts are hidden server-only streak state; the impostor earns +1 survival.
+  manager.handle(normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
   manager.handle(departing.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[1].conn, { t: "SUBMIT_VOTE", targetUid: normals[0].uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1].uid });
+  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, false);
-  assert.equal(room.pendingRoundScores.get(normals[0].uid), 1);
-  assert.equal(room.pendingRoundScores.get(departing.uid), 1);
+  assert.equal(room.correctVoteStreakStart.get(normals[0]!.uid), 1);
+  assert.equal(room.correctVoteStreakStart.get(departing.uid), 1);
+  assert.equal(room.pendingRoundScores.get(impostor.uid), 1);
   assert.ok([...room.players.values()].every((player) => player.score === 0));
 
   manager.handle(host.conn, { t: "NEXT_ROUND" });
@@ -67,16 +66,17 @@ test("removed player with an earlier pending point never becomes a ghost scorebo
   manager.handle(host.conn, { t: "START_VOTING" });
 
   const remainingNormals = remaining.filter((player) => player.uid !== impostor.uid);
-  manager.handle(remainingNormals[0].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(remainingNormals[1].conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: remainingNormals[0].uid });
+  manager.handle(remainingNormals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(remainingNormals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: remainingNormals[0]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, true);
-  assert.equal(room.pendingRoundScores.size, 0, "completed Round clears every pending entry");
-  assert.equal(room.players.get(normals[0].uid)?.score, 2, "remaining earlier +1 is preserved");
-  assert.equal(room.players.get(normals[1].uid)?.score, 1, "remaining current correct vote scores");
-  assert.equal(room.players.get(impostor.uid)?.score, 0);
+  assert.equal(room.pendingRoundScores.size, 0, "completed stint clears hidden pending entries");
+  assert.equal(room.correctVoteStreakStart.size, 0, "completed stint clears hidden streak state");
+  assert.equal(room.players.get(normals[0]!.uid)?.score, 3, "C1 continuous correct streak keeps the 4-player +3 value");
+  assert.equal(room.players.get(normals[1]!.uid)?.score, 2, "new correct streak beginning in C2 gets +2");
+  assert.equal(room.players.get(impostor.uid)?.score, 1, "the impostor keeps the one C1 survival point");
 
   const view = lastMessage(host.socket, "STATE")!.view;
   assert.ok(view.scoreboard);

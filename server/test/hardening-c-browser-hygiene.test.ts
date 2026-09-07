@@ -28,13 +28,10 @@ test("browser specs never use fixed sleeps for phase correctness", () => {
   }
 });
 
-test("a real full-game browser journey exists and drives production phases", () => {
+test("a real full-game browser journey exists and drives the competitive production phases", () => {
   const journey = specs().find((file) => file.name.includes("journey"));
   assert.ok(journey, "a full-game browser journey spec must exist");
 
-  // The journey has to exercise the real end-to-end path, not a shortcut: a
-  // genuine offline/online round trip, a Host kick, a configured TEAM match,
-  // per-round impostor discovery, and an authoritative GAME_OVER.
   for (const marker of [
     "setOffline(true)",
     "setOffline(false)",
@@ -42,24 +39,27 @@ test("a real full-game browser journey exists and drives production phases", () 
     "ابدأ اللعبة",
     "identifyRoles",
     "ابدأ التصويت",
+    "الأصوات مخفية للحين",
+    "النقاط بعد دور المتخفي",
     "خلصت اللعبة",
   ]) {
-    assert.ok(
-      journey.source.includes(marker),
-      `the journey spec must still cover ${marker}`,
-    );
+    assert.ok(journey.source.includes(marker), `the journey spec must still cover ${marker}`);
   }
 
-  // Impostor selection is weighted-random, so the journey must re-derive the
-  // role every round instead of assuming it rotates.
   assert.ok(
-    /for \(let round = 1; round <= 3; round \+= 1\)/.test(journey.source),
-    "the journey must loop over three real rounds",
+    /for \(let challenge = 1; challenge <= 9; challenge \+= 1\)/.test(journey.source),
+    "the journey must loop over nine real base Challenges",
   );
   assert.ok(
-    journey.source.includes("never\n * assumes the role moved") ||
-      journey.source.includes("never assumes the role moved") ||
-      journey.source.includes("re-derived every round"),
-    "the journey must document that impostor identity is re-derived per round",
+    journey.source.includes("exactly one impostor per stint"),
+    "the journey must re-derive the weighted-random impostor for every new stint",
+  );
+  assert.ok(
+    journey.source.includes("player-countdown-number"),
+    "the journey must verify the newly approved phone countdown cue",
+  );
+  assert.ok(
+    journey.source.includes("live target totals must never be serialized"),
+    "the journey must assert the hidden live target-tally contract",
   );
 });

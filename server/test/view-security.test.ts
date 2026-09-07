@@ -30,7 +30,6 @@ function addPlayer(room: RoomState, index: number): InternalPlayer {
 function startedRoom(count = 3): RoomState {
   const room = createRoomState("ABCDE", testUid(99), 1);
   for (let index = 1; index <= count; index += 1) addPlayer(room, index);
-  room.totalRounds = 3;
   engine.startGame(room, room.hostUid, deps);
   return room;
 }
@@ -75,11 +74,7 @@ test("host and impostor receive no prompt or promptId before prompt reveal", () 
     if (phase === "HOLD") engine.toHold(room, 9_000, deps);
 
     const host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
-    const impostor = buildView(
-      room,
-      round.impostorUid,
-      "https://good.example/join/ABCDE",
-    );
+    const impostor = buildView(room, round.impostorUid, "https://good.example/join/ABCDE");
 
     assert.equal(host.myPrompt, undefined);
     assert.equal(host.publicPrompt, undefined);
@@ -122,29 +117,18 @@ test("prompt becomes public to host and impostor only after HOLD", () => {
   engine.toAction(room, 7_000, deps);
   engine.toHold(room, 9_000, deps);
 
-  assertNoPrompt(
-    buildView(room, room.hostUid, "https://good.example/join/ABCDE"),
-    round.prompt,
-    round.promptId,
-  );
+  assertNoPrompt(buildView(room, room.hostUid, "https://good.example/join/ABCDE"), round.prompt, round.promptId);
 
   engine.revealPrompt(room, 11_500, deps);
   const host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
-  const impostor = buildView(
-    room,
-    round.impostorUid,
-    "https://good.example/join/ABCDE",
-  );
+  const impostor = buildView(room, round.impostorUid, "https://good.example/join/ABCDE");
   assert.equal(host.publicPrompt?.text, round.prompt);
   assert.equal(impostor.publicPrompt?.text, round.prompt);
   assert.ok(!JSON.stringify(host).includes(round.promptId));
   assert.ok(!JSON.stringify(impostor).includes(round.promptId));
 
   engine.toDiscussion(room, deps);
-  assert.equal(
-    buildView(room, room.hostUid, "https://good.example/join/ABCDE").publicPrompt?.text,
-    round.prompt,
-  );
+  assert.equal(buildView(room, room.hostUid, "https://good.example/join/ABCDE").publicPrompt?.text, round.prompt);
 });
 
 test("spectator/non-participant never receives a private prompt", () => {
@@ -157,7 +141,7 @@ test("spectator/non-participant never receives a private prompt", () => {
   assertNoPrompt(view, room.round!.prompt, room.round!.promptId);
 });
 
-test("host live tally updates in stable participant order without voter identity", () => {
+test("Host sees anonymous vote progress while live target totals stay hidden", () => {
   const room = startedRoom();
   const round = room.round!;
   advanceToVoting(room);
@@ -165,18 +149,13 @@ test("host live tally updates in stable participant order without voter identity
 
   let host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
   assert.equal(host.votesProgress?.submitted, 0);
-  assert.deepEqual(host.liveVoteTally?.map((row) => row.uid), round.participantUids);
-  assert.equal(host.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 0);
-  assert.ok(host.liveVoteTally?.every((row) => row.votes === 0));
+  assert.equal(host.liveVoteTally, undefined);
   assertNoVoterMapping(host);
 
   engine.submitVote(room, a, b, deps);
   host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
   assert.equal(host.votesProgress?.submitted, 1);
-  assert.deepEqual(host.liveVoteTally?.map((row) => row.uid), round.participantUids);
-  assert.equal(host.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 1);
-  assert.equal(host.liveVoteTally?.find((row) => row.uid === b)?.votes, 1);
-  assert.ok(host.liveVoteTally?.some((row) => row.votes === 0));
+  assert.equal(host.liveVoteTally, undefined);
   assertNoVoterMapping(host);
 
   const playerAfterFirstVote = buildView(room, a, "https://good.example/join/ABCDE");
@@ -187,8 +166,7 @@ test("host live tally updates in stable participant order without voter identity
   engine.submitVote(room, b, a, deps);
   host = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
   assert.equal(host.votesProgress?.submitted, 2);
-  assert.deepEqual(host.liveVoteTally?.map((row) => row.uid), round.participantUids);
-  assert.equal(host.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 2);
+  assert.equal(host.liveVoteTally, undefined);
   assertNoVoterMapping(host);
 
   const waitingPlayer = buildView(room, c, "https://good.example/join/ABCDE");
@@ -248,7 +226,7 @@ test("survived challenge 1/2 result hides identity and tally but keeps already-p
   }
 });
 
-test("round-end result exposes anonymous aggregate tally including zero-vote players", () => {
+test("stint-end result exposes anonymous aggregate tally including zero-vote players", () => {
   const room = startedRoom(4);
   const round = room.round!;
   advanceToVoting(room);
@@ -272,24 +250,28 @@ test("round-end result exposes anonymous aggregate tally including zero-vote pla
   assertNoVoterMapping(view);
 });
 
-test("current client views expose no score, scoreboard, ranking, points, or winner payload", () => {
+test("active-stint client views expose no score, scoreboard, ranking, points, or winner payload", () => {
   const room = startedRoom();
-  const lobbyLike = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
-  const json = JSON.stringify(lobbyLike);
+  const activeView = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
+  const json = JSON.stringify(activeView);
   assert.ok(!json.includes("\"score\""));
   assert.ok(!json.includes("scoreboard"));
   assert.ok(!json.includes("ranking"));
   assert.ok(!json.includes("roundScores"));
   assert.ok(!json.includes("winners"));
+  assert.ok(!json.includes("correctVoteStreakStart"));
 });
 
-test("game over exposes only caught/escaped group summary", () => {
+test("game over exposes challenge summary and final scoreboard without vote mapping", () => {
   const room = startedRoom();
   room.roundOutcomes = [
     { roundIndex: 1, caught: true, challengeIndex: 1 },
-    { roundIndex: 2, caught: false, challengeIndex: 3 },
-    { roundIndex: 3, caught: true, challengeIndex: 2 },
+    { roundIndex: 2, caught: false, challengeIndex: 2 },
+    { roundIndex: 3, caught: true, challengeIndex: 1 },
   ];
+  room.completedChallenges = 10;
+  room.players.get(testUid(1))!.score = 4;
+  room.players.get(testUid(2))!.score = 2;
   room.phase = "GAME_OVER";
 
   const view = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
@@ -297,9 +279,13 @@ test("game over exposes only caught/escaped group summary", () => {
     totalRounds: 3,
     caughtRounds: 2,
     escapedRounds: 1,
+    targetChallenges: 9,
+    completedChallenges: 10,
   });
+  assert.ok(view.scoreboard);
+  assert.equal(view.scoreboard[0]?.score, 4);
+  assertNoVoterMapping(view);
   const json = JSON.stringify(view);
-  assert.ok(!json.includes("ranking"));
-  assert.ok(!json.includes("winner"));
-  assert.ok(!json.includes("scoreboard"));
+  assert.ok(!json.includes("voterUid"));
+  assert.ok(!json.includes("targetUid"));
 });

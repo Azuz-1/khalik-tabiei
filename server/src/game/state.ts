@@ -2,6 +2,7 @@
 import type { CategoryId, GameMode, GamePhase, PlayStyle } from "../../../shared/types.js";
 import {
   ANSWER_MAX,
+  BASE_CHALLENGES,
   DEFAULT_GAME_MODES,
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -41,6 +42,8 @@ export interface RoundState {
   impostorUid: string;
   participantUids: string[];
   challengeIndex: number;
+  /** Fixed for new impostor stints. Optional only for legacy/manual fixtures, which fall back to 3. */
+  maxChallenges?: number;
   mode: GameMode;
   promptId: string;
   prompt: string;
@@ -87,6 +90,10 @@ export interface RoomState {
   maxPlayers: number;
   totalRounds: number;
   currentRound: number;
+  /** Competitive game length: play at least this many Challenges, then finish the active impostor stint. */
+  targetChallenges: number;
+  /** Authoritative count of completed Challenges in the current match. */
+  completedChallenges: number;
   admissionLocked: boolean;
   /** Blocks a signed anonymous UID, not a physical person. */
   kickedIdentities: Map<string, string>;
@@ -98,7 +105,10 @@ export interface RoomState {
   lastMode?: GameMode;
   players: Map<string, InternalPlayer>;
   round: RoundState | null;
+  /** Server-only score deltas accumulated during the active impostor stint. */
   pendingRoundScores: Map<string, number>;
+  /** Server-only start Challenge for each normal player's current uninterrupted correct-vote streak. */
+  correctVoteStreakStart: Map<string, number>;
   usedPairIds: Set<string>;
   usedPromptIds: Set<string>;
   impostorHistory: string[];
@@ -122,15 +132,18 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     maxPlayers: MAX_PLAYERS,
     totalRounds: 0,
     currentRound: 0,
+    targetChallenges: BASE_CHALLENGES,
+    completedChallenges: 0,
     admissionLocked: false,
     kickedIdentities: new Map(),
     categories: [],
-    playStyle: "TEAM",
+    playStyle: "INDIVIDUAL",
     selectedModes: [...DEFAULT_GAME_MODES],
     modeBag: [],
     players: new Map(),
     round: null,
     pendingRoundScores: new Map(),
+    correctVoteStreakStart: new Map(),
     usedPairIds: new Set(),
     usedPromptIds: new Set(),
     impostorHistory: [],

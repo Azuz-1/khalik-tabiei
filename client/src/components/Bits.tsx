@@ -37,7 +37,7 @@ export function ResultBody({ result }: { result: RoundResult }) {
         <div className="subtitle center">المتخفي كان</div>
         <div className="impostor-name center">{result.impostorName}</div>
         <div className="pill-note" style={{ marginInline: "auto" }}>
-          انتهت الجولة في التحدّي {result.challengeIndex} من {result.maxChallenges}
+          انتهى دوره في التحدّي {result.challengeIndex} من {result.maxChallenges}
         </div>
       </div>
 
@@ -50,6 +50,10 @@ export function ResultBody({ result }: { result: RoundResult }) {
 }
 
 export function roundLabel(view: ClientView): string {
-  const challenge = view.challenge ? ` · تحدّي ${view.challenge.index}/${view.challenge.max}` : "";
-  return `جولة ${view.room.currentRound} من ${view.room.totalRounds}${challenge}`;
+  const globalChallenge = view.room.completedChallenges + (view.room.phase === "RESULT" ? 0 : 1);
+  const base = globalChallenge <= view.room.targetChallenges
+    ? `التحدّي ${Math.max(1, globalChallenge)} من ${view.room.targetChallenges}`
+    : "إكمال دور المتخفي الأخير";
+  const stint = view.challenge ? ` · دور المتخفي ${view.challenge.index}/${view.challenge.max}` : "";
+  return `${base}${stint}`;
 }

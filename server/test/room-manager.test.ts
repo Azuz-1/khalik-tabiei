@@ -28,7 +28,6 @@ function start(manager: RoomManager, count = 3) {
   const setup = setupPlayers(manager, count);
   manager.handle(setup.host.conn, {
     t: "SET_SETTINGS",
-    totalRounds: 3,
     selectedModes: ["HANDS", "POINT", "NUMBER"],
   });
   manager.handle(setup.host.conn, { t: "START_GAME" });
@@ -118,11 +117,11 @@ test("host can select one/two/three modes; non-host and zero-mode changes are re
   manager.handle(host.conn, { t: "SET_SETTINGS", selectedModes: [] });
   assert.equal(errorCode(host.socket), "NO_MODE_SELECTED");
 
-  manager.handle(players[0].conn, {
+  manager.handle(players[0]!.conn, {
     t: "SET_SETTINGS",
     selectedModes: ["POINT"],
   });
-  assert.equal(errorCode(players[0].socket), "NOT_HOST");
+  assert.equal(errorCode(players[0]!.socket), "NOT_HOST");
   assert.equal(room.selectedModes.length, 3);
   manager.dispose();
 });
@@ -212,7 +211,7 @@ test("all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> DISCUSSION"
   const { players, room } = start(manager);
 
   for (let index = 0; index < players.length - 1; index += 1) {
-    manager.handle(players[index].conn, { t: "MARK_READY" });
+    manager.handle(players[index]!.conn, { t: "MARK_READY" });
   }
   assert.equal(room.phase, "QUESTION");
 
@@ -248,9 +247,9 @@ test("survived challenge advances with same impostor and next balanced challenge
   const bagBefore = room.modeBag.length;
 
   manager.handle(host.conn, { t: "START_VOTING" });
-  manager.handle(players[0].conn, { t: "SUBMIT_VOTE", targetUid: players[1].uid });
-  manager.handle(players[1].conn, { t: "SUBMIT_VOTE", targetUid: players[2].uid });
-  manager.handle(players[2].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  manager.handle(players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: players[1]!.uid });
+  manager.handle(players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[2]!.uid });
+  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round?.roundComplete, false);
 
@@ -264,7 +263,7 @@ test("survived challenge advances with same impostor and next balanced challenge
   manager.dispose();
 });
 
-test("host sees live aggregate vote counts while player wires remain anonymous", async () => {
+test("Host sees anonymous vote progress while target totals stay hidden from every wire", async () => {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 2,
@@ -275,21 +274,15 @@ test("host sees live aggregate vote counts while player wires remain anonymous",
   const { host, players, room } = await toDiscussion(manager);
   manager.handle(host.conn, { t: "START_VOTING" });
 
-  const order = [...room.round!.participantUids];
   let hostView = lastMessage(host.socket, "STATE")!.view;
   assert.equal(hostView.votesProgress?.submitted, 0);
-  assert.deepEqual(hostView.liveVoteTally?.map((row) => row.uid), order);
-  assert.equal(hostView.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 0);
-  assert.ok(hostView.liveVoteTally?.every((row) => row.votes === 0));
+  assert.equal(hostView.liveVoteTally, undefined);
 
-  const firstTarget = players[1].uid;
-  manager.handle(players[0].conn, { t: "SUBMIT_VOTE", targetUid: firstTarget });
+  const firstTarget = players[1]!.uid;
+  manager.handle(players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: firstTarget });
   hostView = lastMessage(host.socket, "STATE")!.view;
   assert.equal(hostView.votesProgress?.submitted, 1);
-  assert.deepEqual(hostView.liveVoteTally?.map((row) => row.uid), order);
-  assert.equal(hostView.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 1);
-  assert.equal(hostView.liveVoteTally?.find((row) => row.uid === firstTarget)?.votes, 1);
-  assert.ok(hostView.liveVoteTally?.some((row) => row.votes === 0));
+  assert.equal(hostView.liveVoteTally, undefined);
 
   const firstHostJson = JSON.stringify(hostView);
   assert.ok(!firstHostJson.includes("voterUid"));
@@ -304,13 +297,12 @@ test("host sees live aggregate vote counts while player wires remain anonymous",
     assert.ok(!json.includes("voteBreakdown"));
   }
 
-  manager.handle(players[1].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  manager.handle(players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
   hostView = lastMessage(host.socket, "STATE")!.view;
   assert.equal(hostView.votesProgress?.submitted, 2);
-  assert.deepEqual(hostView.liveVoteTally?.map((row) => row.uid), order);
-  assert.equal(hostView.liveVoteTally?.reduce((sum, row) => sum + row.votes, 0), 2);
+  assert.equal(hostView.liveVoteTally, undefined);
 
-  manager.handle(players[2].conn, { t: "SUBMIT_VOTE", targetUid: players[0].uid });
+  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
   assert.equal(room.phase, "RESULT");
   manager.dispose();
 });
@@ -326,28 +318,28 @@ test("voting survives disconnect/reconnect and completes only after every partic
   const { host, players, room } = await toDiscussion(manager);
 
   manager.handle(host.conn, { t: "START_VOTING" });
-  manager.handle(players[0].conn, {
+  manager.handle(players[0]!.conn, {
     t: "SUBMIT_VOTE",
-    targetUid: players[1].uid,
+    targetUid: players[1]!.uid,
   });
-  manager.disconnect(players[0].conn);
-  manager.handle(players[1].conn, {
+  manager.disconnect(players[0]!.conn);
+  manager.handle(players[1]!.conn, {
     t: "SUBMIT_VOTE",
-    targetUid: players[0].uid,
+    targetUid: players[0]!.uid,
   });
   assert.equal(room.phase, "VOTING");
 
-  const third = players[2];
+  const third = players[2]!;
   manager.disconnect(third.conn);
   const thirdReconnect = authenticatedConnection(manager, third.uid);
   assert.equal(lastMessage(thirdReconnect.socket, "STATE")?.view.room.phase, "VOTING");
   manager.handle(thirdReconnect.conn, {
     t: "SUBMIT_VOTE",
-    targetUid: players[0].uid,
+    targetUid: players[0]!.uid,
   });
 
   assert.equal(room.phase, "RESULT");
-  assert.equal(room.round?.votes.get(players[0].uid), players[1].uid);
+  assert.equal(room.round?.votes.get(players[0]!.uid), players[1]!.uid);
   manager.dispose();
 });
 
@@ -388,23 +380,10 @@ test("disconnect after a survived challenge keeps the result and seat until expl
   const { host, players, room } = await toDiscussion(manager, 4);
   manager.handle(host.conn, { t: "START_VOTING" });
 
-  // 1-1-1-1 means the impostor cannot have the required 3-vote majority.
-  manager.handle(players[0].conn, {
-    t: "SUBMIT_VOTE",
-    targetUid: players[1].uid,
-  });
-  manager.handle(players[1].conn, {
-    t: "SUBMIT_VOTE",
-    targetUid: players[0].uid,
-  });
-  manager.handle(players[2].conn, {
-    t: "SUBMIT_VOTE",
-    targetUid: players[3].uid,
-  });
-  manager.handle(players[3].conn, {
-    t: "SUBMIT_VOTE",
-    targetUid: players[2].uid,
-  });
+  manager.handle(players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: players[1]!.uid });
+  manager.handle(players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
+  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[3]!.uid });
+  manager.handle(players[3]!.conn, { t: "SUBMIT_VOTE", targetUid: players[2]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round?.roundComplete, false);
 

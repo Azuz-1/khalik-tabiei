@@ -177,6 +177,33 @@ test("request IDs dedupe only within authenticated action and match context", ()
   manager.dispose();
 });
 
+test("request IDs are challenge-scoped so a prior vote cannot receive a stale ACK", () => {
+  const manager = new RoomManager({ rng: () => 0 });
+  const host = createRoom(manager);
+  const players = [2, 3, 4].map((index) => joinPlayer(manager, host.code, index));
+  const room = manager.roomForTests(host.code)!;
+  manager.handle(host.conn, { t: "START_GAME" });
+
+  const voter = players[0]!;
+  const targetUid = room.round!.participantUids.find((uid) => uid !== voter.uid)!;
+  room.phase = "VOTING";
+
+  assert.equal(manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote1" }), true);
+  assert.equal(room.round!.votes.get(voter.uid), targetUid);
+  assert.equal(lastMessage(voter.socket, "ACK")?.rid, "vote1");
+
+  // Same stint, same phase, but a new Challenge must be a distinct idempotency context.
+  room.round!.challengeIndex = 2;
+  room.round!.votes.clear();
+  assert.equal(manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote1" }), false);
+  assert.equal(lastMessage(voter.socket, "ERROR")?.code, "BAD_REQUEST");
+  assert.equal(room.round!.votes.has(voter.uid), false, "stale request id is rejected instead of acknowledged as a fresh vote");
+
+  assert.equal(manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote2" }), true);
+  assert.equal(room.round!.votes.get(voter.uid), targetUid, "a fresh request id records the new Challenge vote");
+  manager.dispose();
+});
+
 test("kicked identity, Lobby lock, reserved reconnect, and Host unblock have distinct semantics", () => {
   const manager = new RoomManager({ rng: () => 0 });
   const host = createRoom(manager);

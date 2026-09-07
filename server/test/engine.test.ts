@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { GameMode } from "../../shared/types.js";
-import { GAME_MODE_IDS } from "../../shared/constants.js";
+import { BASE_CHALLENGES, GAME_MODE_IDS } from "../../shared/constants.js";
 import {
   cleanName,
   createRoomState,
@@ -35,7 +35,6 @@ function roomWith(count = 4): RoomState {
   for (let index = 1; index <= count; index += 1) {
     addPlayer(room, `p${index}`, `لاعب${index}`);
   }
-  room.totalRounds = 3;
   return room;
 }
 
@@ -147,30 +146,30 @@ test("majority threshold is floor(n / 2) + 1 for 3-10 players", () => {
   }
 });
 
-test("one selected mode repeats normally across challenges and rounds", () => {
+test("one selected mode repeats across challenges and new impostor stints", () => {
   const room = roomWith(3);
-  room.totalRounds = 3;
   engine.setSettings(room, "host", { selectedModes: ["POINT"] }, deps);
   engine.startGame(room, "host", deps);
   const impostorUid = room.round!.impostorUid;
 
-  for (let challenge = 1; challenge <= 3; challenge += 1) {
+  for (let challenge = 1; challenge <= 2; challenge += 1) {
     assert.equal(room.round?.mode, "POINT");
     assert.equal(room.round?.impostorUid, impostorUid);
     assertPromptMatchesMode(room);
     readyToVote(room);
     voteNoMajority(room);
-    if (challenge < 3) engine.nextRound(room, "host", deps);
+    if (challenge < 2) engine.nextRound(room, "host", deps);
   }
 
   assert.equal(room.round?.roundComplete, true);
   engine.nextRound(room, "host", deps);
   assert.equal(room.currentRound, 2);
+  assert.equal(room.round?.challengeIndex, 1);
   assert.equal(room.round?.mode, "POINT");
 });
 
-test("same impostor stays through a round while mode can change each challenge", () => {
-  const room = roomWith(3);
+test("same impostor stays through a three-Challenge stint while mode can change", () => {
+  const room = roomWith(4);
   engine.startGame(room, "host", deps);
 
   const impostorUid = room.round!.impostorUid;
@@ -191,22 +190,22 @@ test("same impostor stays through a round while mode can change each challenge",
 
   assert.deepEqual(new Set(modes), new Set(["HANDS", "POINT", "NUMBER"]));
   assert.equal(new Set(prompts).size, 3);
+  assert.equal(room.round?.roundComplete, true);
 });
 
 test("balanced mode bag is consumed per challenge and refills only after all selected modes", () => {
-  const room = roomWith(3);
-  room.totalRounds = 3;
+  const room = roomWith(4);
   engine.startGame(room, "host", deps);
   const sequence: GameMode[] = [];
 
-  for (let roundIndex = 1; roundIndex <= 2; roundIndex += 1) {
+  for (let stint = 1; stint <= 2; stint += 1) {
     for (let challenge = 1; challenge <= 3; challenge += 1) {
       sequence.push(room.round!.mode);
       readyToVote(room);
       voteNoMajority(room);
       if (challenge < 3) engine.nextRound(room, "host", deps);
     }
-    if (roundIndex < 2) engine.nextRound(room, "host", deps);
+    if (stint < 2) engine.nextRound(room, "host", deps);
   }
 
   assert.deepEqual(new Set(sequence.slice(0, 3)), new Set(["HANDS", "POINT", "NUMBER"]));
@@ -314,9 +313,8 @@ test("majority on a normal player still lets impostor survive", () => {
   assert.equal(room.round!.roundComplete, false);
 });
 
-test("impostor majority catches them, ends round immediately, but game continues to next round", () => {
+test("impostor majority catches them, ends the stint immediately, but the match continues before nine Challenges", () => {
   const room = roomWith(4);
-  room.totalRounds = 3;
   engine.startGame(room, "host", deps);
 
   readyToVote(room);
@@ -325,7 +323,7 @@ test("impostor majority catches them, ends round immediately, but game continues
   assert.equal(room.round!.groupFound, true);
   assert.equal(room.round!.roundComplete, true);
   assert.equal(room.phase, "RESULT");
-  assert.equal(room.currentRound, 1);
+  assert.equal(room.completedChallenges, 1);
 
   engine.nextRound(room, "host", deps);
   assert.equal(room.phase, "QUESTION");
@@ -333,8 +331,8 @@ test("impostor majority catches them, ends round immediately, but game continues
   assert.ok(room.round!.participantUids.includes(room.round!.impostorUid));
 });
 
-test("surviving challenge three ends the round with no points", () => {
-  const room = roomWith(3);
+test("surviving all three Challenges completes a four-player stint and awards three survival points", () => {
+  const room = roomWith(4);
   engine.startGame(room, "host", deps);
   const impostorUid = room.round!.impostorUid;
 
@@ -352,14 +350,14 @@ test("surviving challenge three ends the round with no points", () => {
 
   assert.equal(room.round!.roundComplete, true);
   assert.equal(room.round!.groupFound, false);
-  assert.ok([...room.players.values()].every((player) => player.score === 0));
+  assert.equal(room.players.get(impostorUid)?.score, 3);
 });
 
 test("prompt ids do not repeat within a game while unused prompts remain", () => {
-  const room = roomWith(3);
-  room.totalRounds = 5;
+  const room = roomWith(4);
   engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
   engine.startGame(room, "host", deps);
+  room.targetChallenges = 20;
   const seen: string[] = [];
 
   while (seen.length < 11) {
@@ -373,27 +371,24 @@ test("prompt ids do not repeat within a game while unused prompts remain", () =>
   assert.equal(new Set(seen).size, seen.length);
 });
 
-test("game over happens only after configured round count and tracks group outcomes", () => {
-  const room = roomWith(3);
-  room.totalRounds = 3;
+test("game over happens after nine base Challenges and the active stint is complete", () => {
+  const room = roomWith(4);
   engine.startGame(room, "host", deps);
 
-  for (let roundIndex = 1; roundIndex <= 3; roundIndex += 1) {
+  for (let challenge = 1; challenge <= BASE_CHALLENGES; challenge += 1) {
     readyToVote(room);
     voteCatch(room);
     assert.equal(room.round!.roundComplete, true);
     assert.equal(room.phase, "RESULT");
     engine.nextRound(room, "host", deps);
 
-    if (roundIndex < 3) {
-      assert.equal(room.phase, "QUESTION");
-      assert.equal(room.currentRound, roundIndex + 1);
-    }
+    if (challenge < BASE_CHALLENGES) assert.equal(room.phase, "QUESTION");
   }
 
   assert.equal(room.phase, "GAME_OVER");
-  assert.equal(room.roundOutcomes.length, 3);
-  assert.equal(room.roundOutcomes.filter((outcome) => outcome.caught).length, 3);
+  assert.equal(room.completedChallenges, BASE_CHALLENGES);
+  assert.equal(room.roundOutcomes.length, BASE_CHALLENGES);
+  assert.equal(room.roundOutcomes.filter((outcome) => outcome.caught).length, BASE_CHALLENGES);
 });
 
 test("Arabic display-name sanitization remains intact", () => {

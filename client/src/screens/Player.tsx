@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ClientView, GameModeInfo, ScoreEntry } from "../../../shared/types.js";
+import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
+import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
 import { ResultBody, roundLabel } from "../components/Bits.js";
 import { Players } from "../components/Players.js";
@@ -8,9 +10,9 @@ export function Player({ view }: { view: ClientView }) {
   switch (view.room.phase) {
     case "LOBBY": return <PlayerLobby view={view} />;
     case "QUESTION": return <PlayerPrompt view={view} />;
-    case "COUNTDOWN":
-    case "ACTION":
-    case "HOLD": return <PlayerWatchScreen />;
+    case "COUNTDOWN": return <PlayerCountdown view={view} />;
+    case "ACTION": return <PlayerAction view={view} />;
+    case "HOLD": return <PlayerHold />;
     case "PROMPT_REVEAL": return <PlayerPromptReveal view={view} />;
     case "DISCUSSION": return <PlayerDiscussion view={view} />;
     case "VOTING": return <PlayerVote view={view} />;
@@ -32,7 +34,7 @@ function modeTitle(view: ClientView): string {
 function PlayerScoreboard({ rows, selfUid, round }: { rows: ScoreEntry[]; selfUid: string; round?: boolean }) {
   return (
     <div className="card stack" style={{ width: "100%" }}>
-      <div className="code-label">{round ? "النقاط بعد الجولة" : "الترتيب النهائي"}</div>
+      <div className="code-label">{round ? "النقاط بعد دور المتخفي" : "الترتيب النهائي"}</div>
       {rows.map((row) => (
         <div key={row.uid} className="row between" style={{ fontWeight: row.uid === selfUid ? 900 : 700 }}>
           <span>#{row.rank} {row.name}{row.uid === selfUid ? " — أنت" : ""}</span>
@@ -51,8 +53,8 @@ function PlayerLobby({ view }: { view: ClientView }) {
       <div className="center stack">
         <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>أنت داخل 🎉</h1>
         <span className="pill-note" style={{ direction: "ltr", marginInline: "auto" }}>غرفة {view.room.code}</span>
-        <span className="chip">{view.room.playStyle === "INDIVIDUAL" ? "🏅 فردي بالنقاط" : "🤝 جماعي"}</span>
-        <p className="subtitle">{view.room.playStyle === "INDIVIDUAL" ? "التصويت الصحيح = +1، والمتخفي إذا نجا من الجولة = +2." : "ننتظر المضيف يبدأ اللعبة…"}</p>
+        <span className="chip">🏅 منافسة بالنقاط</span>
+        <p className="subtitle">{view.room.targetChallenges} تحديات أساسية، ونكمّل دور آخر متخفي. الأغلبية تمسكه، وكل لاعب يجمع نقاطه بنفسه.</p>
         <div className="players">{selectedModes.map((mode) => <span className="chip" key={mode.id}>{mode.icon} {mode.label}</span>)}</div>
       </div>
       <div className="card">
@@ -65,10 +67,10 @@ function PlayerLobby({ view }: { view: ClientView }) {
 }
 
 function PlayerPrompt({ view }: { view: ClientView }) {
-  if (view.myReady === undefined) return <PlayerWatchScreen />;
+  if (view.myReady === undefined) return <PlayerWaitNext />;
   const ready = view.myReady === true;
   const mode = modeInfo(view);
-  if (ready) return <PlayerWatchScreen />;
+  if (ready) return <PlayerReadyWaiting />;
   return (
     <div className="screen">
       <div className="center"><div className="eyebrow">{roundLabel(view)}</div></div>
@@ -91,6 +93,63 @@ function PlayerPrompt({ view }: { view: ClientView }) {
       </div>
       <button className="btn btn-primary" onClick={() => actions.markReady()}>جاهز</button>
       <div className="spacer" />
+    </div>
+  );
+}
+
+function PlayerReadyWaiting() {
+  return (
+    <div className="screen center stack">
+      <div className="spacer" />
+      <div className="ok-badge">جاهز ✓</div>
+      <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>ننتظر الباقين</h1>
+      <p className="subtitle">إذا بدأ العد، بيظهر هنا وعلى الشاشة.</p>
+      <div className="spacer" />
+    </div>
+  );
+}
+
+function PlayerWaitNext() {
+  return (
+    <div className="screen center stack">
+      <div className="spacer" />
+      <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>انتظر الدور الجاي</h1>
+      <p className="subtitle">أنت مو مشارك في دور المتخفي الحالي. مكانك محفوظ وبتدخل مع الدور الجاي.</p>
+      <div className="spacer" />
+    </div>
+  );
+}
+
+function PlayerCountdown({ view }: { view: ClientView }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => tick((value) => value + 1), 100);
+    return () => window.clearInterval(id);
+  }, []);
+  const seconds = visibleCountdownSecond(view.room.phaseEndsAt, estimatedServerNow()) ?? 1;
+  const mode = modeInfo(view);
+  return (
+    <div className="screen center stack player-cue-screen">
+      <div className="eyebrow">استعد…</div>
+      <div className="player-countdown-number">{seconds}</div>
+      <div className="title center" style={{ fontSize: "clamp(22px,7vw,32px)" }}>{mode?.icon} {mode?.label}</div>
+    </div>
+  );
+}
+
+function PlayerAction({ view }: { view: ClientView }) {
+  return (
+    <div className="screen center stack player-cue-screen">
+      <h1 className="title player-action-title">{modeInfo(view)?.actionLabel ?? "الحين!"}</h1>
+    </div>
+  );
+}
+
+function PlayerHold() {
+  return (
+    <div className="screen center stack player-cue-screen">
+      <h1 className="title player-action-title">ثبّتوا…</h1>
+      <p className="subtitle">طالعوا بعض</p>
     </div>
   );
 }
@@ -134,7 +193,7 @@ function PlayerVote({ view }: { view: ClientView }) {
         <div className="center stack">
           <div className="ok-badge">تم تسجيل صوتك</div>
           <p className="subtitle">ننتظر الباقين… <span className="num-ltr">{progress.submitted}/{progress.total}</span></p>
-          {view.room.playStyle === "INDIVIDUAL" ? <p className="helper center">إذا اختيارك صحيح، نقطتك تنحفظ وما تنكشف إلا بعد نهاية الجولة.</p> : null}
+          <p className="helper center">نقاطك وتوزيع الأصوات ما تنكشف إلا بعد نهاية دور المتخفي.</p>
         </div>
         <div className="spacer" />
       </div>
@@ -146,7 +205,7 @@ function PlayerVote({ view }: { view: ClientView }) {
       <div className="center stack">
         <div className="eyebrow">{roundLabel(view)}</div>
         <h1 className="title">مين تحس إنه المتخفي؟</h1>
-        {progress.requiredVotes > 0 ? <p className="helper">{view.room.playStyle === "INDIVIDUAL" ? `اختيارك الصحيح = +1 لك. و${progress.requiredVotes} أصوات تكشف المتخفي بالجولة.` : `يحتاج المتخفي ${progress.requiredVotes} أصوات عشان ينكشف`}</p> : null}
+        {progress.requiredVotes > 0 ? <p className="helper">يحتاج {progress.requiredVotes} أصوات عشان ينمسك. تصويتك الشخصي يدخل في نقاطك بعد نهاية دوره.</p> : null}
       </div>
       <div className="vote-list" role="radiogroup" aria-label="اختر الشخص اللي تحس إنه المتخفي">
         {targets.map((target) => {
@@ -158,25 +217,25 @@ function PlayerVote({ view }: { view: ClientView }) {
           );
         })}
       </div>
-      <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>أكّد التصويت</button>
-      {/*
-        The shared Host screen intentionally shows live aggregate vote counts, so
-        this must not promise absolute secrecy. State exactly what is hidden
-        (the voter-to-target mapping) and what is visible (the totals).
-      */}
-      <p className="helper">ما يظهر مين صوّت لمين، لكن الشاشة تعرض الأعداد بشكل مجمّع. وما تقدر تغيّر صوتك بعدين.</p>
+      <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{picked ? `أكّد التصويت` : "اختر شخص"}</button>
+      <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
       <div className="spacer" />
     </div>
   );
 }
 
 function PlayerResult({ view }: { view: ClientView }) {
+  const finalStint = Boolean(view.result?.roundComplete && view.room.completedChallenges >= view.room.targetChallenges);
   return (
     <div className="screen">
       <div className="spacer" />
       {view.result ? <div className="card"><ResultBody result={view.result} /></div> : null}
       {view.result?.roundComplete && view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} round /> : null}
-      <p className="subtitle center">{view.result?.roundComplete ? "ننتظر المضيف للجولة الجاية…" : "نفس المتخفي مكمل… ننتظر التحدّي الجاي"}</p>
+      <p className="subtitle center">
+        {view.result?.roundComplete
+          ? finalStint ? "انتهى دور المتخفي الأخير… ننتظر الترتيب النهائي" : "ننتظر المضيف يبدأ دور متخفي جديد…"
+          : view.room.completedChallenges >= view.room.targetChallenges ? "نفس المتخفي مكمل… نكمّل دوره الأخير" : "نفس المتخفي مكمل… ننتظر التحدّي الجاي"}
+      </p>
       <div className="spacer" />
     </div>
   );
@@ -191,10 +250,10 @@ function PlayerGameOver({ view }: { view: ClientView }) {
         <h1 className="brand" style={{ fontSize: "clamp(34px,11vw,56px)" }}>خلصت اللعبة 🎉</h1>
         {gameOver ? (
           <>
-            <p className="subtitle">مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} جولات</p>
+            <p className="subtitle">لعبتوا {gameOver.completedChallenges} تحديات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار</p>
             <div className="card stack" style={{ width: "100%" }}>
-              <div className="row between" style={{ fontWeight: 900 }}><span>انكشف</span><span>{gameOver.caughtRounds}</span></div>
-              <div className="row between" style={{ fontWeight: 900 }}><span>نجا</span><span>{gameOver.escapedRounds}</span></div>
+              <div className="row between" style={{ fontWeight: 900 }}><span>انمسك</span><span>{gameOver.caughtRounds}</span></div>
+              <div className="row between" style={{ fontWeight: 900 }}><span>نجا من دوره</span><span>{gameOver.escapedRounds}</span></div>
             </div>
           </>
         ) : null}

@@ -1,9 +1,10 @@
 import { randomInt } from "node:crypto";
 import type { CategoryId, GameMode, GamePhase, PlayStyle } from "../../../shared/types.js";
 import {
-  DEFAULT_ROUNDS,
+  BASE_CHALLENGES,
   GAME_MODE_IDS,
   MAX_CHALLENGES_PER_ROUND,
+  MAX_CHALLENGES_THREE_PLAYERS,
   ROUND_OPTIONS,
   SCORING,
 } from "../../../shared/constants.js";
@@ -72,8 +73,6 @@ function deriveProposedSettings(room: RoomState, patch: SettingsPatch): Proposed
 
 function validateProposedSettings(proposed: ProposedSettings, patch: SettingsPatch): void {
   if (patch.categories !== undefined) {
-    // Legacy TEXT_PAIR content remains in the codebase, but is intentionally
-    // not selectable through the current client/server protocol.
     throw new GameError("BAD_REQUEST", "legacy mode unavailable");
   }
 
@@ -153,11 +152,6 @@ function shuffle<T>(items: T[], rng: () => number): T[] {
   return output;
 }
 
-/**
- * Challenge-level balanced shuffle. Every intentional new Challenge consumes
- * one entry. A reconnect/redeal preserves the already-selected Challenge mode
- * and therefore never calls this function.
- */
 export function pickBalancedMode(room: RoomState, deps: EngineDeps = defaultDeps): GameMode {
   if (!room.selectedModes.length) throw new GameError("NO_MODE_SELECTED");
   if (room.selectedModes.length === 1) {
@@ -197,8 +191,6 @@ function pickPrompt(room: RoomState, mode: GameMode, deps: EngineDeps): Imitatio
   let candidates = pool.filter((prompt) => !room.usedPromptIds.has(prompt.id));
 
   if (!candidates.length) {
-    // Prompt history is game-scoped. Only this mode is reset, and only after
-    // every prompt in its bank has been consumed.
     for (const prompt of pool) room.usedPromptIds.delete(prompt.id);
     candidates = pool;
   }
@@ -208,11 +200,17 @@ function pickPrompt(room: RoomState, mode: GameMode, deps: EngineDeps): Imitatio
   const previousFamily = room.round?.promptId
     ? IMITATION_PROMPTS.find((prompt) => prompt.id === room.round?.promptId)?.family
     : undefined;
-  // Topic spacing is best-effort only. It never bypasses exact game-scoped
-  // no-repeat history; when only one family remains, selection falls back.
   const prompt = choosePromptCandidate(candidates, previousFamily, deps.rng);
   room.usedPromptIds.add(prompt.id);
   return prompt;
+}
+
+function maxChallengesForParticipantCount(participantCount: number): number {
+  return participantCount === 3 ? MAX_CHALLENGES_THREE_PLAYERS : MAX_CHALLENGES_PER_ROUND;
+}
+
+function resolvedMaxChallenges(round: RoundState): number {
+  return round.maxChallenges ?? MAX_CHALLENGES_PER_ROUND;
 }
 
 function prepareChallenge(
@@ -220,13 +218,11 @@ function prepareChallenge(
   impostorUid: string,
   challengeIndex: number,
   participantUids: string[],
+  maxChallenges: number,
   mode: GameMode,
   deps: EngineDeps,
 ): void {
   const prompt = pickPrompt(room, mode, deps);
-
-  // A new Challenge is a new timer identity. It also resets every
-  // challenge-specific result/seal snapshot by constructing a fresh RoundState.
   room.timerGeneration += 1;
   room.pause = undefined;
   room.round = {
@@ -235,6 +231,7 @@ function prepareChallenge(
     impostorUid,
     participantUids,
     challengeIndex,
+    maxChallenges,
     mode,
     promptId: prompt.id,
     prompt: prompt.text,
@@ -256,23 +253,23 @@ function prepareChallenge(
 }
 
 function beginImitationRound(room: RoomState, deps: EngineDeps): void {
+  const active = activePlayers(room);
   const impostorUid = selectImpostor(room, deps);
   const mode = pickBalancedMode(room, deps);
   room.impostorHistory.push(impostorUid);
+  room.pendingRoundScores.clear();
+  room.correctVoteStreakStart.clear();
   prepareChallenge(
     room,
     impostorUid,
     1,
-    activePlayers(room).map((player) => player.uid),
+    active.map((player) => player.uid),
+    maxChallengesForParticipantCount(active.length),
     mode,
     deps,
   );
 }
 
-/**
- * Isolated legacy helper retained so the old TEXT_PAIR engine/data can be
- * maintained without being reachable from current room settings or UI.
- */
 export function beginLegacyRound(room: RoomState, deps: EngineDeps = defaultDeps): void {
   const pair = pickPair(room.categories, room.usedPairIds, deps.rng);
   room.usedPairIds.add(pair.id);
@@ -287,6 +284,7 @@ export function beginLegacyRound(room: RoomState, deps: EngineDeps = defaultDeps
     impostorUid,
     participantUids: activePlayers(room).map((player) => player.uid),
     challengeIndex: 1,
+    maxChallenges: 1,
     mode: "HANDS",
     promptId: "",
     prompt: "",
@@ -312,8 +310,13 @@ export function startGame(room: RoomState, uid: string, deps: EngineDeps = defau
   if (activePlayers(room).length < room.minPlayers) throw new GameError("NOT_ENOUGH_PLAYERS");
   if (!room.selectedModes.length) throw new GameError("NO_MODE_SELECTED");
 
-  if (room.totalRounds === 0) room.totalRounds = DEFAULT_ROUNDS;
+  room.playStyle = "INDIVIDUAL";
+  room.targetChallenges = BASE_CHALLENGES;
+  // RoomManager historically uses totalRounds/currentRound to recognize a final RESULT.
+  // Keep those fields as an internal compatibility sentinel only; product progress is challenge-based.
+  room.totalRounds = BASE_CHALLENGES;
   room.currentRound = 1;
+  room.completedChallenges = 0;
   room.categories = [];
   room.usedPromptIds.clear();
   room.usedPairIds.clear();
@@ -322,12 +325,11 @@ export function startGame(room: RoomState, uid: string, deps: EngineDeps = defau
   room.impostorHistory = [];
   room.roundOutcomes = [];
   room.pendingRoundScores.clear();
+  room.correctVoteStreakStart.clear();
 
   for (const player of room.players.values()) player.score = 0;
   beginImitationRound(room, deps);
 }
-
-// ---- Isolated legacy TEXT_PAIR operations ---------------------------------
 
 export function questionFor(round: RoundState, uid: string): string {
   return uid === round.impostorUid ? round.impostorQuestion : round.normalQuestion;
@@ -375,8 +377,6 @@ export function reveal(room: RoomState, deps: EngineDeps = defaultDeps): void {
   touch(room, deps);
 }
 
-// ---- Current IMITATION operations -----------------------------------------
-
 export function markReady(
   room: RoomState,
   uid: string,
@@ -398,11 +398,7 @@ export function markReady(
   };
 }
 
-export function startCountdown(
-  room: RoomState,
-  endsAt: number,
-  deps: EngineDeps = defaultDeps,
-): void {
+export function startCountdown(room: RoomState, endsAt: number, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "QUESTION");
   if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
   room.phase = "COUNTDOWN";
@@ -410,12 +406,7 @@ export function startCountdown(
   touch(room, deps);
 }
 
-/** Restart the same physical Challenge after a Host disconnect. */
-export function restartCountdown(
-  room: RoomState,
-  endsAt: number,
-  deps: EngineDeps = defaultDeps,
-): void {
+export function restartCountdown(room: RoomState, endsAt: number, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "COUNTDOWN", "ACTION", "HOLD");
   if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
   room.phase = "COUNTDOWN";
@@ -423,11 +414,7 @@ export function restartCountdown(
   touch(room, deps);
 }
 
-export function toAction(
-  room: RoomState,
-  endsAt: number,
-  deps: EngineDeps = defaultDeps,
-): void {
+export function toAction(room: RoomState, endsAt: number, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "COUNTDOWN");
   if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
   room.phase = "ACTION";
@@ -435,11 +422,7 @@ export function toAction(
   touch(room, deps);
 }
 
-export function toHold(
-  room: RoomState,
-  endsAt: number,
-  deps: EngineDeps = defaultDeps,
-): void {
+export function toHold(room: RoomState, endsAt: number, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "ACTION");
   if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
   room.phase = "HOLD";
@@ -447,11 +430,7 @@ export function toHold(
   touch(room, deps);
 }
 
-export function revealPrompt(
-  room: RoomState,
-  endsAt: number,
-  deps: EngineDeps = defaultDeps,
-): void {
+export function revealPrompt(room: RoomState, endsAt: number, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "HOLD");
   if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
   room.phase = "PROMPT_REVEAL";
@@ -459,11 +438,7 @@ export function revealPrompt(
   touch(room, deps);
 }
 
-export function resumePromptReveal(
-  room: RoomState,
-  endsAt: number,
-  deps: EngineDeps = defaultDeps,
-): void {
+export function resumePromptReveal(room: RoomState, endsAt: number, deps: EngineDeps = defaultDeps): void {
   assertPhase(room, "PROMPT_REVEAL");
   if (room.round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
   room.phaseEndsAt = endsAt;
@@ -504,11 +479,7 @@ export function submitVote(
   if (!voter || !voter.connected || !round.participantUids.includes(uid)) {
     throw new GameError("NOT_PLAYER");
   }
-  if (
-    typeof targetUid !== "string" ||
-    targetUid === uid ||
-    !round.participantUids.includes(targetUid)
-  ) {
+  if (typeof targetUid !== "string" || targetUid === uid || !round.participantUids.includes(targetUid)) {
     throw new GameError("INVALID_VOTE");
   }
   if (round.votes.has(uid)) throw new GameError("VOTE_ALREADY_SUBMITTED");
@@ -533,21 +504,46 @@ export function sealVoteResolution(room: RoomState, deps: EngineDeps = defaultDe
   if (round.resolutionSealed) return;
   if (!allVoted(room)) throw new GameError("INVALID_PHASE", "ballot is incomplete");
 
-  const participants: SealedParticipant[] = roundParticipants(room).map((player) => ({
-    uid: player.uid,
-    name: player.name,
-  }));
+  const participants: SealedParticipant[] = roundParticipants(room).map((player) => ({ uid: player.uid, name: player.name }));
   const participantSet = new Set(participants.map((player) => player.uid));
   round.sealedParticipants = participants;
-  round.sealedVotes = new Map(
-    [...round.votes].filter(([voterUid]) => participantSet.has(voterUid)),
-  );
+  round.sealedVotes = new Map([...round.votes].filter(([voterUid]) => participantSet.has(voterUid)));
   round.resolutionSealed = true;
   touch(room, deps);
 }
 
 function addPendingScore(room: RoomState, uid: string, points: number): void {
   room.pendingRoundScores.set(uid, (room.pendingRoundScores.get(uid) ?? 0) + points);
+}
+
+function updateCorrectVoteStreaks(
+  room: RoomState,
+  round: RoundState,
+  participants: SealedParticipant[],
+  votes: Map<string, string>,
+): void {
+  const participantSet = new Set(participants.map((participant) => participant.uid));
+  for (const uid of [...room.correctVoteStreakStart.keys()]) {
+    if (!participantSet.has(uid) || uid === round.impostorUid) room.correctVoteStreakStart.delete(uid);
+  }
+
+  for (const participant of participants) {
+    if (participant.uid === round.impostorUid) continue;
+    const votedForImpostor = votes.get(participant.uid) === round.impostorUid;
+    if (votedForImpostor) {
+      if (!room.correctVoteStreakStart.has(participant.uid)) room.correctVoteStreakStart.set(participant.uid, round.challengeIndex);
+    } else {
+      room.correctVoteStreakStart.delete(participant.uid);
+    }
+  }
+}
+
+function awardContinuousDiscoveryScores(room: RoomState, round: RoundState): void {
+  const maxChallenges = resolvedMaxChallenges(round);
+  for (const [uid, startChallenge] of room.correctVoteStreakStart) {
+    const points = Math.max(0, maxChallenges - startChallenge + 1);
+    if (points > 0) addPendingScore(room, uid, points);
+  }
 }
 
 export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): void {
@@ -567,38 +563,35 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
   const requiredVotes = requiredVotesFor(participants.length);
   const found = (tally.get(round.impostorUid) ?? 0) >= requiredVotes;
 
-  if (room.playStyle === "INDIVIDUAL" && round.kind === "IMITATION") {
-    // Every normal player's vote is their own point decision. Keep these
-    // increments server-only until the round ends; exposing them after
-    // Challenge 1/2 would reveal that a private guess was correct.
-    for (const [voterUid, targetUid] of votes) {
-      if (voterUid !== round.impostorUid && targetUid === round.impostorUid) {
-        addPendingScore(room, voterUid, SCORING.POINT_CORRECT_VOTE);
+  round.groupFound = found;
+  round.roundComplete = round.kind === "TEXT_PAIR" || found || round.challengeIndex >= resolvedMaxChallenges(round);
+  round.roundScores = new Map();
+  round.resultRequiredVotes = requiredVotes;
+
+  if (round.kind === "IMITATION") {
+    room.completedChallenges += 1;
+    updateCorrectVoteStreaks(room, round, participants, votes);
+    if (!found) addPendingScore(room, round.impostorUid, SCORING.POINT_IMPOSTOR_SURVIVES_CHALLENGE);
+
+    if (round.roundComplete) {
+      awardContinuousDiscoveryScores(room, round);
+      for (const [playerUid, delta] of room.pendingRoundScores) {
+        const player = room.players.get(playerUid);
+        if (!player) continue;
+        player.score += delta;
+        round.roundScores.set(playerUid, delta);
+      }
+      room.pendingRoundScores.clear();
+      room.correctVoteStreakStart.clear();
+      if (room.completedChallenges >= room.targetChallenges) {
+        // Make the existing RoomManager final-RESULT guard agree with the challenge-based match boundary.
+        room.currentRound = room.totalRounds;
       }
     }
   }
 
-  round.groupFound = found;
-  round.roundComplete =
-    round.kind === "TEXT_PAIR" || found || round.challengeIndex >= MAX_CHALLENGES_PER_ROUND;
-  round.roundScores = new Map();
-  round.resultRequiredVotes = requiredVotes;
-
-  if (room.playStyle === "INDIVIDUAL" && round.kind === "IMITATION" && round.roundComplete) {
-    if (!found) addPendingScore(room, round.impostorUid, SCORING.POINT_IMPOSTOR_SURVIVES);
-
-    for (const [playerUid, delta] of room.pendingRoundScores) {
-      const player = room.players.get(playerUid);
-      if (!player) continue;
-      player.score += delta;
-      round.roundScores.set(playerUid, delta);
-    }
-    room.pendingRoundScores.clear();
-  }
-
   if (round.roundComplete) {
-    round.resultImpostorName =
-      participants.find((player) => player.uid === round.impostorUid)?.name ?? "—";
+    round.resultImpostorName = participants.find((player) => player.uid === round.impostorUid)?.name ?? "—";
     round.resultVoteTally = aggregateVoteTally(participants, votes);
   }
 
@@ -609,11 +602,7 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
     round.roundComplete &&
     !room.roundOutcomes.some((outcome) => outcome.roundIndex === round.index)
   ) {
-    room.roundOutcomes.push({
-      roundIndex: round.index,
-      caught: found,
-      challengeIndex: round.challengeIndex,
-    });
+    room.roundOutcomes.push({ roundIndex: round.index, caught: found, challengeIndex: round.challengeIndex });
   }
 
   room.phase = "RESULT";
@@ -628,17 +617,31 @@ export function nextRound(room: RoomState, uid: string, deps: EngineDeps = defau
   if (!round) throw new GameError("INVALID_PHASE");
 
   if (round.kind === "IMITATION" && !round.roundComplete) {
-    // The impostor/participants stay fixed, but an intentional next Challenge
-    // consumes the next balanced mode and gets a fresh prompt from that mode.
     const mode = pickBalancedMode(room, deps);
     prepareChallenge(
       room,
       round.impostorUid,
       round.challengeIndex + 1,
       round.participantUids,
+      resolvedMaxChallenges(round),
       mode,
       deps,
     );
+    return;
+  }
+
+  if (round.kind === "IMITATION") {
+    if (room.completedChallenges >= room.targetChallenges) {
+      room.timerGeneration += 1;
+      room.pause = undefined;
+      room.phase = "GAME_OVER";
+      room.phaseEndsAt = undefined;
+      touch(room, deps);
+      return;
+    }
+
+    room.currentRound += 1;
+    beginImitationRound(room, deps);
     return;
   }
 
@@ -652,8 +655,7 @@ export function nextRound(room: RoomState, uid: string, deps: EngineDeps = defau
   }
 
   room.currentRound += 1;
-  if (round.kind === "TEXT_PAIR") beginLegacyRound(room, deps);
-  else beginImitationRound(room, deps);
+  beginLegacyRound(room, deps);
 }
 
 export function redealCurrentRound(room: RoomState, deps: EngineDeps = defaultDeps): void {
@@ -673,29 +675,27 @@ export function redealCurrentRound(room: RoomState, deps: EngineDeps = defaultDe
   const round = room.round;
   if (!round) throw new GameError("INVALID_PHASE");
 
-  if (room.phase === "RESULT" && (round.kind !== "IMITATION" || round.roundComplete)) {
-    throw new GameError("INVALID_PHASE");
-  }
+  if (room.phase === "RESULT" && (round.kind !== "IMITATION" || round.roundComplete)) throw new GameError("INVALID_PHASE");
 
   if (room.impostorHistory.at(-1) === round.impostorUid) room.impostorHistory.pop();
   room.pendingRoundScores.clear();
+  room.correctVoteStreakStart.clear();
 
   if (round.kind === "TEXT_PAIR") {
     beginLegacyRound(room, deps);
     return;
   }
 
-  // A disconnect redeal preserves the already-selected Challenge mode. It may
-  // choose a new fair impostor because the participant set changed, but it
-  // must not consume another entry from the Challenge-level mode bag.
   const mode = round.mode;
+  const active = activePlayers(room);
   const impostorUid = selectImpostor(room, deps);
   room.impostorHistory.push(impostorUid);
   prepareChallenge(
     room,
     impostorUid,
     1,
-    activePlayers(room).map((player) => player.uid),
+    active.map((player) => player.uid),
+    maxChallengesForParticipantCount(active.length),
     mode,
     deps,
   );
@@ -706,6 +706,8 @@ export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): v
   room.pause = undefined;
   room.phase = "LOBBY";
   room.currentRound = 0;
+  room.targetChallenges = BASE_CHALLENGES;
+  room.completedChallenges = 0;
   room.round = null;
   room.categories = [];
   room.usedPromptIds.clear();
@@ -715,6 +717,7 @@ export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): v
   room.impostorHistory = [];
   room.roundOutcomes = [];
   room.pendingRoundScores.clear();
+  room.correctVoteStreakStart.clear();
   room.phaseEndsAt = undefined;
   for (const player of room.players.values()) player.score = 0;
   touch(room, deps);
@@ -726,7 +729,6 @@ export function rematch(room: RoomState, uid: string, deps: EngineDeps = default
   abortToLobby(room, deps);
 }
 
-/** Shared ranking helper for INDIVIDUAL play and dormant TEXT_PAIR compatibility. */
 export function ranking(room: RoomState) {
   const rows = allPlayers(room)
     .map((player) => ({ uid: player.uid, name: player.name, score: player.score }))
