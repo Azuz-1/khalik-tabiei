@@ -545,9 +545,8 @@ function updateCorrectVoteStreaks(
 }
 
 function awardContinuousDiscoveryScores(room: RoomState, round: RoundState): void {
-  const maxChallenges = resolvedMaxChallenges(round);
   for (const [uid, startChallenge] of room.correctVoteStreakStart) {
-    const points = Math.max(0, maxChallenges - startChallenge + 1);
+    const points = Math.max(0, round.challengeIndex - startChallenge + 1);
     if (points > 0) addPendingScore(room, uid, points);
   }
 }
@@ -568,9 +567,15 @@ export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): 
 
   const requiredVotes = requiredVotesFor(participants.length);
   const found = (tally.get(round.impostorUid) ?? 0) >= requiredVotes;
+  const matchTargetReached =
+    round.kind === "IMITATION" && room.completedChallenges + 1 >= room.targetChallenges;
 
   round.groupFound = found;
-  round.roundComplete = round.kind === "TEXT_PAIR" || found || round.challengeIndex >= resolvedMaxChallenges(round);
+  round.roundComplete =
+    round.kind === "TEXT_PAIR" ||
+    found ||
+    round.challengeIndex >= resolvedMaxChallenges(round) ||
+    matchTargetReached;
   round.roundScores = new Map();
   round.resultRequiredVotes = requiredVotes;
 
