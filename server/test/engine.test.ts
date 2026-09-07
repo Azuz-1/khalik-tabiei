@@ -152,13 +152,13 @@ test("one selected mode repeats across challenges and new impostor stints", () =
   engine.startGame(room, "host", deps);
   const impostorUid = room.round!.impostorUid;
 
-  for (let challenge = 1; challenge <= 2; challenge += 1) {
+  for (let challenge = 1; challenge <= 3; challenge += 1) {
     assert.equal(room.round?.mode, "POINT");
     assert.equal(room.round?.impostorUid, impostorUid);
     assertPromptMatchesMode(room);
     readyToVote(room);
     voteNoMajority(room);
-    if (challenge < 2) engine.nextRound(room, "host", deps);
+    if (challenge < 3) engine.nextRound(room, "host", deps);
   }
 
   assert.equal(room.round?.roundComplete, true);
@@ -371,7 +371,7 @@ test("prompt ids do not repeat within a game while unused prompts remain", () =>
   assert.equal(new Set(seen).size, seen.length);
 });
 
-test("game over happens after nine base Challenges and the active stint is complete", () => {
+test("game over happens after nine base Challenges", () => {
   const room = roomWith(4);
   engine.startGame(room, "host", deps);
 
