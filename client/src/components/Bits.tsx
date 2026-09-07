@@ -51,9 +51,8 @@ export function ResultBody({ result }: { result: RoundResult }) {
 
 export function roundLabel(view: ClientView): string {
   const globalChallenge = view.room.completedChallenges + (view.room.phase === "RESULT" ? 0 : 1);
-  const base = globalChallenge <= view.room.targetChallenges
-    ? `التحدّي ${Math.max(1, globalChallenge)} من ${view.room.targetChallenges}`
-    : "إكمال دور المتخفي الأخير";
+  const visibleChallenge = Math.min(view.room.targetChallenges, Math.max(1, globalChallenge));
+  const base = `التحدّي ${visibleChallenge} من ${view.room.targetChallenges}`;
   const stint = view.challenge ? ` · دور المتخفي ${view.challenge.index}/${view.challenge.max}` : "";
   return `${base}${stint}`;
 }
