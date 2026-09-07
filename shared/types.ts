@@ -130,7 +130,6 @@ export interface GameOverInfo {
 
 export interface FeedbackChallengeOption {
   ordinal: number;
-  promptId: string;
   mode: GameMode;
   prompt: string;
 }
