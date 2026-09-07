@@ -74,8 +74,8 @@ test("removed player with an earlier correct streak never becomes a ghost scoreb
   assert.equal(room.round!.roundComplete, true);
   assert.equal(room.pendingRoundScores.size, 0, "completed stint clears hidden pending entries");
   assert.equal(room.correctVoteStreakStart.size, 0, "completed stint clears hidden streak state");
-  assert.equal(room.players.get(normals[0]!.uid)?.score, 3, "C1 continuous correct streak keeps the 4-player +3 value");
-  assert.equal(room.players.get(normals[1]!.uid)?.score, 2, "new correct streak beginning in C2 gets +2");
+  assert.equal(room.players.get(normals[0]!.uid)?.score, 2, "C1-C2 continuous correct streak is worth +2 at the actual stint end");
+  assert.equal(room.players.get(normals[1]!.uid)?.score, 1, "new correct streak beginning in C2 is worth +1");
   assert.equal(room.players.get(impostor.uid)?.score, 1, "the impostor keeps the one C1 survival point");
 
   const view = lastMessage(host.socket, "STATE")!.view;
