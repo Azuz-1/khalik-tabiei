@@ -105,7 +105,7 @@ test("each selected target ends after exactly that many immediately-caught Chall
   }
 });
 
-test("selected target never truncates the active final impostor stint", () => {
+test("selected target ends the match even when the active impostor would otherwise continue", () => {
   const room = roomWithPlayers(4);
   engine.setSettings(room, "host", { totalRounds: 3 }, deps);
   engine.startGame(room, "host", deps);
@@ -115,25 +115,14 @@ test("selected target never truncates the active final impostor stint", () => {
   catchImpostor(room);
   engine.nextRound(room, "host", deps);
   assert.equal(room.completedChallenges, 2);
-  assert.equal(room.round?.challengeIndex, 1, "Challenge 3 starts a fresh impostor stint");
+  assert.equal(room.round?.challengeIndex, 1);
 
   letImpostorSurvive(room);
   assert.equal(room.completedChallenges, 3);
-  assert.equal(room.round?.roundComplete, false, "target reached but final stint remains active");
-  engine.nextRound(room, "host", deps);
-  assert.equal(room.round?.challengeIndex, 2);
-
-  letImpostorSurvive(room);
-  assert.equal(room.completedChallenges, 4);
-  assert.equal(room.round?.roundComplete, false);
-  engine.nextRound(room, "host", deps);
-  assert.equal(room.round?.challengeIndex, 3);
-
-  letImpostorSurvive(room);
-  assert.equal(room.completedChallenges, 5);
-  assert.equal(room.round?.roundComplete, true);
+  assert.equal(room.round?.roundComplete, true, "Challenge 3 is the exact match boundary");
   engine.nextRound(room, "host", deps);
   assert.equal(room.phase, "GAME_OVER");
+  assert.equal(room.completedChallenges, 3);
 });
 
 test("rematch returns to Lobby with the Host's selected challenge count preserved", () => {
@@ -152,11 +141,13 @@ test("rematch returns to Lobby with the Host's selected challenge count preserve
   assert.equal(room.targetChallenges, 3);
 });
 
-test("Host and Home source expose the four-choice UX instead of a fixed nine-only contract", () => {
+test("Host and Home source expose the four-choice exact-total UX", () => {
   const hostSource = readFileSync(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8");
   const homeSource = readFileSync(new URL("../../client/src/screens/Home.tsx", import.meta.url), "utf8");
   assert.match(hostSource, /CHALLENGE_OPTIONS\.map/);
   assert.match(hostSource, /totalRounds: count/);
-  assert.match(hostSource, /عدد التحديات الأساسية/);
+  assert.match(hostSource, /عدد التحديات/);
+  assert.match(hostSource, /تنتهي عند عدد التحديات المختار بالضبط/);
   assert.match(homeSource, /CHALLENGE_OPTIONS\.join/);
+  assert.match(homeSource, /تنتهي بالعدد المختار بالضبط/);
 });
