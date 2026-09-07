@@ -66,6 +66,27 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   room_closed: ["reason", "matchOrdinal", "duringMatch"],
   room_ended_unknown: ["reason", "matchOrdinal", "phase"],
   game_error: ["code", "action", "phase", "duringMatch"],
+  feedback_rating: [
+    "matchOrdinal",
+    "rating",
+    "targetChallenges",
+    "completedChallenges",
+    "startingPlayerCount",
+    "rulesVersion",
+    "contentVersion",
+  ],
+  feedback_challenge_issue: [
+    "matchOrdinal",
+    "challengeOrdinal",
+    "challengeWithinStint",
+    "promptId",
+    "mode",
+    "reason",
+    "targetChallenges",
+    "startingPlayerCount",
+    "rulesVersion",
+    "contentVersion",
+  ],
 };
 
 export interface AnalyticsRecord {
