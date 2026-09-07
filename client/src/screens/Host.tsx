@@ -144,14 +144,14 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
           <div className="card stack">
             <span className="code-label">المباراة</span>
             <div className="manager-subcard card stack" style={{ gap: 8 }}>
-              <strong>🏅 {view.room.targetChallenges} تحديات أساسية</strong>
-              <span className="helper">نكمّل دور آخر متخفي حتى ينمسك أو يخلص فرصه.</span>
-              <span className="helper">3 لاعبين: حدّه تحدّيين · 4–10 لاعبين: حدّه 3 تحديات.</span>
+              <strong>🏅 {view.room.targetChallenges} تحديات</strong>
+              <span className="helper">كل متخفي يستمر حتى ينمسك أو يكمل 3 تحديات كحد أقصى.</span>
+              <span className="helper">المباراة تنتهي عند عدد التحديات المختار بالضبط.</span>
               <span className="helper">كل لاعب يجمع نقاطه، والأغلبية هي اللي تمسك المتخفي.</span>
             </div>
 
-            <span className="code-label" style={{ marginTop: 8 }}>اختر عدد التحديات الأساسية</span>
-            <div role="radiogroup" aria-label="عدد التحديات الأساسية" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+            <span className="code-label" style={{ marginTop: 8 }}>اختر عدد التحديات</span>
+            <div role="radiogroup" aria-label="عدد التحديات" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
               {CHALLENGE_OPTIONS.map((count) => {
                 const selected = view.room.targetChallenges === count;
                 return (
@@ -168,7 +168,7 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
                 );
               })}
             </div>
-            <p className="helper center" style={{ margin: 0 }}>9 هو الافتراضي. وإذا انتهى العدد والمتخفي باقي في دوره، نكمّل دوره للنهاية.</p>
+            <p className="helper center" style={{ margin: 0 }}>9 هو الافتراضي.</p>
 
             <span className="code-label" style={{ marginTop: 8 }}>اختر طرق اللعب</span>
             <div className="mode-select-grid">
@@ -288,9 +288,9 @@ function Scoreboard({ rows, round }: { rows: ScoreEntry[]; round?: boolean }) {
 function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
   const result = view.result;
   const targetReached = view.room.completedChallenges >= view.room.targetChallenges;
-  const next = result?.roundComplete
-    ? targetReached ? "شوفوا الترتيب النهائي" : "متخفي جديد"
-    : targetReached ? "إكمال دور المتخفي الأخير" : "التحدّي الجاي";
+  const next = targetReached
+    ? "شوفوا الترتيب النهائي"
+    : result?.roundComplete ? "متخفي جديد" : "التحدّي الجاي";
   const advance = () => {
     if (!view.nextRoundWarning) {
       actions.nextRound();
