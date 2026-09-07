@@ -80,7 +80,7 @@ function validateProposedSettings(proposed: ProposedSettings, patch: SettingsPat
     patch.totalRounds !== undefined &&
     !ROUND_OPTIONS.includes(proposed.totalRounds as (typeof ROUND_OPTIONS)[number])
   ) {
-    throw new GameError("BAD_REQUEST", "invalid round count");
+    throw new GameError("BAD_REQUEST", "invalid match length");
   }
 
   if (patch.selectedModes !== undefined && !proposed.selectedModes.length) {
@@ -97,7 +97,10 @@ function validateProposedSettings(proposed: ProposedSettings, patch: SettingsPat
 }
 
 function commitSettings(room: RoomState, proposed: ProposedSettings, patch: SettingsPatch): void {
-  if (patch.totalRounds !== undefined) room.totalRounds = proposed.totalRounds;
+  if (patch.totalRounds !== undefined) {
+    room.totalRounds = proposed.totalRounds;
+    room.targetChallenges = proposed.totalRounds;
+  }
   if (patch.selectedModes !== undefined) {
     room.selectedModes = proposed.selectedModes;
     room.modeBag = [];
@@ -311,10 +314,12 @@ export function startGame(room: RoomState, uid: string, deps: EngineDeps = defau
   if (!room.selectedModes.length) throw new GameError("NO_MODE_SELECTED");
 
   room.playStyle = "INDIVIDUAL";
-  room.targetChallenges = BASE_CHALLENGES;
+  room.targetChallenges = ROUND_OPTIONS.includes(room.totalRounds as (typeof ROUND_OPTIONS)[number])
+    ? room.totalRounds
+    : BASE_CHALLENGES;
   // RoomManager historically uses totalRounds/currentRound to recognize a final RESULT.
   // Keep those fields as an internal compatibility sentinel only; product progress is challenge-based.
-  room.totalRounds = BASE_CHALLENGES;
+  room.totalRounds = room.targetChallenges;
   room.currentRound = 1;
   room.completedChallenges = 0;
   room.categories = [];
@@ -706,7 +711,11 @@ export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): v
   room.pause = undefined;
   room.phase = "LOBBY";
   room.currentRound = 0;
-  room.targetChallenges = BASE_CHALLENGES;
+  // Match length is a Lobby setting, so keep the selected target across abort/rematch.
+  room.targetChallenges = ROUND_OPTIONS.includes(room.totalRounds as (typeof ROUND_OPTIONS)[number])
+    ? room.totalRounds
+    : BASE_CHALLENGES;
+  room.totalRounds = room.targetChallenges;
   room.completedChallenges = 0;
   room.round = null;
   room.categories = [];
