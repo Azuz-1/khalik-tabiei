@@ -126,8 +126,8 @@ test("five consecutive competitive games survive rematch without stale score sta
       assert.equal(resultView.scoreboard?.length, 3);
       assert.equal(
         resultView.scoreboard?.reduce((sum, row) => sum + (row.roundDelta ?? 0), 0),
-        4,
-        "a Challenge-1 catch with three players awards +2 to each of the two correct normals",
+        2,
+        "a Challenge-1 catch awards +1 to each of the two correct normals",
       );
       assert.equal(JSON.stringify(resultView).includes("pendingRoundScores"), false);
       assert.equal(JSON.stringify(resultView).includes("correctVoteStreakStart"), false);
@@ -140,7 +140,7 @@ test("five consecutive competitive games survive rematch without stale score sta
     assert.equal(final.scoreboard?.length, 3);
     assert.equal(
       final.scoreboard?.reduce((sum, row) => sum + row.score, 0),
-      BASE_CHALLENGES * 4,
+      BASE_CHALLENGES * 2,
       "role repeats may move points between players, but total awarded points remain invariant",
     );
 
@@ -181,8 +181,8 @@ test("transport reconnect after a committed correct vote preserves one ballot an
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.groupFound, true);
-  assert.equal(room.players.get(voter.uid)?.score, 2, "reconnect cannot duplicate the Challenge-1 +2 award");
-  assert.equal(room.players.get(normals[1]!.uid)?.score, 2);
+  assert.equal(room.players.get(voter.uid)?.score, 1, "reconnect cannot duplicate the Challenge-1 +1 award");
+  assert.equal(room.players.get(normals[1]!.uid)?.score, 1);
   assert.equal(room.players.get(impostor.uid)?.score, 0);
   manager.dispose();
 });
@@ -205,8 +205,8 @@ test("two live tabs for one player cannot submit two votes or double-score", asy
   manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
   assert.equal(room.phase, "RESULT");
-  assert.equal(room.players.get(voter.uid)?.score, 2);
-  assert.equal(room.round!.roundScores.get(voter.uid), 2);
+  assert.equal(room.players.get(voter.uid)?.score, 1);
+  assert.equal(room.round!.roundScores.get(voter.uid), 1);
   manager.dispose();
 });
 

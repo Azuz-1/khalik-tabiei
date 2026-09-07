@@ -92,7 +92,7 @@ test("strict runtime validation accepts every valid ClientMessage shape", () => 
     { t: "CREATE_ROOM" },
     { t: "JOIN_ROOM", code: "ABCDE", name: "سلمان" },
     { t: "LEAVE_ROOM" },
-    { t: "SET_SETTINGS", totalRounds: 5, categories: ["food"] },
+    { t: "SET_SETTINGS", totalRounds: 6, categories: ["food"] },
     { t: "START_GAME" },
     { t: "SUBMIT_ANSWER", answer: "قهوة" },
     { t: "START_VOTING" },

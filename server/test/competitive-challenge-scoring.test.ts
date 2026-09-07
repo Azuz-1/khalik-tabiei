@@ -55,36 +55,29 @@ function advance(room: RoomState): void {
   engine.nextRound(room, "host", deps);
 }
 
-test("three-player stint uses two Challenges and awards 2/1 continuous discovery", () => {
+test("three-player stints also allow three Challenges", () => {
   const room = roomWithPlayers(3);
   engine.startGame(room, "host", deps);
-  assert.equal(room.round?.maxChallenges, 2);
-  assert.equal(buildView(room, "host", "http://game/join/PTS01").challenge?.max, 2, "wire projection exposes the two-Challenge cap");
+  assert.equal(room.round?.maxChallenges, 3);
+  assert.equal(buildView(room, "host", "http://game/join/PTS01").challenge?.max, 3);
+});
 
+test("catching the impostor on Challenge 1 awards correct voters one point only", () => {
+  const room = roomWithPlayers(4);
+  engine.startGame(room, "host", deps);
   const impostor = room.round!.impostorUid;
   const normals = room.round!.participantUids.filter((uid) => uid !== impostor);
 
-  resolveChallenge(room, new Set([normals[0]!]));
-  assert.equal(room.round?.roundComplete, false);
-  assert.equal(room.players.get(impostor)?.score, 0, "hidden stint points are not applied early");
-  assert.equal(buildView(room, "host", "http://game/join/PTS01").scoreboard, undefined);
-
-  advance(room);
   resolveChallenge(room, new Set(normals));
 
   assert.equal(room.round?.roundComplete, true);
-  assert.equal(room.players.get(normals[0]!)?.score, 2);
-  assert.equal(room.players.get(normals[1]!)?.score, 1);
-  assert.equal(room.players.get(impostor)?.score, 1, "impostor survived exactly one Challenge");
-  assert.equal(room.completedChallenges, 2);
+  for (const normal of normals) assert.equal(room.players.get(normal)?.score, 1);
+  assert.equal(room.players.get(impostor)?.score, 0);
 });
 
-test("four-player stint awards 3/2/1 discovery and +1 per survived Challenge", () => {
+test("trailing correct streaks award 3/2/1 when a stint reaches Challenge 3", () => {
   const room = roomWithPlayers(4);
   engine.startGame(room, "host", deps);
-  assert.equal(room.round?.maxChallenges, 3);
-  assert.equal(buildView(room, "host", "http://game/join/PTS01").challenge?.max, 3, "wire projection exposes the three-Challenge cap");
-
   const impostor = room.round!.impostorUid;
   const normals = room.round!.participantUids.filter((uid) => uid !== impostor);
 
@@ -103,11 +96,9 @@ test("four-player stint awards 3/2/1 discovery and +1 per survived Challenge", (
   assert.equal(room.players.get(normals[1]!)?.score, 2);
   assert.equal(room.players.get(normals[2]!)?.score, 1);
   assert.equal(room.players.get(impostor)?.score, 2);
-  assert.equal(room.round?.roundScores.get(normals[0]!), 3);
-  assert.equal(room.round?.roundScores.get(impostor), 2);
 });
 
-test("correct then wrong then correct restarts the streak at Challenge 3", () => {
+test("correct then wrong then correct restarts the streak at one point", () => {
   const room = roomWithPlayers(4);
   engine.startGame(room, "host", deps);
   const impostor = room.round!.impostorUid;
@@ -121,7 +112,7 @@ test("correct then wrong then correct restarts the streak at Challenge 3", () =>
   resolveChallenge(room, new Set([target, normals[1]!, normals[2]!]));
 
   assert.equal(room.round?.roundComplete, true);
-  assert.equal(room.players.get(target)?.score, 1, "a broken streak cannot retain the C1 value");
+  assert.equal(room.players.get(target)?.score, 1);
 });
 
 test("a normal whose final vote is wrong earns zero for the stint", () => {
@@ -139,45 +130,36 @@ test("a normal whose final vote is wrong earns zero for the stint", () => {
 
   assert.equal(room.round?.roundComplete, true);
   assert.equal(room.players.get(target)?.score, 0);
-  assert.equal(room.players.get(impostor)?.score, 3, "three survived Challenges award exactly three points");
+  assert.equal(room.players.get(impostor)?.score, 3);
 });
 
-test("the ninth base Challenge never truncates the final impostor stint", () => {
+test("the selected match total ends exactly on that Challenge without extending the active stint", () => {
   const room = roomWithPlayers(4);
+  engine.setSettings(room, "host", { totalRounds: 3 }, deps);
   engine.startGame(room, "host", deps);
 
-  // Finish eight one-Challenge stints by catching immediately.
-  for (let completed = 0; completed < 8; completed += 1) {
+  for (let completed = 0; completed < 2; completed += 1) {
     const impostor = room.round!.impostorUid;
     const normals = room.round!.participantUids.filter((uid) => uid !== impostor);
     resolveChallenge(room, new Set(normals));
-    assert.equal(room.round?.roundComplete, true);
     advance(room);
-    assert.equal(room.phase, "QUESTION");
   }
 
-  assert.equal(room.completedChallenges, 8);
-  assert.equal(room.round?.challengeIndex, 1);
+  assert.equal(room.completedChallenges, 2);
+  assert.equal(room.round?.challengeIndex, 1, "Challenge 3 begins a fresh impostor stint");
+  const finalImpostor = room.round!.impostorUid;
+  const finalNormals = room.round!.participantUids.filter((uid) => uid !== finalImpostor);
 
-  // Challenge 9 starts a fresh three-Challenge stint and must be completed.
-  resolveChallenge(room, new Set());
-  assert.equal(room.completedChallenges, 9);
-  assert.equal(room.round?.roundComplete, false);
-  advance(room);
-  assert.equal(room.phase, "QUESTION");
-  assert.equal(room.round?.challengeIndex, 2);
+  resolveChallenge(room, new Set([finalNormals[0]!]));
+  assert.equal(room.completedChallenges, 3);
+  assert.equal(room.round?.groupFound, false);
+  assert.equal(room.round?.roundComplete, true, "the selected total ends the match even mid-stint");
+  assert.equal(room.round?.roundScores.get(finalNormals[0]!), 1, "a one-Challenge trailing correct streak is worth one in the final stint");
+  assert.equal(room.round?.roundScores.get(finalImpostor), 1, "the impostor gets one point for surviving the final Challenge");
 
-  resolveChallenge(room, new Set());
-  assert.equal(room.completedChallenges, 10);
-  assert.equal(room.round?.roundComplete, false);
-  advance(room);
-  assert.equal(room.round?.challengeIndex, 3);
-
-  resolveChallenge(room, new Set());
-  assert.equal(room.completedChallenges, 11);
-  assert.equal(room.round?.roundComplete, true);
   advance(room);
   assert.equal(room.phase, "GAME_OVER");
+  assert.equal(room.completedChallenges, 3);
 });
 
 test("Host receives vote progress but no live target tally during VOTING", () => {

@@ -2,8 +2,8 @@
  * Real WebSocket E2E for the one competitive «خلك طبيعي» ruleset.
  *
  * Host + three player phones run through the production timers, secrecy boundary,
- * two-Challenge three-player impostor stint, score reveal, repeated weighted role
- * selection and the nine-base-Challenge GAME_OVER condition.
+ * three-Challenge impostor stint cap, score reveal, repeated weighted role
+ * selection and the exact nine-Challenge default GAME_OVER condition.
  */
 import { WebSocket } from "ws";
 
@@ -247,10 +247,10 @@ async function main() {
   await waitForAll([host, ...players], (client) => client.phase() === "QUESTION", "first QUESTION");
 
   ok(host.view?.room?.playStyle === "INDIVIDUAL", "single product ruleset is competitive scoring");
-  ok(host.view?.room?.targetChallenges === 9, "match advertises nine base Challenges");
-  ok(host.view?.challenge?.max === 2, "three-player impostor stint has two-Challenge maximum");
+  ok(host.view?.room?.targetChallenges === 9, "match advertises exact nine-Challenge default");
+  ok(host.view?.challenge?.max === 3, "three-player impostor stint has three-Challenge maximum");
 
-  console.log("\n[first stint] C1 survival then C2 catch tests 2/1 scoring + survival point:");
+  console.log("\n[first stint] C1 survival then C2 catch tests trailing 2/1 scoring + survival point:");
   let current = await physical(host, players, "C1", players[0]);
   const firstImpostorUid = current.impostor.uid;
   await surviveFirstChallenge(host, players, current, "C1");
@@ -259,7 +259,7 @@ async function main() {
   await nextQuestion(host, players, 1);
   ok(host.view?.challenge?.index === 2, "same stint advances to Challenge 2");
   current = await physical(host, players, "C2");
-  ok(current.impostor.uid === firstImpostorUid, "same impostor stays for the second three-player Challenge");
+  ok(current.impostor.uid === firstImpostorUid, "same impostor stays for the second Challenge");
   await catchCurrent(host, players, current, "C2");
 
   const firstStintScores = host.view.scoreboard;
@@ -273,16 +273,16 @@ async function main() {
   let completed = 2;
   while (completed < 9) {
     await nextQuestion(host, players, completed);
-    current = await physical(host, players, `base C${completed + 1}`);
-    await catchCurrent(host, players, current, `base C${completed + 1}`);
+    current = await physical(host, players, `C${completed + 1}`);
+    await catchCurrent(host, players, current, `C${completed + 1}`);
     completed += 1;
     ok(host.view?.room?.completedChallenges === completed, `completed Challenge count reaches ${completed}`);
   }
 
   host.send({ t: "NEXT_ROUND" });
-  await waitForAll([host, ...players], (client) => client.phase() === "GAME_OVER", "GAME_OVER after base Challenge 9");
+  await waitForAll([host, ...players], (client) => client.phase() === "GAME_OVER", "GAME_OVER after exact Challenge 9");
   ok(host.view?.gameOver?.targetChallenges === 9, "GAME_OVER keeps nine-Challenge target");
-  ok(host.view?.gameOver?.completedChallenges === 9, "GAME_OVER reports nine completed Challenges");
+  ok(host.view?.gameOver?.completedChallenges === 9, "GAME_OVER reports exactly nine completed Challenges");
   ok(Array.isArray(host.view?.scoreboard) && host.view.scoreboard.length === 3, "GAME_OVER exposes final ranking");
   ok(host.view.scoreboard.every((row) => Number.isInteger(row.rank) && row.rank >= 1), "final ranking has numeric ranks");
   for (const client of [host, ...players]) {

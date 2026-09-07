@@ -92,12 +92,12 @@ test("single product ruleset starts as competitive INDIVIDUAL scoring", () => {
 
   assert.equal(round.groupFound, true);
   assert.equal(round.roundComplete, true);
-  for (const uid of normals) assert.equal(room.players.get(uid)?.score, 3);
+  for (const uid of normals) assert.equal(room.players.get(uid)?.score, 1);
   assert.equal(room.players.get(impostor)?.score, 0);
 
   const view = buildView(room, "host", "http://game/join/ABCDE");
   assert.ok(view.scoreboard);
-  assert.equal(view.scoreboard.filter((row) => row.roundDelta === 3).length, normals.length);
+  assert.equal(view.scoreboard.filter((row) => row.roundDelta === 1).length, normals.length);
   assertNoVoteMapping(view);
 });
 
@@ -243,7 +243,7 @@ test("kicking a missing normal preserves committed ballots and never creates a g
   assert.equal(room.round!.groupFound, true, "3-player majority recalculates to two");
   assert.equal(room.players.has(missing.uid), false);
   assert.equal(room.pendingRoundScores.has(missing.uid), false);
-  for (const normal of remainingNormals) assert.equal(room.players.get(normal.uid)?.score, 3);
+  for (const normal of remainingNormals) assert.equal(room.players.get(normal.uid)?.score, 1);
   assert.equal(room.players.get(impostor.uid)?.score, 0);
 
   const view = lastMessage(host.socket, "STATE")!.view;

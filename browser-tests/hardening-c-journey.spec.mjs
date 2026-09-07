@@ -221,7 +221,7 @@ test("full game journey: reconnect, kick, competitive scoring, nine Challenges, 
     await expect(host.page.locator(".seat-badge")).toHaveCount(3);
 
     const players = [joined[0], joined[2], joined[3]];
-    await expect(host.page.getByText("🏅 9 تحديات أساسية")).toBeVisible();
+    await expect(host.page.getByText("🏅 9 تحديات")).toBeVisible();
     await host.page.getByRole("button", { name: "ابدأ اللعبة" }).click();
 
     for (let challenge = 1; challenge <= 9; challenge += 1) {

@@ -57,6 +57,42 @@ async function expectRtlAndNoOverflow(page, label) {
   expect(await horizontalOverflow(page), `${label} must not scroll horizontally`).toBeLessThanOrEqual(1);
 }
 
+test("Host challenge selector offers 3, 6, 9, and 12 and synchronizes the chosen target to Player Lobby", async ({
+  browser,
+}) => {
+  const host = await createHost(browser);
+  const players = [];
+  try {
+    const selector = host.page.getByRole("radiogroup", { name: "عدد التحديات" });
+    const options = selector.getByRole("radio");
+    await expect(options).toHaveCount(4);
+    await expect(options.nth(0)).toHaveText("3");
+    await expect(options.nth(1)).toHaveText("6");
+    await expect(options.nth(2)).toHaveText("9");
+    await expect(options.nth(3)).toHaveText("12");
+    await expect(selector.getByRole("radio", { name: "9" })).toHaveAttribute("aria-checked", "true");
+
+    const player = await joinPlayer(browser, host.code, "سالم", PHONE_SMALL);
+    players.push(player);
+    await expect(player.page.getByText(/9 تحديات بالضبط/)).toBeVisible();
+
+    await selector.getByRole("radio", { name: "3" }).click();
+    await expect(selector.getByRole("radio", { name: "3" })).toHaveAttribute("aria-checked", "true");
+    await expect(host.page.getByText("🏅 3 تحديات")).toBeVisible();
+    await expect(player.page.getByText(/3 تحديات بالضبط/)).toBeVisible();
+
+    await selector.getByRole("radio", { name: "12" }).click();
+    await expect(selector.getByRole("radio", { name: "12" })).toHaveAttribute("aria-checked", "true");
+    await expect(host.page.getByText("🏅 12 تحديات")).toBeVisible();
+    await expect(player.page.getByText(/12 تحديات بالضبط/)).toBeVisible();
+    await expectRtlAndNoOverflow(host.page, "Host challenge selector");
+    await expectRtlAndNoOverflow(player.page, "Player selected challenge target");
+  } finally {
+    await Promise.allSettled(players.map((player) => player.context.close()));
+    await host.context.close();
+  }
+});
+
 test("Host at 1920x1080 renders a full ten-player roster in RTL without horizontal overflow", async ({
   browser,
 }) => {
