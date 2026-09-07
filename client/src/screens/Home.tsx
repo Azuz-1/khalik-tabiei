@@ -3,7 +3,6 @@ import { unlockAudio } from "../audio/gameAudio.js";
 import { actions, useGame } from "../net/socket.js";
 import { errorText } from "../i18n/errors.js";
 import {
-  BASE_CHALLENGES,
   GAME_MODES,
   NAME_MAX,
   NAME_MIN,
@@ -91,7 +90,7 @@ function RulesTabs() {
             <p className="subtitle" style={{ margin: 0 }}>٢. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
             <p className="subtitle" style={{ margin: 0 }}>٣. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
             <p className="subtitle" style={{ margin: 0 }}>٤. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي للتحدّي اللي بعده.</p>
-            <p className="helper" style={{ margin: 0 }}>نلعب {BASE_CHALLENGES} تحديات أساسية، ونكمّل دور آخر متخفي إذا كان باقي له فرص.</p>
+            <p className="helper" style={{ margin: 0 }}>المضيف يختار 3 أو 6 أو 9 أو 12 تحديًا أساسيًا، ونكمّل دور آخر متخفي حتى لو تجاوزنا العدد المختار.</p>
           </div>
         ) : null}
 
