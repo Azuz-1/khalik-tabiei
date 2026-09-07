@@ -154,7 +154,7 @@ test("the selected match total ends exactly on that Challenge without extending 
   assert.equal(room.completedChallenges, 3);
   assert.equal(room.round?.groupFound, false);
   assert.equal(room.round?.roundComplete, true, "the selected total ends the match even mid-stint");
-  assert.equal(room.players.get(finalNormals[0]!)?.score, 1, "a one-Challenge trailing correct streak is worth one");
+  assert.equal(room.round?.roundScores.get(finalNormals[0]!), 1, "a one-Challenge trailing correct streak is worth one in the final stint");
   assert.equal(room.round?.roundScores.get(finalImpostor), 1, "the impostor gets one point for surviving the final Challenge");
 
   advance(room);
