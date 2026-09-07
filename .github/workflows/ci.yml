@@ -95,8 +95,8 @@ jobs:
       - run: npm run build
       - name: Install pinned Playwright test runner
         run: npm install --no-save --ignore-scripts @playwright/test@1.62.1
-      - name: Install pinned Chromium runtime
-        run: npx playwright@1.62.1 install --with-deps chromium
+      - name: Install Chromium, WebKit, and Google Chrome runtimes
+        run: npx playwright@1.62.1 install --with-deps chromium webkit chrome
       - name: Run real browser Host and Player flows
         run: npx playwright@1.62.1 test --config=playwright.config.mjs
       - name: Upload browser failure evidence

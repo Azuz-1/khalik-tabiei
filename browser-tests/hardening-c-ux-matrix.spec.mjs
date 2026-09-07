@@ -3,7 +3,7 @@ import { NAME_MAX } from "../shared/constants.js";
 
 /**
  * Rendered browser UX matrix. Every assertion here runs against real rendered
- * layout in Chromium — viewport sizes, computed direction, real scroll widths,
+ * layout in every configured browser — viewport sizes, direction, scroll widths,
  * real disabled state and real transport failures. None of it is satisfied by
  * inspecting source strings.
  */

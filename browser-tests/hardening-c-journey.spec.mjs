@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * A real Chromium journey through an actual competitive game: four isolated
+ * A real browser journey through an actual competitive game: four isolated
  * browser contexts join, one genuinely goes offline and recovers to the same
  * signed seat, the Host kicks a different player, and the remaining three play
  * nine real Challenges to GAME_OVER under the production timers.

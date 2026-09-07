@@ -27,9 +27,9 @@ export default defineConfig({
       NODE_ENV: "development",
     },
   },
-  // CI installs the pinned Chromium for this runner version. Environments that
-  // already ship a Chromium build (sandboxes, offline machines, distro
-  // packages) can point at it instead of downloading a second copy.
+  // Run every flow on both engines and branded Chrome. Mobile contexts in the
+  // specs exercise touch layout; they do not certify real iOS/Android devices.
+  // The optional system Chromium override applies only to that project.
   projects: [
     {
       name: "chromium",
@@ -39,6 +39,14 @@ export default defineConfig({
           ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
           : {}),
       },
+    },
+    {
+      name: "google-chrome",
+      use: { browserName: "chromium", channel: "chrome" },
+    },
+    {
+      name: "webkit",
+      use: { browserName: "webkit" },
     },
   ],
 });
