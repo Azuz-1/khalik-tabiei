@@ -59,7 +59,7 @@ test("a real full-game browser journey exists and drives the competitive product
     "the journey must verify the newly approved phone countdown cue",
   );
   assert.ok(
-    journey.source.includes("live target totals must never be serialized"),
-    "the journey must assert the hidden live target-tally contract",
+    journey.source.includes('key === "liveVoteTally"') && journey.source.includes("violations.push"),
+    "the journey must collect any serialized live target tally as a privacy violation",
   );
 });
