@@ -16,10 +16,11 @@ export const NAME_MIN = 2;
 export const NAME_MAX = 16;
 export const ANSWER_MAX = 40;
 export const UID_RE = /^u_[a-f0-9]{24}$/;
-export const ROUND_OPTIONS = [3, 5, 7, 10] as const;
-export const DEFAULT_ROUNDS = 5;
-/** Competitive match target. The final impostor stint is always completed even if it runs past this count. */
-export const BASE_CHALLENGES = 9;
+/** Selectable competitive match lengths. The final active impostor stint is always completed. */
+export const ROUND_OPTIONS = [3, 6, 9, 12] as const;
+export const DEFAULT_ROUNDS = 9;
+/** Default competitive match target. */
+export const BASE_CHALLENGES = DEFAULT_ROUNDS;
 export const MAX_CHALLENGES_PER_ROUND = 3;
 export const MAX_CHALLENGES_THREE_PLAYERS = 2;
 
