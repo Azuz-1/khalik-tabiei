@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { ClientView, GameMode, GameModeInfo, ScoreEntry } from "../../../shared/types.js";
-import { MIN_PLAYERS } from "../../../shared/constants.js";
+import { CHALLENGE_OPTIONS, MIN_PLAYERS } from "../../../shared/constants.js";
 import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
@@ -149,6 +149,26 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
               <span className="helper">3 لاعبين: حدّه تحدّيين · 4–10 لاعبين: حدّه 3 تحديات.</span>
               <span className="helper">كل لاعب يجمع نقاطه، والأغلبية هي اللي تمسك المتخفي.</span>
             </div>
+
+            <span className="code-label" style={{ marginTop: 8 }}>اختر عدد التحديات الأساسية</span>
+            <div role="radiogroup" aria-label="عدد التحديات الأساسية" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+              {CHALLENGE_OPTIONS.map((count) => {
+                const selected = view.room.targetChallenges === count;
+                return (
+                  <button
+                    key={count}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={`home-tab${selected ? " active" : ""}`}
+                    onClick={() => actions.setSettings({ totalRounds: count })}
+                  >
+                    {count}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="helper center" style={{ margin: 0 }}>9 هو الافتراضي. وإذا انتهى العدد والمتخفي باقي في دوره، نكمّل دوره للنهاية.</p>
 
             <span className="code-label" style={{ marginTop: 8 }}>اختر طرق اللعب</span>
             <div className="mode-select-grid">
