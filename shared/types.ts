@@ -227,6 +227,13 @@ export type ServerMessage =
 export type AnalyticsEvent =
   | "room_created"
   | "game_started"
+  | "challenge_completed"
   | "game_completed"
-  | "selected_category"
-  | "player_count";
+  | "rematch_requested"
+  | "rematch_started"
+  | "player_left"
+  | "player_disconnected"
+  | "player_reconnected"
+  | "room_closed"
+  | "room_ended_unknown"
+  | "game_error";
