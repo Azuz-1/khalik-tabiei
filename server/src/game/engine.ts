@@ -80,7 +80,7 @@ function validateProposedSettings(proposed: ProposedSettings, patch: SettingsPat
     patch.totalRounds !== undefined &&
     !ROUND_OPTIONS.includes(proposed.totalRounds as (typeof ROUND_OPTIONS)[number])
   ) {
-    throw new GameError("BAD_REQUEST", "invalid round count");
+    throw new GameError("BAD_REQUEST", "invalid challenge count");
   }
 
   if (patch.selectedModes !== undefined && !proposed.selectedModes.length) {
@@ -97,7 +97,10 @@ function validateProposedSettings(proposed: ProposedSettings, patch: SettingsPat
 }
 
 function commitSettings(room: RoomState, proposed: ProposedSettings, patch: SettingsPatch): void {
-  if (patch.totalRounds !== undefined) room.totalRounds = proposed.totalRounds;
+  if (patch.totalRounds !== undefined) {
+    room.totalRounds = proposed.totalRounds;
+    room.targetChallenges = proposed.totalRounds;
+  }
   if (patch.selectedModes !== undefined) {
     room.selectedModes = proposed.selectedModes;
     room.modeBag = [];
@@ -310,11 +313,14 @@ export function startGame(room: RoomState, uid: string, deps: EngineDeps = defau
   if (activePlayers(room).length < room.minPlayers) throw new GameError("NOT_ENOUGH_PLAYERS");
   if (!room.selectedModes.length) throw new GameError("NO_MODE_SELECTED");
 
+  const configuredTarget = ROUND_OPTIONS.includes(room.targetChallenges as (typeof ROUND_OPTIONS)[number])
+    ? room.targetChallenges
+    : BASE_CHALLENGES;
   room.playStyle = "INDIVIDUAL";
-  room.targetChallenges = BASE_CHALLENGES;
+  room.targetChallenges = configuredTarget;
   // RoomManager historically uses totalRounds/currentRound to recognize a final RESULT.
   // Keep those fields as an internal compatibility sentinel only; product progress is challenge-based.
-  room.totalRounds = BASE_CHALLENGES;
+  room.totalRounds = configuredTarget;
   room.currentRound = 1;
   room.completedChallenges = 0;
   room.categories = [];
@@ -702,11 +708,15 @@ export function redealCurrentRound(room: RoomState, deps: EngineDeps = defaultDe
 }
 
 export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): void {
+  const configuredTarget = ROUND_OPTIONS.includes(room.targetChallenges as (typeof ROUND_OPTIONS)[number])
+    ? room.targetChallenges
+    : BASE_CHALLENGES;
   room.timerGeneration += 1;
   room.pause = undefined;
   room.phase = "LOBBY";
   room.currentRound = 0;
-  room.targetChallenges = BASE_CHALLENGES;
+  room.totalRounds = configuredTarget;
+  room.targetChallenges = configuredTarget;
   room.completedChallenges = 0;
   room.round = null;
   room.categories = [];
