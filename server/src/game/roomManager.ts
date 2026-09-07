@@ -281,6 +281,7 @@ export class RoomManager {
         }
         engine.rematch(room, uid, this.deps);
         room.completedChallengeSummaries = [];
+        room.feedbackEligibleUids.clear();
         room.feedbackSubmittedUids.clear();
         this.markMeaningful(room);
         this.broadcast(room);
@@ -379,6 +380,7 @@ export class RoomManager {
       const startsAfterCompletedMatch = previousMatchOrdinal > 0 && analytics.completedMatchOrdinal === previousMatchOrdinal;
 
       room.completedChallengeSummaries = [];
+      room.feedbackEligibleUids.clear();
       room.feedbackSubmittedUids.clear();
       engine.startGame(room, uid, this.deps);
       room.matchGeneration += 1;
@@ -474,6 +476,7 @@ export class RoomManager {
         mode: round.mode,
       });
     }
+    for (const participant of round.sealedParticipants ?? []) room.feedbackEligibleUids.add(participant.uid);
 
     const analytics = this.analyticsState(room);
     const challengeKey = `${analytics.matchOrdinal}:${room.completedChallenges}`;
@@ -527,7 +530,9 @@ export class RoomManager {
     this.withRoom(uid, (room) => {
       if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
       const player = room.players.get(uid);
-      if (!player || !player.connected || player.pendingRemoval) throw new GameError("NOT_PLAYER");
+      if (!player || !player.connected || player.pendingRemoval || !room.feedbackEligibleUids.has(uid)) {
+        throw new GameError("NOT_PLAYER");
+      }
       if (room.feedbackSubmittedUids.has(uid)) throw new GameError("BAD_REQUEST", "feedback already submitted");
       const hasIssue = challengeOrdinal !== undefined || issueReason !== undefined;
       if ((challengeOrdinal === undefined) !== (issueReason === undefined)) throw new GameError("BAD_REQUEST", "incomplete challenge feedback");
