@@ -99,6 +99,7 @@ async function castVote(voter, targetName) {
 }
 
 function assertNoVoterMapping(frames, label) {
+  const violations = [];
   const walk = (node, path) => {
     if (Array.isArray(node)) {
       node.forEach((item, index) => walk(item, `${path}[${index}]`));
@@ -106,20 +107,16 @@ function assertNoVoterMapping(frames, label) {
     }
     if (!node || typeof node !== "object") return;
     for (const [key, value] of Object.entries(node)) {
-      expect(
-        /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i.test(key),
-        `${label}: frame at ${path} exposed private key "${key}"`,
-      ).toBe(false);
+      if (/voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i.test(key)) {
+        violations.push(`${path}: private key ${key}`);
+      }
+      if (key === "liveVoteTally") violations.push(`${path}: live target totals serialized`);
       if (key === "voteTally" && Array.isArray(value)) {
         for (const entry of value) {
-          expect(Object.keys(entry).sort(), `${label}: voteTally stays aggregate-only`).toEqual([
-            "name",
-            "uid",
-            "votes",
-          ]);
+          const keys = Object.keys(entry).sort().join(",");
+          if (keys !== "name,uid,votes") violations.push(`${path}.voteTally: non-aggregate entry keys ${keys}`);
         }
       }
-      expect(key, `${label}: live target totals must never be serialized`).not.toBe("liveVoteTally");
       walk(value, `${path}.${key}`);
     }
   };
@@ -131,6 +128,8 @@ function assertNoVoterMapping(frames, label) {
       // Ignore non-JSON frames if any future transport metadata is introduced.
     }
   }
+
+  expect(violations, `${label}: WebSocket privacy violations`).toEqual([]);
 }
 
 async function playCaughtChallenge(host, players, globalChallenge) {
