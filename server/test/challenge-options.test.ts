@@ -146,8 +146,8 @@ test("Host and Home source expose the four-choice exact-total UX", () => {
   const homeSource = readFileSync(new URL("../../client/src/screens/Home.tsx", import.meta.url), "utf8");
   assert.match(hostSource, /CHALLENGE_OPTIONS\.map/);
   assert.match(hostSource, /totalRounds: count/);
-  assert.match(hostSource, /عدد التحديات/);
-  assert.match(hostSource, /تنتهي عند عدد التحديات المختار بالضبط/);
+  assert.match(hostSource, /عدد التحدّيات/);
+  assert.match(hostSource, /تنتهي عند عدد التحدّيات المختار بالضبط/);
   assert.match(homeSource, /CHALLENGE_OPTIONS\.join/);
   assert.match(homeSource, /تنتهي بالعدد المختار بالضبط/);
 });
