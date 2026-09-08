@@ -1,11 +1,6 @@
 import type { GameMode } from "../../../shared/types.js";
 import { IMITATION_PROMPTS } from "./imitationPrompts.data.js";
-import {
-  normalizePromptText,
-  PROMPT_QUALITY_FLAGS,
-  type PromptFamily,
-  type PromptQualityFlag,
-} from "./promptMetadata.js";
+import { normalizePromptText, type PromptFamily, type PromptQualityFlag } from "./promptMetadata.js";
 
 export interface PromptAuditReport {
   total: number;
@@ -24,12 +19,18 @@ export function auditActivePrompts(): PromptAuditReport {
   const ids = new Map<string, number>();
   const texts = new Map<string, string[]>();
   const familyCounts: Record<string, number> = {};
-  const qualityFlagCounts = Object.fromEntries(
-    PROMPT_QUALITY_FLAGS.map((flag) => [flag, 0]),
-  ) as Record<PromptQualityFlag, number>;
-  const qualityFlagIds = Object.fromEntries(
-    PROMPT_QUALITY_FLAGS.map((flag) => [flag, []]),
-  ) as Record<PromptQualityFlag, string[]>;
+  const qualityFlagCounts: Record<PromptQualityFlag, number> = {
+    HIGH_CONSENSUS_RISK: 0,
+    CONTEXT_DEPENDENT: 0,
+    MEMORY_HEAVY: 0,
+    AMBIGUOUS_RESPONSE_RISK: 0,
+  };
+  const qualityFlagIds: Record<PromptQualityFlag, string[]> = {
+    HIGH_CONSENSUS_RISK: [],
+    CONTEXT_DEPENDENT: [],
+    MEMORY_HEAVY: [],
+    AMBIGUOUS_RESPONSE_RISK: [],
+  };
   const missingFamilyIds: string[] = [];
 
   for (const prompt of IMITATION_PROMPTS) {
