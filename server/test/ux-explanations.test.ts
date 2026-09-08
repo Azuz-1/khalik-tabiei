@@ -127,6 +127,7 @@ test("exact match boundary distinguishes a partial final stint from a full three
 });
 
 test("user-facing source locks the explainability and Arabic copy improvements", () => {
+  const app = readFileSync(new URL("../../client/src/App.tsx", import.meta.url), "utf8");
   const home = readFileSync(new URL("../../client/src/screens/Home.tsx", import.meta.url), "utf8");
   const host = readFileSync(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8");
   const player = readFileSync(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8");
@@ -144,4 +145,7 @@ test("user-facing source locks the explainability and Arabic copy improvements",
   assert.match(counts, /count === 2.*ننتظر لاعبين/s);
   assert.match(errors, /بين 2 و16 حرف/);
   assert.equal(/[١٢٣٤٥٦٧٨٩٠]/u.test(home + errors), false, "mixed Arabic-Indic digits returned in primary onboarding/error copy");
+  assert.equal(app.includes("للّوبي"), false, "user-facing lobby jargon returned");
+  assert.equal(app.includes("عنوان IP"), false, "technical IP wording returned to room-management UI");
+  assert.equal(app.includes("الهوية المجهولة الموقّعة"), false, "implementation-level identity wording returned");
 });
