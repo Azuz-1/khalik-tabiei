@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { choosePromptCandidate } from "../src/game/engine.js";
-import { type ImitationPrompt } from "../src/game/imitationPrompts.data.js";
+import { IMITATION_PROMPTS, type ImitationPrompt } from "../src/game/imitationPrompts.data.js";
 import { auditActivePrompts } from "../src/game/promptAudit.js";
 import { promptQualityWeight } from "../src/game/promptMetadata.js";
 
@@ -67,6 +67,35 @@ test("three-player selection materially suppresses high-consensus prompts compar
   assert.ok(threePlayers < 100, `expected strong three-player suppression, got ${threePlayers}/1000`);
   assert.ok(tenPlayers > 300, `expected risky prompts to remain available for large groups, got ${tenPlayers}/1000`);
   assert.ok(threePlayers < tenPlayers / 3);
+});
+
+test("real 330-bank probability mass suppresses high-consensus content most at three players", () => {
+  for (const mode of ["HANDS", "POINT", "NUMBER"] as const) {
+    const pool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === mode);
+    const risky = pool.filter((prompt) => prompt.flags?.includes("HIGH_CONSENSUS_RISK"));
+    assert.ok(risky.length > 0, `${mode} should include reviewed high-consensus prompts`);
+
+    const weightedShare = (participantCount: number) => {
+      const total = pool.reduce(
+        (sum, prompt) => sum + promptQualityWeight(prompt.flags, participantCount),
+        0,
+      );
+      const riskyWeight = risky.reduce(
+        (sum, prompt) => sum + promptQualityWeight(prompt.flags, participantCount),
+        0,
+      );
+      return riskyWeight / total;
+    };
+
+    const rawShare = risky.length / pool.length;
+    const threePlayerShare = weightedShare(3);
+    const tenPlayerShare = weightedShare(10);
+
+    assert.ok(threePlayerShare > 0, `${mode} risky prompts must remain possible`);
+    assert.ok(threePlayerShare < rawShare * 0.15, `${mode} needs strong 3-player suppression`);
+    assert.ok(tenPlayerShare > threePlayerShare * 4, `${mode} should relax suppression for 10 players`);
+    assert.ok(tenPlayerShare < rawShare, `${mode} should still slightly prefer safer prompts at 10 players`);
+  }
 });
 
 test("quality weighting never breaks family spacing or no-alternative fallback", () => {
