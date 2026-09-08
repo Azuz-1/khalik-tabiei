@@ -279,6 +279,8 @@ test("game over exposes challenge summary and final scoreboard without vote mapp
     totalRounds: 3,
     caughtRounds: 2,
     escapedRounds: 1,
+    completedEscapeRounds: 0,
+    matchEndedUncaughtRounds: 1,
     targetChallenges: 9,
     completedChallenges: 10,
   });
