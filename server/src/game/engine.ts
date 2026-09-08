@@ -19,7 +19,7 @@ import {
   type SealedParticipant,
 } from "./state.js";
 import { IMITATION_PROMPTS, type ImitationPrompt } from "./imitationPrompts.data.js";
-import type { PromptFamily } from "./promptMetadata.js";
+import { promptQualityWeight, type PromptFamily } from "./promptMetadata.js";
 import { pickPair } from "./questions.js";
 import { aggregateVoteTally } from "./votes.js";
 
@@ -181,15 +181,29 @@ export function choosePromptCandidate(
   candidates: ImitationPrompt[],
   previousFamily: PromptFamily | undefined,
   rng: () => number,
+  participantCount = 4,
 ): ImitationPrompt {
   if (!candidates.length) throw new GameError("INTERNAL", "no prompt candidates");
   const spaced = previousFamily ? candidates.filter((prompt) => prompt.family !== previousFamily) : candidates;
   const selectionPool = spaced.length ? spaced : candidates;
-  const index = Math.min(Math.floor(rng() * selectionPool.length), selectionPool.length - 1);
-  return selectionPool[index]!;
+  const weights = selectionPool.map((prompt) => promptQualityWeight(prompt.flags, participantCount));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const normalizedRng = Math.max(0, Math.min(rng(), 1 - Number.EPSILON));
+  let ticket = normalizedRng * totalWeight;
+
+  for (let index = 0; index < selectionPool.length; index += 1) {
+    ticket -= weights[index]!;
+    if (ticket < 0) return selectionPool[index]!;
+  }
+  return selectionPool[selectionPool.length - 1]!;
 }
 
-function pickPrompt(room: RoomState, mode: GameMode, deps: EngineDeps): ImitationPrompt {
+function pickPrompt(
+  room: RoomState,
+  mode: GameMode,
+  participantCount: number,
+  deps: EngineDeps,
+): ImitationPrompt {
   const pool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === mode);
   let candidates = pool.filter((prompt) => !room.usedPromptIds.has(prompt.id));
 
@@ -203,7 +217,7 @@ function pickPrompt(room: RoomState, mode: GameMode, deps: EngineDeps): Imitatio
   const previousFamily = room.round?.promptId
     ? IMITATION_PROMPTS.find((prompt) => prompt.id === room.round?.promptId)?.family
     : undefined;
-  const prompt = choosePromptCandidate(candidates, previousFamily, deps.rng);
+  const prompt = choosePromptCandidate(candidates, previousFamily, deps.rng, participantCount);
   room.usedPromptIds.add(prompt.id);
   return prompt;
 }
@@ -225,7 +239,7 @@ function prepareChallenge(
   mode: GameMode,
   deps: EngineDeps,
 ): void {
-  const prompt = pickPrompt(room, mode, deps);
+  const prompt = pickPrompt(room, mode, participantUids.length, deps);
   room.timerGeneration += 1;
   room.pause = undefined;
   room.round = {
