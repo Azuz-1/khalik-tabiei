@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { choosePromptCandidate } from "../src/game/engine.js";
-import { IMITATION_PROMPTS, type ImitationPrompt } from "../src/game/imitationPrompts.data.js";
+import { type ImitationPrompt } from "../src/game/imitationPrompts.data.js";
 import { auditActivePrompts } from "../src/game/promptAudit.js";
 import { promptQualityWeight } from "../src/game/promptMetadata.js";
 
 test("reviewed prompt risks are explicit and auditable across the active 330 bank", () => {
   const report = auditActivePrompts();
   assert.equal(report.total, 330);
+  assert.deepEqual(report.orphanQualityFlagIds, []);
   assert.equal(report.qualityFlagCounts.HIGH_CONSENSUS_RISK, 35);
   assert.equal(report.qualityFlagCounts.CONTEXT_DEPENDENT, 12);
   assert.equal(report.qualityFlagCounts.MEMORY_HEAVY, 7);
@@ -90,10 +91,7 @@ test("quality weighting never breaks family spacing or no-alternative fallback",
   assert.equal(choosePromptCandidate([riskyOtherFamily], "food-drink", () => 0.5, 3).id, "other");
 });
 
-test("all quality flags attach to real active prompts only", () => {
-  const ids = new Set(IMITATION_PROMPTS.map((prompt) => prompt.id));
+test("quality registry has no ids outside the active prompt bank", () => {
   const report = auditActivePrompts();
-  for (const promptIds of Object.values(report.qualityFlagIds)) {
-    for (const id of promptIds) assert.ok(ids.has(id), `quality registry references missing prompt ${id}`);
-  }
+  assert.deepEqual(report.orphanQualityFlagIds, []);
 });
