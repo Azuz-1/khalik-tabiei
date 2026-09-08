@@ -1,6 +1,11 @@
 import type { GameMode } from "../../../shared/types.js";
 import { IMITATION_PROMPTS } from "./imitationPrompts.data.js";
-import { normalizePromptText, type PromptFamily } from "./promptMetadata.js";
+import {
+  normalizePromptText,
+  PROMPT_QUALITY_FLAGS,
+  type PromptFamily,
+  type PromptQualityFlag,
+} from "./promptMetadata.js";
 
 export interface PromptAuditReport {
   total: number;
@@ -9,6 +14,8 @@ export interface PromptAuditReport {
   duplicateTexts: Array<{ normalizedText: string; ids: string[] }>;
   familyCounts: Record<string, number>;
   highConsensusIds: string[];
+  qualityFlagCounts: Record<PromptQualityFlag, number>;
+  qualityFlagIds: Record<PromptQualityFlag, string[]>;
   missingFamilyIds: string[];
 }
 
@@ -17,7 +24,12 @@ export function auditActivePrompts(): PromptAuditReport {
   const ids = new Map<string, number>();
   const texts = new Map<string, string[]>();
   const familyCounts: Record<string, number> = {};
-  const highConsensusIds: string[] = [];
+  const qualityFlagCounts = Object.fromEntries(
+    PROMPT_QUALITY_FLAGS.map((flag) => [flag, 0]),
+  ) as Record<PromptQualityFlag, number>;
+  const qualityFlagIds = Object.fromEntries(
+    PROMPT_QUALITY_FLAGS.map((flag) => [flag, []]),
+  ) as Record<PromptQualityFlag, string[]>;
   const missingFamilyIds: string[] = [];
 
   for (const prompt of IMITATION_PROMPTS) {
@@ -29,7 +41,11 @@ export function auditActivePrompts(): PromptAuditReport {
     texts.set(normalizedText, textIds);
     if (prompt.family) familyCounts[prompt.family] = (familyCounts[prompt.family] ?? 0) + 1;
     else missingFamilyIds.push(prompt.id);
-    if (prompt.flags?.includes("HIGH_CONSENSUS_RISK")) highConsensusIds.push(prompt.id);
+
+    for (const flag of prompt.flags ?? []) {
+      qualityFlagCounts[flag] += 1;
+      qualityFlagIds[flag].push(prompt.id);
+    }
   }
 
   return {
@@ -40,7 +56,9 @@ export function auditActivePrompts(): PromptAuditReport {
       .filter(([, promptIds]) => promptIds.length > 1)
       .map(([normalizedText, promptIds]) => ({ normalizedText, ids: promptIds })),
     familyCounts,
-    highConsensusIds,
+    highConsensusIds: qualityFlagIds.HIGH_CONSENSUS_RISK,
+    qualityFlagCounts,
+    qualityFlagIds,
     missingFamilyIds,
   };
 }
