@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import type { ScoreEntry } from "../../shared/types.js";
 import * as engine from "../src/game/engine.js";
 import { buildView } from "../src/game/view.js";
 import { createRoomState, type InternalPlayer, type RoomState } from "../src/game/state.js";
@@ -62,11 +63,11 @@ test("completed stint exposes a public reason for every scoreboard row, includin
   assert.equal(view.result?.completionReason, "CAUGHT");
   assert.ok(view.scoreboard);
   for (const normal of normals) {
-    const row = view.scoreboard!.find((entry) => entry.uid === normal)!;
-    assert.equal(row.roundDelta, 1);
-    assert.deepEqual(row.roundReason, { kind: "NORMAL_CORRECT_STREAK", count: 1 });
+    const scoreRow: ScoreEntry = view.scoreboard!.find((entry: ScoreEntry) => entry.uid === normal)!;
+    assert.equal(scoreRow.roundDelta, 1);
+    assert.deepEqual(scoreRow.roundReason, { kind: "NORMAL_CORRECT_STREAK", count: 1 });
   }
-  const impostorRow = view.scoreboard!.find((entry) => entry.uid === impostor)!;
+  const impostorRow: ScoreEntry = view.scoreboard!.find((entry: ScoreEntry) => entry.uid === impostor)!;
   assert.equal(impostorRow.roundDelta, 0);
   assert.deepEqual(impostorRow.roundReason, { kind: "IMPOSTOR_SURVIVAL", count: 0 });
 });
@@ -101,7 +102,7 @@ test("exact match boundary distinguishes a partial final stint from a full three
   const partialResult = buildView(partial, "host", "https://game.test/join/UX001");
   assert.equal(partial.round?.challengeIndex, 1);
   assert.equal(partialResult.result?.completionReason, "MATCH_END");
-  const partialImpostor = partialResult.scoreboard!.find((row) => row.uid === partial.round!.impostorUid)!;
+  const partialImpostor: ScoreEntry = partialResult.scoreboard!.find((entry: ScoreEntry) => entry.uid === partial.round!.impostorUid)!;
   assert.deepEqual(partialImpostor.roundReason, { kind: "IMPOSTOR_SURVIVAL", count: 1 });
   engine.nextRound(partial, "host", deps);
   const partialGameOver = buildView(partial, "host", "https://game.test/join/UX001").gameOver!;
@@ -117,7 +118,7 @@ test("exact match boundary distinguishes a partial final stint from a full three
   }
   const fullResult = buildView(full, "host", "https://game.test/join/UX001");
   assert.equal(fullResult.result?.completionReason, "MAX_CHALLENGES");
-  const fullImpostor = fullResult.scoreboard!.find((row) => row.uid === full.round!.impostorUid)!;
+  const fullImpostor: ScoreEntry = fullResult.scoreboard!.find((entry: ScoreEntry) => entry.uid === full.round!.impostorUid)!;
   assert.deepEqual(fullImpostor.roundReason, { kind: "IMPOSTOR_SURVIVAL", count: 3 });
   engine.nextRound(full, "host", deps);
   const fullGameOver = buildView(full, "host", "https://game.test/join/UX001").gameOver!;
