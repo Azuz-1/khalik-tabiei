@@ -102,27 +102,28 @@ async function castVote(voter, targetName) {
 }
 
 function assertNoVoterMapping(frames, label) {
+  const violations = [];
+  const forbiddenKey = /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i;
+  const expectedTallyKeys = ["name", "uid", "votes"];
+
   const walk = (node, path) => {
     if (Array.isArray(node)) {
       node.forEach((item, index) => walk(item, `${path}[${index}]`));
       return;
     }
     if (!node || typeof node !== "object") return;
+
     for (const [key, value] of Object.entries(node)) {
-      expect(
-        /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i.test(key),
-        `${label}: frame at ${path} exposed private key "${key}"`,
-      ).toBe(false);
+      if (forbiddenKey.test(key)) violations.push(`${path}: exposed private key "${key}"`);
+      if (key === "liveVoteTally") violations.push(`${path}: exposed live target totals`);
       if (key === "voteTally" && Array.isArray(value)) {
-        for (const entry of value) {
-          expect(Object.keys(entry).sort(), `${label}: voteTally stays aggregate-only`).toEqual([
-            "name",
-            "uid",
-            "votes",
-          ]);
-        }
+        value.forEach((entry, index) => {
+          const actual = entry && typeof entry === "object" ? Object.keys(entry).sort() : [];
+          if (JSON.stringify(actual) !== JSON.stringify(expectedTallyKeys)) {
+            violations.push(`${path}.voteTally[${index}]: expected aggregate-only keys, got ${actual.join(",")}`);
+          }
+        });
       }
-      expect(key, `${label}: live target totals must never be serialized`).not.toBe("liveVoteTally");
       walk(value, `${path}.${key}`);
     }
   };
@@ -134,6 +135,8 @@ function assertNoVoterMapping(frames, label) {
       // Ignore non-JSON frames if any future transport metadata is introduced.
     }
   }
+
+  expect(violations, `${label}: WebSocket privacy violations`).toEqual([]);
 }
 
 async function playCaughtChallenge(host, players, globalChallenge) {
