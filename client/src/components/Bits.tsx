@@ -1,4 +1,5 @@
 import type { ClientView, RoundResult, VoteTallyEntry } from "../../../shared/types.js";
+import { voteCountText } from "../i18n/counts.js";
 
 export function VoteBoard({ rows, live = false }: { rows: VoteTallyEntry[]; live?: boolean }) {
   return (
@@ -7,8 +8,7 @@ export function VoteBoard({ rows, live = false }: { rows: VoteTallyEntry[]; live
         <div className="vote-card" key={row.uid} data-player-uid={row.uid}>
           <div className="vote-card-name">{row.name}</div>
           <div className="vote-card-count">
-            <span className={`vote-count-value${live ? " live" : ""}`}>{row.votes}</span>
-            <span className="vote-count-label">{row.votes === 1 ? "صوت" : "أصوات"}</span>
+            <span className={`vote-count-value${live ? " live" : ""}`}>{voteCountText(row.votes)}</span>
           </div>
         </div>
       ))}
@@ -28,16 +28,25 @@ export function ResultBody({ result }: { result: RoundResult }) {
     );
   }
 
+  const verdict = result.groupFound
+    ? "مسكتوا المتخفي"
+    : result.completionReason === "MATCH_END"
+      ? "خلصت المباراة وما انمسك المتخفي"
+      : "المتخفي نجا من دوره";
+  const detail = result.completionReason === "MATCH_END"
+    ? `انتهت المباراة في تحدّيه ${result.challengeIndex} من ${result.maxChallenges}`
+    : `انتهى دوره في التحدّي ${result.challengeIndex} من ${result.maxChallenges}`;
+
   return (
     <div className="stack result-body" style={{ gap: 22 }}>
       <div className="verdict stack">
         <div className={`big ${result.groupFound ? "caught" : "escaped"}`}>
-          {result.groupFound ? "مسكتوا المتخفي" : "المتخفي نجا"}
+          {verdict}
         </div>
         <div className="subtitle center">المتخفي كان</div>
         <div className="impostor-name center">{result.impostorName}</div>
         <div className="pill-note" style={{ marginInline: "auto" }}>
-          انتهى دوره في التحدّي {result.challengeIndex} من {result.maxChallenges}
+          {detail}
         </div>
       </div>
 
@@ -53,6 +62,6 @@ export function roundLabel(view: ClientView): string {
   const globalChallenge = view.room.completedChallenges + (view.room.phase === "RESULT" ? 0 : 1);
   const visibleChallenge = Math.min(view.room.targetChallenges, Math.max(1, globalChallenge));
   const base = `التحدّي ${visibleChallenge} من ${view.room.targetChallenges}`;
-  const stint = view.challenge ? ` · دور المتخفي ${view.challenge.index}/${view.challenge.max}` : "";
+  const stint = view.challenge ? ` · المتخفي الحالي: ${view.challenge.index} من ${view.challenge.max}` : "";
   return `${base}${stint}`;
 }

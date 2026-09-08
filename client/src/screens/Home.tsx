@@ -46,7 +46,7 @@ function RulesTabs() {
   const [tab, setTab] = useState<InfoTab>("how");
   const tabs: Array<{ id: InfoTab; label: string }> = [
     { id: "how", label: "كيف نلعب؟" },
-    { id: "modes", label: "التحديات" },
+    { id: "modes", label: "التحدّيات" },
     { id: "points", label: "النقاط" },
   ];
 
@@ -84,39 +84,56 @@ function RulesTabs() {
         ))}
       </div>
 
-      <div id={`home-panel-${tab}`} role="tabpanel" aria-labelledby={`home-tab-${tab}`} className="home-tab-panel">
-        {tab === "how" ? (
-          <div className="stack" style={{ gap: 10 }}>
-            <p className="subtitle" style={{ margin: 0 }}>١. كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٢. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٣. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
-            <p className="subtitle" style={{ margin: 0 }}>٤. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي، وبحد أقصى 3 تحديات في دوره.</p>
-            <p className="helper" style={{ margin: 0 }}>المضيف يختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
-          </div>
-        ) : null}
+      <div id="home-panel-how" role="tabpanel" aria-labelledby="home-tab-how" className="home-tab-panel" hidden={tab !== "how"} tabIndex={0}>
+        <div className="stack" style={{ gap: 10 }}>
+          <p className="subtitle" style={{ margin: 0 }}>1. كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</p>
+          <p className="subtitle" style={{ margin: 0 }}>2. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
+          <p className="subtitle" style={{ margin: 0 }}>3. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
+          <p className="subtitle" style={{ margin: 0 }}>4. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي، وبحد أقصى 3 تحدّيات في دوره.</p>
+          <p className="helper" style={{ margin: 0 }}>المضيف يختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
+        </div>
+      </div>
 
-        {tab === "modes" ? (
-          <div className="stack home-mode-list">
-            {GAME_MODES.map((mode) => (
-              <div className="row home-mode-row" key={mode.id}>
-                <span className="mode-explainer-icon" aria-hidden="true">{mode.icon}</span>
-                <div>
-                  <strong>{mode.fullLabel}</strong>
-                  <p className="helper" style={{ margin: 0 }}>{mode.description}</p>
-                </div>
+      <div id="home-panel-modes" role="tabpanel" aria-labelledby="home-tab-modes" className="home-tab-panel" hidden={tab !== "modes"} tabIndex={0}>
+        <div className="stack home-mode-list">
+          {GAME_MODES.map((mode) => (
+            <div className="row home-mode-row" key={mode.id}>
+              <span className="mode-explainer-icon" aria-hidden="true">{mode.icon}</span>
+              <div>
+                <strong>{mode.fullLabel}</strong>
+                <p className="helper" style={{ margin: 0 }}>{mode.description}</p>
               </div>
-            ))}
-          </div>
-        ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
 
-        {tab === "points" ? (
-          <div className="stack home-points-copy" style={{ gap: 10 }}>
-            <p className="subtitle" style={{ margin: 0 }}><strong>الطبيعي:</strong> آخر سلسلة تصويتات صحيحة متتالية على المتخفي تساوي نقاطك: تحدّي واحد = +1، تحدّيين = +2، ثلاثة = +3.</p>
-            <p className="subtitle" style={{ margin: 0 }}>إذا انمسك المتخفي من أول تحدّي وأنت مصوّت عليه صح، تاخذ +1 فقط. وإذا قفطته من بدري واستمرّيت صح إلى نهاية دوره، تكبر نقاطك.</p>
-            <p className="subtitle" style={{ margin: 0 }}><strong>المتخفي:</strong> +1 عن كل تحدّي ينجو منه؛ إذا نجا من الثلاثة ياخذ +3.</p>
-            <p className="helper" style={{ margin: 0 }}>التصويت الغلط يقطع سلسلتك، وإذا كان آخر تصويتك غلط تاخذ 0 عن الدور. مو لازم الأغلبية توافقك عشان تنحسب لك نقاطك.</p>
+      <div id="home-panel-points" role="tabpanel" aria-labelledby="home-tab-points" className="home-tab-panel" hidden={tab !== "points"} tabIndex={0}>
+        <div className="stack home-points-copy" style={{ gap: 14 }}>
+          <div>
+            <strong>إذا أنت طبيعي</strong>
+            <table className="points-table">
+              <tbody>
+                <tr><td>آخر تصويت صح</td><td>+1</td></tr>
+                <tr><td>آخر تصويتين ورا بعض صح</td><td>+2</td></tr>
+                <tr><td>آخر 3 تصويتات ورا بعض صح</td><td>+3</td></tr>
+                <tr><td>آخر تصويت غلط</td><td>0</td></tr>
+              </tbody>
+            </table>
+            <p className="helper" style={{ margin: "8px 0 0" }}>كل ما قفطته بدري واستمريت مصوّت عليه صح، تكسب أكثر. مو لازم الأغلبية توافقك.</p>
           </div>
-        ) : null}
+          <div>
+            <strong>إذا أنت المتخفي</strong>
+            <table className="points-table">
+              <tbody>
+                <tr><td>انمسكت في أول تحدّي</td><td>0</td></tr>
+                <tr><td>نجوت من تحدّي</td><td>+1</td></tr>
+                <tr><td>نجوت من تحدّيين</td><td>+2</td></tr>
+                <tr><td>نجوت من 3 تحدّيات</td><td>+3</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -177,7 +194,7 @@ export function Home() {
       <div className="screen">
         <button className="link-btn" onClick={() => setStep("home")}>← رجوع</button>
         <div className="spacer" />
-        <div className="center stack"><h2 className="title">اكتب كود الغرفة</h2><p className="subtitle">الكود مكوّن من ٥ حروف وأرقام</p></div>
+        <div className="center stack"><h2 className="title">اكتب كود الغرفة</h2><p className="subtitle">الكود مكوّن من 5 حروف وأرقام</p></div>
         <input
           className="input code"
           aria-label="كود الغرفة"
@@ -221,7 +238,7 @@ export function Home() {
         onChange={(event) => { setName(event.target.value); setLocalErr(null); }}
         onKeyDown={(event) => { if (event.key === "Enter" && ok && !joining && !offline) actions.joinRoom(code, cleanedName); }}
       />
-      <p className="helper" aria-live="polite">الاسم من {NAME_MIN} إلى {NAME_MAX} محرفًا مرئيًا؛ الإيموجي المركب يُحسب محرفًا واحدًا.</p>
+      <p className="helper" aria-live="polite">اسمك من {NAME_MIN} إلى {NAME_MAX} حرف.</p>
       {localErr ? <p className="helper" role="alert" style={{ color: "var(--bad)" }}>{localErr}</p> : null}
       <button className="btn btn-primary" disabled={!ok || offline || joining} onClick={() => actions.joinRoom(code, cleanedName)}>{joining ? "جاري الدخول…" : "دخول الغرفة"}</button>
       <div className="spacer" />

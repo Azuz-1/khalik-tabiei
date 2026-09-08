@@ -5,6 +5,8 @@ import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
 import { ResultBody, roundLabel } from "../components/Bits.js";
 import { Players } from "../components/Players.js";
+import { requiredVotesText } from "../i18n/counts.js";
+import { roundDeltaText, scoreReasonText } from "../i18n/score.js";
 
 export function Player({ view }: { view: ClientView }) {
   switch (view.room.phase) {
@@ -33,12 +35,15 @@ function modeTitle(view: ClientView): string {
 
 function PlayerScoreboard({ rows, selfUid, round }: { rows: ScoreEntry[]; selfUid: string; round?: boolean }) {
   return (
-    <div className="card stack" style={{ width: "100%" }}>
+    <div className="card stack score-explain-board" style={{ width: "100%" }}>
       <div className="code-label">{round ? "النقاط بعد دور المتخفي" : "الترتيب النهائي"}</div>
       {rows.map((row) => (
-        <div key={row.uid} className="row between" style={{ fontWeight: row.uid === selfUid ? 900 : 700 }}>
-          <span>#{row.rank} {row.name}{row.uid === selfUid ? " — أنت" : ""}</span>
-          <span>{row.score} نقطة{round && (row.roundDelta ?? 0) > 0 ? ` (+${row.roundDelta})` : ""}</span>
+        <div key={row.uid} className={`score-explain-row${row.uid === selfUid ? " self" : ""}`}>
+          <div className="row between" style={{ fontWeight: row.uid === selfUid ? 900 : 700 }}>
+            <span>#{row.rank} {row.name}{row.uid === selfUid ? " — أنت" : ""}</span>
+            <strong>{row.score} نقطة</strong>
+          </div>
+          {round ? <div className="score-reason">{scoreReasonText(row.roundReason)} · {roundDeltaText(row.roundDelta)}</div> : null}
         </div>
       ))}
     </div>
@@ -54,8 +59,13 @@ function PlayerLobby({ view }: { view: ClientView }) {
         <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>أنت داخل 🎉</h1>
         <span className="pill-note" style={{ direction: "ltr", marginInline: "auto" }}>غرفة {view.room.code}</span>
         <span className="chip">🏅 منافسة بالنقاط</span>
-        <p className="subtitle">{view.room.targetChallenges} تحديات بالضبط. كل متخفي حدّه 3 تحديات، والأغلبية هي اللي تمسكه.</p>
+        <p className="subtitle">{view.room.targetChallenges} تحدّيات بالضبط. كل متخفي حدّه 3 تحدّيات، والأغلبية هي اللي تمسكه.</p>
         <div className="players">{selectedModes.map((mode) => <span className="chip" key={mode.id}>{mode.icon} {mode.label}</span>)}</div>
+      </div>
+      <div className="card stack quick-points-card">
+        <strong>كيف تجمع نقاط؟</strong>
+        <p className="helper" style={{ margin: 0 }}><strong>إذا أنت طبيعي:</strong> آخر 1 / 2 / 3 تصويتات صحيحة ورا بعض = +1 / +2 / +3. آخر تصويت غلط = 0.</p>
+        <p className="helper" style={{ margin: 0 }}><strong>إذا أنت المتخفي:</strong> +1 عن كل تحدّي تنجو منه، حتى +3.</p>
       </div>
       <div className="card">
         <div className="code-label" style={{ marginBottom: 10 }}>اللاعبين ({view.players.length})</div>
@@ -179,6 +189,7 @@ function PlayerVote({ view }: { view: ClientView }) {
   const [picked, setPicked] = useState<string | null>(null);
   const targets = view.voteTargets ?? [];
   const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
+  const pickedName = targets.find((target) => target.uid === picked)?.name;
 
   useEffect(() => {
     if (picked && !targets.some((target) => target.uid === picked)) setPicked(null);
@@ -201,11 +212,11 @@ function PlayerVote({ view }: { view: ClientView }) {
   }
 
   return (
-    <div className="screen">
+    <div className="screen player-vote-screen">
       <div className="center stack">
         <div className="eyebrow">{roundLabel(view)}</div>
         <h1 className="title">مين تحس إنه المتخفي؟</h1>
-        {progress.requiredVotes > 0 ? <p className="helper">يحتاج {progress.requiredVotes} أصوات عشان ينمسك. تصويتك الشخصي يدخل في نقاطك بعد نهاية دوره.</p> : null}
+        {progress.requiredVotes > 0 ? <p className="helper">يحتاج {requiredVotesText(progress.requiredVotes)} عشان ينمسك. تصويتك الشخصي يدخل في نقاطك بعد نهاية دوره.</p> : null}
       </div>
       <div className="vote-list" role="radiogroup" aria-label="اختر الشخص اللي تحس إنه المتخفي">
         {targets.map((target) => {
@@ -217,8 +228,10 @@ function PlayerVote({ view }: { view: ClientView }) {
           );
         })}
       </div>
-      <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{picked ? `أكّد التصويت` : "اختر شخص"}</button>
-      <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
+      <div className="vote-confirm-bar">
+        <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{pickedName ? `أكّد التصويت على ${pickedName}` : "اختر شخص"}</button>
+        <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
+      </div>
       <div className="spacer" />
     </div>
   );
@@ -233,7 +246,7 @@ function PlayerResult({ view }: { view: ClientView }) {
       {view.result?.roundComplete && view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} round /> : null}
       <p className="subtitle center">
         {matchFinished
-          ? "خلصت التحديات… ننتظر الترتيب النهائي"
+          ? "خلصت التحدّيات… ننتظر الترتيب النهائي"
           : view.result?.roundComplete
             ? "ننتظر المضيف يبدأ دور متخفي جديد…"
             : "نفس المتخفي مكمل… ننتظر التحدّي الجاي"}
@@ -252,10 +265,11 @@ function PlayerGameOver({ view }: { view: ClientView }) {
         <h1 className="brand" style={{ fontSize: "clamp(34px,11vw,56px)" }}>خلصت اللعبة 🎉</h1>
         {gameOver ? (
           <>
-            <p className="subtitle">لعبتوا {gameOver.completedChallenges} تحديات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار</p>
+            <p className="subtitle">لعبتوا {gameOver.completedChallenges} تحدّيات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار متخفي</p>
             <div className="card stack" style={{ width: "100%" }}>
               <div className="row between" style={{ fontWeight: 900 }}><span>انمسك</span><span>{gameOver.caughtRounds}</span></div>
-              <div className="row between" style={{ fontWeight: 900 }}><span>نجا من دوره</span><span>{gameOver.escapedRounds}</span></div>
+              <div className="row between" style={{ fontWeight: 900 }}><span>نجا من 3 تحدّيات</span><span>{gameOver.completedEscapeRounds ?? gameOver.escapedRounds}</span></div>
+              {(gameOver.matchEndedUncaughtRounds ?? 0) > 0 ? <div className="row between" style={{ fontWeight: 900 }}><span>انتهت المباراة وهو ما انمسك</span><span>{gameOver.matchEndedUncaughtRounds}</span></div> : null}
             </div>
           </>
         ) : null}

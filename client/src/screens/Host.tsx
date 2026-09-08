@@ -7,6 +7,8 @@ import { actions } from "../net/socket.js";
 import { Qr } from "../components/Qr.js";
 import { Players, Progress } from "../components/Players.js";
 import { ResultBody, roundLabel } from "../components/Bits.js";
+import { requiredVotesText, waitForPlayersText } from "../i18n/counts.js";
+import { roundDeltaText, scoreReasonText } from "../i18n/score.js";
 
 export interface ConfirmActionRequest {
   title: string;
@@ -95,7 +97,7 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
   const modeSummary = modes.size === 1
     ? `كل التحدّيات بتكون بطريقة ${view.room.availableModes.find((mode) => modes.has(mode.id))?.fullLabel ?? "هذه الطريقة"}.`
     : "طرق اللعب تتغيّر بين التحدّيات حسب اختياراتك.";
-  const startLabel = missingPlayers === 0 ? "ابدأ اللعبة" : missingPlayers === 1 ? "ننتظر لاعب واحد" : `ننتظر ${missingPlayers} لاعبين`;
+  const startLabel = waitForPlayersText(missingPlayers);
 
   const confirmKick = (uid: string) => {
     const player = view.players.find((candidate) => candidate.uid === uid);
@@ -144,14 +146,14 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
           <div className="card stack">
             <span className="code-label">المباراة</span>
             <div className="manager-subcard card stack" style={{ gap: 8 }}>
-              <strong>🏅 {view.room.targetChallenges} تحديات</strong>
-              <span className="helper">كل متخفي يستمر حتى ينمسك أو يكمل 3 تحديات كحد أقصى.</span>
-              <span className="helper">المباراة تنتهي عند عدد التحديات المختار بالضبط.</span>
+              <strong>🏅 {view.room.targetChallenges} تحدّيات</strong>
+              <span className="helper">كل متخفي يستمر حتى ينمسك أو يكمل 3 تحدّيات كحد أقصى.</span>
+              <span className="helper">المباراة تنتهي عند عدد التحدّيات المختار بالضبط.</span>
               <span className="helper">كل لاعب يجمع نقاطه، والأغلبية هي اللي تمسك المتخفي.</span>
             </div>
 
-            <span className="code-label" style={{ marginTop: 8 }}>اختر عدد التحديات</span>
-            <div role="radiogroup" aria-label="عدد التحديات" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+            <span className="code-label" style={{ marginTop: 8 }}>اختر عدد التحدّيات</span>
+            <div role="radiogroup" aria-label="عدد التحدّيات" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
               {CHALLENGE_OPTIONS.map((count) => {
                 const selected = view.room.targetChallenges === count;
                 return (
@@ -271,16 +273,24 @@ function HostVoting({ view }: { view: ClientView }) {
         <strong>الأصوات مخفية للحين</strong>
         <p className="subtitle" style={{ margin: 0 }}>ما يظهر اتجاه التصويت إلا بعد نهاية دور المتخفي.</p>
       </div>
-      {progress.requiredVotes > 0 ? <p className="vote-majority-note">يحتاج {progress.requiredVotes} أصوات عشان ينمسك</p> : null}
+      {progress.requiredVotes > 0 ? <p className="vote-majority-note">يحتاج {requiredVotesText(progress.requiredVotes)} عشان ينمسك</p> : null}
     </HostStage>
   );
 }
 
 function Scoreboard({ rows, round }: { rows: ScoreEntry[]; round?: boolean }) {
   return (
-    <div className="card stack" style={{ width: "min(100%, 680px)" }}>
+    <div className="card stack score-explain-board" style={{ width: "min(100%, 760px)" }}>
       <div className="code-label">{round ? "النقاط بعد دور المتخفي" : "الترتيب النهائي"}</div>
-      {rows.map((row) => <div key={row.uid} className="row between host-summary-row"><span>#{row.rank} {row.name}</span><strong>{row.score} نقطة{round && (row.roundDelta ?? 0) > 0 ? ` (+${row.roundDelta})` : ""}</strong></div>)}
+      {rows.map((row) => (
+        <div key={row.uid} className="score-explain-row">
+          <div className="row between host-summary-row">
+            <span>#{row.rank} {row.name}</span>
+            <strong>{row.score} نقطة</strong>
+          </div>
+          {round ? <div className="score-reason">{scoreReasonText(row.roundReason)} · {roundDeltaText(row.roundDelta)}</div> : null}
+        </div>
+      ))}
     </div>
   );
 }
@@ -297,9 +307,9 @@ function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: 
       return;
     }
     confirmAction({
-      title: "الرجوع للّوبي؟",
+      title: "الرجوع لشاشة الانتظار؟",
       description: view.nextRoundWarning,
-      confirmLabel: "ارجع للّوبي",
+      confirmLabel: "ارجع لشاشة الانتظار",
       actionType: "NEXT_ROUND",
       run: actions.nextRound,
     });
@@ -320,10 +330,11 @@ function HostGameOver({ view, confirmAction }: { view: ClientView; confirmAction
       <h1 className="brand">خلصت اللعبة 🎉</h1>
       {gameOver ? (
         <>
-          <p className="subtitle host-game-over-summary">لعبتوا {gameOver.completedChallenges} تحديات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار</p>
+          <p className="subtitle host-game-over-summary">لعبتوا {gameOver.completedChallenges} تحدّيات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار متخفي</p>
           <div className="card stack host-game-over-card">
             <div className="row between host-summary-row"><span>انمسك</span><span>{gameOver.caughtRounds}</span></div>
-            <div className="row between host-summary-row"><span>نجا من دوره</span><span>{gameOver.escapedRounds}</span></div>
+            <div className="row between host-summary-row"><span>نجا من 3 تحدّيات</span><span>{gameOver.completedEscapeRounds ?? gameOver.escapedRounds}</span></div>
+            {(gameOver.matchEndedUncaughtRounds ?? 0) > 0 ? <div className="row between host-summary-row"><span>انتهت المباراة وهو ما انمسك</span><span>{gameOver.matchEndedUncaughtRounds}</span></div> : null}
           </div>
         </>
       ) : null}
