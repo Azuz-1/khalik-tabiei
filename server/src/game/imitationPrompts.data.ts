@@ -1,13 +1,18 @@
 import type { GameMode } from "../../../shared/types.js";
 import { EXTRA_IMITATION_PROMPTS } from "./imitationPrompts.extra.js";
-import { classifyPromptFamily, type PromptFamily } from "./promptMetadata.js";
+import {
+  classifyPromptFamily,
+  qualityFlagsForPrompt,
+  type PromptFamily,
+  type PromptQualityFlag,
+} from "./promptMetadata.js";
 
 export interface ImitationPrompt {
   id: string;
   mode: GameMode;
   text: string;
   family?: PromptFamily;
-  flags?: string[];
+  flags?: PromptQualityFlag[];
 }
 
 export const BASE_IMITATION_PROMPTS: ImitationPrompt[] = [
@@ -46,7 +51,11 @@ export const BASE_IMITATION_PROMPTS: ImitationPrompt[] = [
 export const IMITATION_PROMPTS: ImitationPrompt[] = [
   ...BASE_IMITATION_PROMPTS,
   ...EXTRA_IMITATION_PROMPTS,
-].map((prompt) => ({
-  ...prompt,
-  family: prompt.family ?? classifyPromptFamily(prompt.text, prompt.mode),
-}));
+].map((prompt) => {
+  const flags = [...new Set([...(prompt.flags ?? []), ...qualityFlagsForPrompt(prompt.id)])];
+  return {
+    ...prompt,
+    family: prompt.family ?? classifyPromptFamily(prompt.text, prompt.mode),
+    flags: flags.length ? flags : undefined,
+  };
+});

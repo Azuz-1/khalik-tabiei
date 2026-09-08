@@ -7,13 +7,17 @@ import { assertActivePromptBank } from "../src/game/promptAudit.js";
 import { RoomManager } from "../src/game/roomManager.js";
 import { createRoom, joinPlayer } from "./helpers.js";
 
-test("active imitation bank is exactly 330 audited prompts with explicit families", () => {
+test("active imitation bank is exactly 330 audited prompts with explicit families and quality flags", () => {
   const report = assertActivePromptBank();
   assert.deepEqual(report.byMode, { HANDS: 110, POINT: 110, NUMBER: 110 });
   assert.deepEqual(report.duplicateIds, []);
   assert.deepEqual(report.duplicateTexts, []);
   assert.deepEqual(report.missingFamilyIds, []);
-  assert.deepEqual(report.highConsensusIds.sort(), ["P06", "P09"]);
+  assert.ok(report.highConsensusIds.includes("P06"));
+  assert.ok(report.highConsensusIds.includes("P09"));
+  assert.ok(report.highConsensusIds.length >= 30);
+  assert.ok(report.qualityFlagCounts.CONTEXT_DEPENDENT > 0);
+  assert.ok(report.qualityFlagCounts.MEMORY_HEAVY > 0);
   assert.ok(Object.keys(report.familyCounts).length >= 8);
 });
 

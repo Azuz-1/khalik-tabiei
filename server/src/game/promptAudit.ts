@@ -1,6 +1,11 @@
 import type { GameMode } from "../../../shared/types.js";
 import { IMITATION_PROMPTS } from "./imitationPrompts.data.js";
-import { normalizePromptText, type PromptFamily } from "./promptMetadata.js";
+import {
+  normalizePromptText,
+  reviewedPromptQualityIds,
+  type PromptFamily,
+  type PromptQualityFlag,
+} from "./promptMetadata.js";
 
 export interface PromptAuditReport {
   total: number;
@@ -9,6 +14,9 @@ export interface PromptAuditReport {
   duplicateTexts: Array<{ normalizedText: string; ids: string[] }>;
   familyCounts: Record<string, number>;
   highConsensusIds: string[];
+  qualityFlagCounts: Record<PromptQualityFlag, number>;
+  qualityFlagIds: Record<PromptQualityFlag, string[]>;
+  orphanQualityFlagIds: string[];
   missingFamilyIds: string[];
 }
 
@@ -17,7 +25,18 @@ export function auditActivePrompts(): PromptAuditReport {
   const ids = new Map<string, number>();
   const texts = new Map<string, string[]>();
   const familyCounts: Record<string, number> = {};
-  const highConsensusIds: string[] = [];
+  const qualityFlagCounts: Record<PromptQualityFlag, number> = {
+    HIGH_CONSENSUS_RISK: 0,
+    CONTEXT_DEPENDENT: 0,
+    MEMORY_HEAVY: 0,
+    AMBIGUOUS_RESPONSE_RISK: 0,
+  };
+  const qualityFlagIds: Record<PromptQualityFlag, string[]> = {
+    HIGH_CONSENSUS_RISK: [],
+    CONTEXT_DEPENDENT: [],
+    MEMORY_HEAVY: [],
+    AMBIGUOUS_RESPONSE_RISK: [],
+  };
   const missingFamilyIds: string[] = [];
 
   for (const prompt of IMITATION_PROMPTS) {
@@ -29,8 +48,15 @@ export function auditActivePrompts(): PromptAuditReport {
     texts.set(normalizedText, textIds);
     if (prompt.family) familyCounts[prompt.family] = (familyCounts[prompt.family] ?? 0) + 1;
     else missingFamilyIds.push(prompt.id);
-    if (prompt.flags?.includes("HIGH_CONSENSUS_RISK")) highConsensusIds.push(prompt.id);
+
+    for (const flag of prompt.flags ?? []) {
+      qualityFlagCounts[flag] += 1;
+      qualityFlagIds[flag].push(prompt.id);
+    }
   }
+
+  const activeIds = new Set(ids.keys());
+  const orphanQualityFlagIds = reviewedPromptQualityIds().filter((id) => !activeIds.has(id));
 
   return {
     total: IMITATION_PROMPTS.length,
@@ -40,7 +66,10 @@ export function auditActivePrompts(): PromptAuditReport {
       .filter(([, promptIds]) => promptIds.length > 1)
       .map(([normalizedText, promptIds]) => ({ normalizedText, ids: promptIds })),
     familyCounts,
-    highConsensusIds,
+    highConsensusIds: qualityFlagIds.HIGH_CONSENSUS_RISK,
+    qualityFlagCounts,
+    qualityFlagIds,
+    orphanQualityFlagIds,
     missingFamilyIds,
   };
 }
@@ -56,6 +85,9 @@ export function assertActivePromptBank(report = auditActivePrompts()): PromptAud
   if (report.duplicateIds.length) throw new Error(`Duplicate active prompt ids: ${report.duplicateIds.join(", ")}`);
   if (report.duplicateTexts.length) {
     throw new Error(`Duplicate active prompt text: ${report.duplicateTexts.map((entry) => entry.ids.join("/")).join(", ")}`);
+  }
+  if (report.orphanQualityFlagIds.length) {
+    throw new Error(`Prompt quality metadata references missing ids: ${report.orphanQualityFlagIds.join(", ")}`);
   }
   if (report.missingFamilyIds.length) throw new Error(`Active prompts missing topic family: ${report.missingFamilyIds.join(", ")}`);
   return report;
