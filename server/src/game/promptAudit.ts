@@ -1,6 +1,11 @@
 import type { GameMode } from "../../../shared/types.js";
 import { IMITATION_PROMPTS } from "./imitationPrompts.data.js";
-import { normalizePromptText, type PromptFamily, type PromptQualityFlag } from "./promptMetadata.js";
+import {
+  normalizePromptText,
+  reviewedPromptQualityIds,
+  type PromptFamily,
+  type PromptQualityFlag,
+} from "./promptMetadata.js";
 
 export interface PromptAuditReport {
   total: number;
@@ -11,6 +16,7 @@ export interface PromptAuditReport {
   highConsensusIds: string[];
   qualityFlagCounts: Record<PromptQualityFlag, number>;
   qualityFlagIds: Record<PromptQualityFlag, string[]>;
+  orphanQualityFlagIds: string[];
   missingFamilyIds: string[];
 }
 
@@ -49,6 +55,9 @@ export function auditActivePrompts(): PromptAuditReport {
     }
   }
 
+  const activeIds = new Set(ids.keys());
+  const orphanQualityFlagIds = reviewedPromptQualityIds().filter((id) => !activeIds.has(id));
+
   return {
     total: IMITATION_PROMPTS.length,
     byMode,
@@ -60,6 +69,7 @@ export function auditActivePrompts(): PromptAuditReport {
     highConsensusIds: qualityFlagIds.HIGH_CONSENSUS_RISK,
     qualityFlagCounts,
     qualityFlagIds,
+    orphanQualityFlagIds,
     missingFamilyIds,
   };
 }
@@ -75,6 +85,9 @@ export function assertActivePromptBank(report = auditActivePrompts()): PromptAud
   if (report.duplicateIds.length) throw new Error(`Duplicate active prompt ids: ${report.duplicateIds.join(", ")}`);
   if (report.duplicateTexts.length) {
     throw new Error(`Duplicate active prompt text: ${report.duplicateTexts.map((entry) => entry.ids.join("/")).join(", ")}`);
+  }
+  if (report.orphanQualityFlagIds.length) {
+    throw new Error(`Prompt quality metadata references missing ids: ${report.orphanQualityFlagIds.join(", ")}`);
   }
   if (report.missingFamilyIds.length) throw new Error(`Active prompts missing topic family: ${report.missingFamilyIds.join(", ")}`);
   return report;
