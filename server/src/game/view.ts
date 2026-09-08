@@ -1,6 +1,6 @@
-import type { ClientView, PublicPlayer, RevealedAnswer, Role } from "../../../shared/types.js";
+import type { ClientView, PublicPlayer, RevealedAnswer, Role, ScoreReason } from "../../../shared/types.js";
 import { CATEGORIES, GAME_MODES, MAX_CHALLENGES_PER_ROUND } from "../../../shared/constants.js";
-import { activePlayers, roundParticipants, type RoomState } from "./state.js";
+import { activePlayers, roundParticipants, type RoomState, type RoundState } from "./state.js";
 import { questionFor, ranking, requiredVotesFor } from "./engine.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
@@ -41,6 +41,19 @@ function revealAnswers(room: RoomState): RevealedAnswer[] {
     if (answer !== undefined) answers.push({ uid: player.uid, name: player.name, answer });
   }
   return answers;
+}
+
+function roundScoreReason(round: RoundState, uid: string, delta: number): ScoreReason {
+  if (!round.participantUids.includes(uid)) return { kind: "NOT_PARTICIPATING" };
+  if (uid === round.impostorUid) return { kind: "IMPOSTOR_SURVIVAL", count: delta };
+  return { kind: "NORMAL_CORRECT_STREAK", count: delta };
+}
+
+function completionReason(room: RoomState, round: RoundState, maxChallenges: number) {
+  if (!round.roundComplete || round.kind !== "IMITATION") return undefined;
+  if (round.groupFound) return "CAUGHT" as const;
+  if (room.completedChallenges >= room.targetChallenges && round.challengeIndex < maxChallenges) return "MATCH_END" as const;
+  return "MAX_CHALLENGES" as const;
 }
 
 export function buildView(room: RoomState, uid: string, joinUrl: string): ClientView {
@@ -139,11 +152,15 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       maxChallenges: roundMaxChallenges,
       mode: round.mode,
       requiredVotes: round.resultRequiredVotes ?? 0,
+      ...(revealIdentity ? { completionReason: completionReason(room, round, roundMaxChallenges) } : {}),
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
       voteTally: revealIdentity ? round.resultVoteTally ?? [] : [],
     };
     if (room.playStyle === "INDIVIDUAL" && revealIdentity) {
-      view.scoreboard = ranking(room).map((row) => ({ ...row, roundDelta: round.roundScores.get(row.uid) ?? 0 }));
+      view.scoreboard = ranking(room).map((row) => {
+        const roundDelta = round.roundScores.get(row.uid) ?? 0;
+        return { ...row, roundDelta, roundReason: roundScoreReason(round, row.uid, roundDelta) };
+      });
     }
     if (
       role === "host" &&
@@ -151,17 +168,25 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       room.completedChallenges < room.targetChallenges &&
       activePlayers(room).length < room.minPlayers
     ) {
-      view.nextRoundWarning = "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع للّوبي وتنتهي اللعبة الحالية وتنمسح نقاطها.";
+      view.nextRoundWarning = "نحتاج 3 لاعبين على الأقل عشان نكمل. إذا تقدمت الآن بنرجع لشاشة الانتظار وتنتهي اللعبة الحالية وتنمسح نقاطها.";
     }
   }
 
   if (room.phase === "GAME_OVER") {
     const caughtRounds = room.roundOutcomes.filter((outcome) => outcome.caught).length;
     const escapedRounds = room.roundOutcomes.filter((outcome) => !outcome.caught).length;
+    const completedEscapeRounds = room.roundOutcomes.filter(
+      (outcome) => !outcome.caught && outcome.challengeIndex >= MAX_CHALLENGES_PER_ROUND,
+    ).length;
+    const matchEndedUncaughtRounds = room.roundOutcomes.filter(
+      (outcome) => !outcome.caught && outcome.challengeIndex < MAX_CHALLENGES_PER_ROUND,
+    ).length;
     view.gameOver = {
       totalRounds: room.roundOutcomes.length,
       caughtRounds,
       escapedRounds,
+      completedEscapeRounds,
+      matchEndedUncaughtRounds,
       targetChallenges: room.targetChallenges,
       completedChallenges: room.completedChallenges,
     };

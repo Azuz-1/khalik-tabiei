@@ -94,13 +94,22 @@ export interface VoteTallyEntry {
   votes: number;
 }
 
+export type ScoreReason =
+  | { kind: "NORMAL_CORRECT_STREAK"; count: number }
+  | { kind: "IMPOSTOR_SURVIVAL"; count: number }
+  | { kind: "NOT_PARTICIPATING" };
+
 export interface ScoreEntry {
   uid: string;
   name: string;
   score: number;
   rank: number;
   roundDelta?: number;
+  /** Revealed only after the active impostor stint ends. */
+  roundReason?: ScoreReason;
 }
+
+export type RoundCompletionReason = "CAUGHT" | "MAX_CHALLENGES" | "MATCH_END";
 
 export interface RoundResult {
   impostorUid?: string;
@@ -111,6 +120,7 @@ export interface RoundResult {
   maxChallenges: number;
   mode: GameMode;
   requiredVotes: number;
+  completionReason?: RoundCompletionReason;
   normalQuestion?: string;
   impostorQuestion?: string;
   category?: CategoryId;
@@ -122,6 +132,10 @@ export interface GameOverInfo {
   totalRounds: number;
   caughtRounds: number;
   escapedRounds: number;
+  /** Full three-Challenge impostor stints that ended without a capture. */
+  completedEscapeRounds?: number;
+  /** Final partial stint(s) that ended only because the selected match total was reached. */
+  matchEndedUncaughtRounds?: number;
   targetChallenges: number;
   completedChallenges: number;
 }

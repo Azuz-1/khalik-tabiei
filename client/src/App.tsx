@@ -102,7 +102,7 @@ export function App() {
         return {
           ...current,
           pending: false,
-          error: "ما قدرنا نتأكد من تنفيذ الطلب. راجع حالة الغرفة وحاول مرة ثانية.",
+          error: "ما قدرنا نتأكد من تنفيذ الطلب. تأكد إن حالة الغرفة ما تغيّرت وحاول مرة ثانية.",
         };
       });
     }, 350);
@@ -137,8 +137,8 @@ export function App() {
     openConfirm({
       title: "الخروج من الغرفة؟",
       description: active
-        ? "إذا خروجك يمنع استمرار دور المتخفي الحالي، ممكن ترجع اللعبة للّوبي. إذا الاتصال مقطوع ما راح ندّعي أن الخروج تسجّل إلا بعد رجوع الاتصال."
-        : "بتطلع من الغرفة وترجع للرئيسية. إذا الاتصال مقطوع نحتاج يرجع قبل ما نأكد الخروج على الخادم.",
+        ? "إذا خروجك يمنع استمرار دور المتخفي الحالي، ممكن ترجع اللعبة لشاشة الانتظار. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك."
+        : "بتطلع من الغرفة وترجع للرئيسية. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك.",
       confirmLabel: "اخرج",
       actionType: "LEAVE_ROOM",
       run: actions.leaveRoom,
@@ -338,7 +338,7 @@ function HostPlayerManager({
               <div><strong>دخول لاعبين جدد</strong><div className="helper">{admissionLocked ? "موقوف مؤقتًا" : "مفتوح"}</div></div>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.setAdmission(!admissionLocked)}>{admissionLocked ? "فتح الدخول" : "إيقاف الدخول"}</button>
             </div>
-            <p className="helper">القفل يمنع الهويات الجديدة فقط. اللاعب اللي له مقعد محفوظ يقدر يرجع بنفس هويته.</p>
+            <p className="helper">إيقاف الدخول يمنع لاعبين جدد. اللي له مكان محفوظ يقدر يرجع.</p>
           </div>
         ) : null}
 
@@ -351,7 +351,7 @@ function HostPlayerManager({
               onClick={() => onConfirm({
                 title: `إخراج ${player.name}؟`,
                 description: active
-                  ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع للّوبي. غير كذا تكملون بنفس المتخفي والتحدّي."
+                  ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع لشاشة الانتظار. غير كذا تكملون بنفس المتخفي والتحدّي."
                   : "بيطلع من الغرفة وما يقدر يرجع بنفس الهوية إلا إذا سمحت له من إدارة اللاعبين.",
                 confirmLabel: "إخراج",
                 actionType: "KICK_PLAYER",
@@ -368,14 +368,14 @@ function HostPlayerManager({
 
         {blockedPlayers.length > 0 ? (
           <div className="card stack manager-subcard">
-            <strong>هويات ممنوعة من الرجوع</strong>
+            <strong>لاعبون ممنوعون من الرجوع</strong>
             {blockedPlayers.map((player) => (
               <div key={player.uid} className="row between">
                 <span>{player.name}</span>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>السماح له يرجع</button>
               </div>
             ))}
-            <p className="helper">المنع مرتبط بالهوية المجهولة الموقّعة في هذا المتصفح، مو بالشخص أو عنوان IP. هوية جديدة تعتبر مستخدمًا مختلفًا.</p>
+            <p className="helper">هذي القائمة تمنع رجوع نفس هوية اللعبة. المضيف يقدر يسمح للاعب يرجع من هنا.</p>
           </div>
         ) : null}
       </div>

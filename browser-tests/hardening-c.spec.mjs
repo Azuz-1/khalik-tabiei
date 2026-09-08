@@ -82,7 +82,7 @@ test("Host and Player rendered flows stay accessible at 3, 6, and 10 players", a
     await kickDialog.getByRole("button", { name: "إخراج", exact: true }).click();
     await expect(kickDialog).toBeHidden();
     await expect(manager.locator(".manager-player-row", { hasText: "لاعب5" })).toHaveCount(0);
-    await expect(manager).toContainText("هويات ممنوعة من الرجوع");
+    await expect(manager).toContainText("لاعبون ممنوعون من الرجوع");
     await expect(manager).toContainText("لاعب5");
 
     await manager.getByRole("button", { name: "إغلاق" }).click();

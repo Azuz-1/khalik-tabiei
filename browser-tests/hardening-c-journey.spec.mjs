@@ -86,12 +86,15 @@ async function castVote(voter, targetName) {
   const option = voter.page.locator(".vote-opt", { hasText: targetName });
   await expect(option).toHaveCount(1);
   await option.click();
-  await voter.page.getByRole("button", { name: "أكّد التصويت" }).click();
+  const confirm = voter.page.getByRole("button", { name: `أكّد التصويت على ${targetName}`, exact: true });
+  await expect(confirm).toBeVisible();
+  await expect(voter.page.locator(".vote-confirm-bar")).toBeVisible();
+  await confirm.click();
   await expect
     .poll(
       async () => {
         const rendered = await voter.page.locator("body").innerText();
-        return /تم تسجيل صوتك|مسكتوا المتخفي|ما مسكتوه|المتخفي نجا/.test(rendered);
+        return /تم تسجيل صوتك|مسكتوا المتخفي|ما مسكتوه|المتخفي نجا|خلصت المباراة/.test(rendered);
       },
       { timeout: PHASE_TIMEOUT, message: `${voter.name}'s vote was never registered` },
     )
@@ -99,27 +102,28 @@ async function castVote(voter, targetName) {
 }
 
 function assertNoVoterMapping(frames, label) {
+  const violations = [];
+  const forbiddenKey = /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i;
+  const expectedTallyKeys = ["name", "uid", "votes"];
+
   const walk = (node, path) => {
     if (Array.isArray(node)) {
       node.forEach((item, index) => walk(item, `${path}[${index}]`));
       return;
     }
     if (!node || typeof node !== "object") return;
+
     for (const [key, value] of Object.entries(node)) {
-      expect(
-        /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i.test(key),
-        `${label}: frame at ${path} exposed private key "${key}"`,
-      ).toBe(false);
+      if (forbiddenKey.test(key)) violations.push(`${path}: exposed private key "${key}"`);
+      if (key === "liveVoteTally") violations.push(`${path}: exposed live target totals`);
       if (key === "voteTally" && Array.isArray(value)) {
-        for (const entry of value) {
-          expect(Object.keys(entry).sort(), `${label}: voteTally stays aggregate-only`).toEqual([
-            "name",
-            "uid",
-            "votes",
-          ]);
-        }
+        value.forEach((entry, index) => {
+          const actual = entry && typeof entry === "object" ? Object.keys(entry).sort() : [];
+          if (JSON.stringify(actual) !== JSON.stringify(expectedTallyKeys)) {
+            violations.push(`${path}.voteTally[${index}]: expected aggregate-only keys, got ${actual.join(",")}`);
+          }
+        });
       }
-      expect(key, `${label}: live target totals must never be serialized`).not.toBe("liveVoteTally");
       walk(value, `${path}.${key}`);
     }
   };
@@ -131,6 +135,8 @@ function assertNoVoterMapping(frames, label) {
       // Ignore non-JSON frames if any future transport metadata is introduced.
     }
   }
+
+  expect(violations, `${label}: WebSocket privacy violations`).toEqual([]);
 }
 
 async function playCaughtChallenge(host, players, globalChallenge) {
@@ -172,6 +178,9 @@ async function playCaughtChallenge(host, players, globalChallenge) {
   await expect(host.page.getByText("مسكتوا المتخفي")).toBeVisible();
   await expect(host.page.locator(".impostor-name")).toHaveText(impostor.name);
   await expect(host.page.getByText("النقاط بعد دور المتخفي")).toBeVisible();
+  await expect(host.page.locator(".score-reason")).toHaveCount(3);
+  await expect(host.page.getByText("انمسك قبل ما ينجو من أي تحدّي · 0")).toBeVisible();
+  await expect(host.page.getByText("صح في آخر تصويت · +1")).toHaveCount(2);
 
   return { impostor, normals };
 }
@@ -221,7 +230,7 @@ test("full game journey: reconnect, kick, competitive scoring, nine Challenges, 
     await expect(host.page.locator(".seat-badge")).toHaveCount(3);
 
     const players = [joined[0], joined[2], joined[3]];
-    await expect(host.page.getByText("🏅 9 تحديات")).toBeVisible();
+    await expect(host.page.getByText("🏅 9 تحدّيات")).toBeVisible();
     await host.page.getByRole("button", { name: "ابدأ اللعبة" }).click();
 
     for (let challenge = 1; challenge <= 9; challenge += 1) {
@@ -239,8 +248,8 @@ test("full game journey: reconnect, kick, competitive scoring, nine Challenges, 
     await expect(host.page.getByRole("heading", { name: "خلصت اللعبة 🎉" })).toBeVisible({
       timeout: PHASE_TIMEOUT,
     });
-    await expect(host.page.getByText(/لعبتوا 9 تحديات/)).toBeVisible();
-    await expect(host.page.getByText(/مسكتوا المتخفي في 9 من 9 أدوار/)).toBeVisible();
+    await expect(host.page.getByText(/لعبتوا 9 تحدّيات/)).toBeVisible();
+    await expect(host.page.getByText(/مسكتوا المتخفي في 9 من 9 أدوار متخفي/)).toBeVisible();
     await expect(host.page.getByText("الترتيب النهائي")).toBeVisible();
 
     for (const client of [host, ...players]) {
