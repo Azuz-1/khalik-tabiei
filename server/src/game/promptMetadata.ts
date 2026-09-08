@@ -104,6 +104,10 @@ export const PROMPT_QUALITY_FLAGS: readonly PromptQualityFlag[] = [
   "AMBIGUOUS_RESPONSE_RISK",
 ];
 
+export function reviewedPromptQualityIds(): string[] {
+  return Object.keys(QUALITY_FLAGS_BY_ID);
+}
+
 export function qualityFlagsForPrompt(id: string): PromptQualityFlag[] {
   return [...(QUALITY_FLAGS_BY_ID[id] ?? [])];
 }
