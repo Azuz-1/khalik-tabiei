@@ -7,8 +7,12 @@ const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOL
 const PUBLIC_PROMPT_PHASES = new Set(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
 
 function roleFor(room: RoomState, uid: string): Role {
-  if (uid === room.hostUid) return "host";
+  // Ownership is a capability, not a gameplay role. New room owners live in
+  // players and therefore receive exactly the same private role/prompt/vote
+  // projection as every other participant. The legacy host role remains only
+  // for old/dev rooms whose owner was created without a player record.
   if (room.players.has(uid)) return "player";
+  if (uid === room.hostUid) return "host";
   return "spectator";
 }
 
@@ -28,7 +32,7 @@ function publicPlayers(room: RoomState): PublicPlayer[] {
     name: player.name,
     seatNumber: player.seatNumber ?? stableSeatNumber(player.uid),
     connected: player.connected,
-    isHost: false,
+    isHost: player.uid === room.hostUid || player.isHost,
   }));
 }
 
@@ -58,11 +62,12 @@ function completionReason(room: RoomState, round: RoundState, maxChallenges: num
 
 export function buildView(room: RoomState, uid: string, joinUrl: string): ClientView {
   const role = roleFor(room, uid);
+  const isOwner = uid === room.hostUid;
   const self = room.players.get(uid);
   const round = room.round;
   const roundMaxChallenges = round?.maxChallenges ?? MAX_CHALLENGES_PER_ROUND;
   const view: ClientView = {
-    self: { uid, role, name: self?.name, connected: self?.connected ?? true },
+    self: { uid, role, name: self?.name, connected: self?.connected ?? true, isOwner },
     room: {
       code: room.code,
       phase: room.phase,
@@ -88,7 +93,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
     players: publicPlayers(room),
   };
 
-  if (role === "host") {
+  if (isOwner) {
     view.blockedPlayers = [...room.kickedIdentities].map(([blockedUid, name]) => ({ uid: blockedUid, name }));
     if (room.phase === "LOBBY") view.settingsEditable = true;
   }
@@ -168,7 +173,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       });
     }
     if (
-      role === "host" &&
+      isOwner &&
       round.roundComplete &&
       room.completedChallenges < room.targetChallenges &&
       activePlayers(room).length < room.minPlayers
