@@ -5,6 +5,7 @@ import "@fontsource/tajawal/500.css";
 import "@fontsource/tajawal/700.css";
 import "@fontsource/tajawal/800.css";
 import "@fontsource/tajawal/900.css";
+import "./telemetry.js";
 import { App } from "./App.js";
 import "./styles.css";
 import "./c-ux.css";
