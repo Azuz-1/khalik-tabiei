@@ -7,7 +7,7 @@ import { testUid } from "./helpers.js";
 
 const deps = { rng: () => 0, now: () => 1_000 };
 
-test("survived challenge result reveals no impostor identity, tally, voter mapping, or scoring", () => {
+test("survived challenge result reveals no impostor identity, tally, turnout aggregate, voter mapping, or scoring", () => {
   const room = createRoomState("ABCDE", testUid(99), 1);
 
   for (let index = 1; index <= 4; index += 1) {
@@ -52,11 +52,17 @@ test("survived challenge result reveals no impostor identity, tally, voter mappi
   const json = JSON.stringify(view);
   assert.equal(view.result?.impostorUid, undefined);
   assert.equal(view.result?.impostorName, undefined);
+  assert.equal(view.result?.requiredVotes, undefined);
+  assert.equal(view.result?.votesCast, undefined);
+  assert.equal(view.result?.participantCount, undefined);
   assert.deepEqual(view.result?.voteTally, []);
   assert.equal(view.publicPrompt?.text, prompt, "already-revealed challenge prompt stays public");
   assert.ok(!json.includes(promptId));
   assert.ok(!json.includes("\"impostorUid\""));
   assert.ok(!json.includes("\"impostorName\""));
+  assert.ok(!json.includes("\"requiredVotes\""));
+  assert.ok(!json.includes("\"votesCast\""));
+  assert.ok(!json.includes("\"participantCount\""));
   assert.ok(!json.includes("voteBreakdown"));
   assert.ok(!json.includes("voterUid"));
   assert.ok(!json.includes("targetUid"));
