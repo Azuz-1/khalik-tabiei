@@ -185,6 +185,8 @@ export interface ClientView {
   /** Owner-only list. A blocked signed anonymous identity is not a physical-person ban. */
   blockedPlayers?: Array<{ uid: string; name: string }>;
   nextRoundWarning?: string;
+  /** Owner-only, role-blind recovery for a participant who disconnected before Ready. */
+  readyRecovery?: { availableAt: number };
   challenge?: {
     mode: GameMode;
     index: number;
@@ -230,6 +232,8 @@ export type ClientMessage =
   | ({ t: "START_GAME" } & RequestMeta)
   | ({ t: "MARK_READY" } & RequestMeta)
   | ({ t: "SUBMIT_ANSWER"; answer: string } & RequestMeta)
+  /** Owner-only, role-blind recovery after an unready participant disconnect grace. */
+  | ({ t: "REDEAL_CHALLENGE" } & RequestMeta)
   /** @deprecated Voting starts automatically after the authoritative discussion deadline. */
   | ({ t: "START_VOTING" } & RequestMeta)
   | ({ t: "SUBMIT_VOTE"; targetUid: string } & RequestMeta)
