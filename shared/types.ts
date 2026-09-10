@@ -251,4 +251,9 @@ export type AnalyticsEvent =
   | "room_closed"
   | "room_ended_unknown"
   | "game_error"
-  | "suggestion_submitted";
+  | "suggestion_submitted"
+  | "client_started"
+  | "client_performance"
+  | "client_vital"
+  | "client_session_summary"
+  | "client_error";
