@@ -151,6 +151,10 @@ export function createGameServer() {
     };
 
     ws.on("message", (data) => {
+      // ws can still emit already-buffered frames after close(1008) starts.
+      // Once this connection is policy-closing, those frames must be inert.
+      if (!conn.canProcessIncoming()) return;
+
       // Reject oversized input before UTF-8 conversion / JSON parsing.
       if (rawDataBytes(data) > config.maxMessageBytes) {
         violate("BAD_REQUEST");
