@@ -69,10 +69,12 @@ export function sealVoteResolution(room: RoomState, deps: VotingDeps): void {
   }));
   const participantSet = new Set(participants.map((player) => player.uid));
   round.sealedParticipants = participants;
+  // A submitted ballot remains part of the cast-vote denominator even if its
+  // target leaves before settlement. Only the departed voter's own ballot is
+  // removed by the membership path; a vote aimed at a departed target is a
+  // committed but wasted ballot and must not make the remaining votes stronger.
   round.sealedVotes = new Map(
-    [...round.votes].filter(([voterUid, targetUid]) =>
-      participantSet.has(voterUid) && participantSet.has(targetUid),
-    ),
+    [...round.votes].filter(([voterUid]) => participantSet.has(voterUid)),
   );
   round.resolutionSealed = true;
   touch(room, deps);
