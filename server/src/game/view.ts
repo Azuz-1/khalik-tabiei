@@ -32,7 +32,7 @@ function publicPlayers(room: RoomState): PublicPlayer[] {
     name: player.name,
     seatNumber: player.seatNumber ?? stableSeatNumber(player.uid),
     connected: player.connected,
-    isHost: player.uid === room.hostUid || player.isHost,
+    isHost: player.uid === room.hostUid,
   }));
 }
 
@@ -96,6 +96,14 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   if (isOwner) {
     view.blockedPlayers = [...room.kickedIdentities].map(([blockedUid, name]) => ({ uid: blockedUid, name }));
     if (room.phase === "LOBBY") view.settingsEditable = true;
+    if (
+      room.phase === "QUESTION" &&
+      round?.kind === "IMITATION" &&
+      room.readyRecoveryDeadline !== undefined &&
+      roundParticipants(room).some((player) => !player.connected && !round.readyUids.has(player.uid))
+    ) {
+      view.readyRecovery = { availableAt: room.readyRecoveryDeadline };
+    }
   }
 
   if (round?.kind === "IMITATION" && room.phase !== "GAME_OVER") {
