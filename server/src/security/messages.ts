@@ -52,6 +52,12 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
       return value as ClientMessage;
 
     case "CREATE_ROOM":
+      if (!exactKeys(value, ["t"], ["name", "rid"]) || !validRid(value)) return null;
+      // `name` remains optional only for legacy/internal callers. Production PR2
+      // clients provide it so the owner is created as a real player.
+      if (value.name !== undefined && !boundedString(value.name, 1, RAW_NAME_MAX_CODE_POINTS)) return null;
+      return value as ClientMessage;
+
     case "LEAVE_ROOM":
     case "START_GAME":
     case "MARK_READY":
