@@ -38,6 +38,7 @@ test("display link is owner-only and display socket is sessionless, spectator-on
   const wsOrigin = `ws://127.0.0.1:${address.port}`;
   let owner: WebSocket | undefined;
   let display: WebSocket | undefined;
+  let rejectedDisplay: WebSocket | undefined;
 
   try {
     const unauthenticatedLink = await fetch(`${origin}/api/rooms/ABCDE/display-link`);
@@ -64,15 +65,27 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     const linkBody = await linkResponse.json() as { path?: string };
     assert.ok(linkBody.path);
     const displayHttpUrl = new URL(linkBody.path, origin);
-    const token = displayHttpUrl.searchParams.get("token");
+    assert.equal(displayHttpUrl.search, "", "display capability must not appear in the HTTP query");
+    const token = new URLSearchParams(displayHttpUrl.hash.slice(1)).get("token");
     assert.ok(token);
 
-    display = await open(
-      `${wsOrigin}/ws?mode=display&code=${encodeURIComponent(code)}&token=${encodeURIComponent(token)}`,
-      origin,
-    );
+    const displayWsUrl = `${wsOrigin}/ws?mode=display&code=${encodeURIComponent(code)}`;
+    assert.equal(displayWsUrl.includes("token="), false, "display capability must not appear in the WebSocket URL");
+    assert.equal(displayWsUrl.includes(token), false, "display capability must not be embedded in the WebSocket URL");
+
+    rejectedDisplay = await open(displayWsUrl, origin);
+    const rejectedHelloMessage = nextMessage(rejectedDisplay);
+    rejectedDisplay.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
+    const rejectedHello = await rejectedHelloMessage;
+    assert.equal(rejectedHello.t, "ERROR");
+    if (rejectedHello.t !== "ERROR") throw new Error("display authentication error missing");
+    assert.equal(rejectedHello.code, "UNAUTHORIZED");
+    await once(rejectedDisplay, "close");
+    rejectedDisplay = undefined;
+
+    display = await open(displayWsUrl, origin);
     const displayHello = nextMessage(display);
-    display.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
+    display.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: token }));
     const publicState = await displayHello;
     assert.equal(publicState.t, "STATE");
     if (publicState.t !== "STATE") throw new Error("display state missing");
@@ -103,6 +116,7 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     assert.equal(room.hostConnected, true, "closing the display must not disconnect or pause the owner/player");
     assert.equal(room.players.get(created.view.self.uid)?.connected, true);
   } finally {
+    try { rejectedDisplay?.terminate(); } catch { /* ignore */ }
     try { display?.terminate(); } catch { /* ignore */ }
     try { owner?.terminate(); } catch { /* ignore */ }
     runtime.dispose();
