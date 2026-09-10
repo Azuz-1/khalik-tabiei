@@ -125,7 +125,7 @@ function actionCompleted(entry: PendingAction, view: ClientView, previous: Clien
   const message = entry.message;
   switch (message.t) {
     case "CREATE_ROOM":
-      return view.self.role === "host";
+      return view.self.isOwner === true && (message.name === undefined || view.self.role === "player");
     case "JOIN_ROOM":
       return view.self.role === "player" && view.room.code === message.code.toUpperCase();
     case "SET_SETTINGS":
@@ -221,7 +221,7 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
       set({ view: null, notice: "الغرفة مقفلة" });
       break;
     case "KICKED":
-      set({ view: null, notice: "المضيف طلعك من الغرفة" });
+      set({ view: null, notice: "مالك الغرفة طلعك من الغرفة" });
       break;
     case "SERVER_RESTARTING": {
       const deadline = new Date(message.deadlineMs).toLocaleTimeString("ar-SA", { hour: "numeric", minute: "2-digit" });
@@ -437,7 +437,7 @@ export function resetToHome(): void {
 }
 
 export const actions = {
-  createRoom: () => sendAction({ t: "CREATE_ROOM" }),
+  createRoom: (name: string) => sendAction({ t: "CREATE_ROOM", name }),
   joinRoom: (code: string, name: string) => sendAction({ t: "JOIN_ROOM", code, name }),
   leaveRoom: () => sendAction({ t: "LEAVE_ROOM" }),
   setSettings: (patch: { totalRounds?: number; categories?: CategoryId[]; selectedModes?: GameMode[]; playStyle?: PlayStyle }) => sendAction({ t: "SET_SETTINGS", ...patch }),
