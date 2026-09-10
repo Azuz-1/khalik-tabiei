@@ -11,14 +11,23 @@ interface DisplayRoute {
   token: string;
 }
 
+interface DisplayHistoryState {
+  displayToken?: string;
+}
+
 function routeFromLocation(): DisplayRoute | null {
-  const match = location.pathname.match(/^\/display\/([A-Za-z0-9]+)/);
+  const match = location.pathname.match(/^\/display\/([A-Za-z2-9]{5})\/?$/);
+  if (!match) return null;
   const hashParams = new URLSearchParams(location.hash.startsWith("#") ? location.hash.slice(1) : location.hash);
-  const token = hashParams.get("token") ?? "";
-  if (!match || !token) return null;
-  // A URL fragment is never sent in the HTTP request or Referer. Once captured,
-  // remove the capability from the visible/history URL as an extra shoulder-surfing guard.
-  history.replaceState(null, "", `${location.pathname}${location.search}`);
+  const fromFragment = hashParams.get("token") ?? "";
+  const previousState = (history.state ?? {}) as DisplayHistoryState;
+  const token = fromFragment || previousState.displayToken || "";
+  if (!token) return null;
+  if (fromFragment) {
+    // Keep the capability out of the visible URL while retaining it only for
+    // this history entry so a TV/tablet hard refresh can reconnect safely.
+    history.replaceState({ ...previousState, displayToken: token }, "", `${location.pathname}${location.search}`);
+  }
   return { code: match[1]!.toUpperCase(), token };
 }
 
@@ -88,12 +97,23 @@ function useDisplayFeed(route: DisplayRoute | null) {
         if (incoming.t === "ROOM_CLOSED") {
           setView(null);
           setStatus("closed");
-          setMessage("انتهت الغرفة.");
+          setMessage(incoming.reason === "display_revoked" || incoming.reason === "display_access_ended"
+            ? "تم إيقاف رابط شاشة العرض من مالك الغرفة."
+            : "انتهت الغرفة.");
+          stopped = true;
+          current.close();
+          return;
+        }
+        if (incoming.t === "ERROR" && incoming.code === "DISPLAY_IN_USE") {
+          setView(null);
+          setStatus("closed");
+          setMessage("فيه شاشة عرض ثانية مربوطة بالغرفة حاليًا. اقفلها ثم حاول مرة ثانية.");
           stopped = true;
           current.close();
           return;
         }
         if (incoming.t === "ERROR" && (incoming.code === "UNAUTHORIZED" || incoming.code === "ROOM_NOT_FOUND")) {
+          setView(null);
           setStatus("closed");
           setMessage("رابط شاشة العرض غير صالح أو انتهت صلاحيته.");
           stopped = true;
@@ -147,7 +167,7 @@ function modeInfo(view: ClientView): GameModeInfo | undefined {
 
 function countdownInstruction(mode?: GameModeInfo): string {
   switch (mode?.id) {
-    case "HANDS": return "إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!».";
+    case "HANDS": return "إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!».");
     case "POINT": return "عند «أشروا!»، أشر على شخص واحد.";
     case "NUMBER": return "عند «ارفعوا أصابعكم!»، ارفع من 0 إلى 5 أصابع.";
     default: return "عند انتهاء العد، نفّذ الحركة.";
