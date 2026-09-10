@@ -154,35 +154,58 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
     await player.page.getByRole("button", { name: "جاهز" }).click();
   }
 
-  for (const player of players) {
-    await expect(player.page.locator(".player-countdown-number")).toBeVisible({ timeout: PHASE_TIMEOUT });
-  }
+  // These phases are intentionally brief. Start all observations together so
+  // every phone gets the full visibility window instead of serially consuming it.
+  await Promise.all(players.map((player) =>
+    expect(player.page.locator(".player-countdown-number")).toBeVisible({ timeout: PHASE_TIMEOUT }),
+  ));
   if (globalChallenge === 1) {
-    for (const player of players) {
-      await expect(player.page.locator(".player-action-title")).toBeVisible({ timeout: PHASE_TIMEOUT });
-    }
+    await Promise.all(players.map((player) =>
+      expect(player.page.locator(".player-action-title")).toBeVisible({ timeout: PHASE_TIMEOUT }),
+    ));
   }
 
-  // PROMPT_REVEAL is brief. Assert it on every phone before waiting for the
-  // longer DISCUSSION phase, otherwise a sequential wait can miss the reveal
-  // on later phones even though all clients rendered it correctly.
-  for (const player of players) {
-    await expect(player.page.getByText("المطلوب كان…")).toBeVisible({ timeout: PHASE_TIMEOUT });
-  }
-  for (const player of players) {
+  await Promise.all(players.map((player) =>
+    expect(player.page.getByText("المطلوب كان…")).toBeVisible({ timeout: PHASE_TIMEOUT }),
+  ));
+  await Promise.all(players.map(async (player) => {
     await expect(player.page.getByRole("heading", { name: "مين تصرفه مو طبيعي؟" })).toBeVisible({
       timeout: PHASE_TIMEOUT,
     });
     await expect(player.page.getByTestId("phase-countdown")).toBeVisible();
-  }
+  }));
+
   if (globalChallenge === 1) {
+    // Exercise the new PR2 liveness contract in a real browser: the room owner
+    // may lose their phone connection without pausing the authoritative clock.
+    const peer = players.find((player) => player !== owner);
+    expect(peer, "owner journey needs another connected player").toBeTruthy();
+    const peerCountdown = peer.page.getByTestId("phase-countdown");
+    const before = await peerCountdown.textContent();
+
+    await owner.context.setOffline(true);
+    await expect(owner.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeVisible({
+      timeout: PHASE_TIMEOUT,
+    });
+    await expect.poll(
+      () => peerCountdown.textContent(),
+      { timeout: 5_000, message: "discussion countdown paused when the owner disconnected" },
+    ).not.toBe(before);
+
+    await owner.context.setOffline(false);
+    await expect(owner.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeHidden({
+      timeout: PHASE_TIMEOUT,
+    });
+    await expect(owner.page.getByRole("heading", { name: "مين تصرفه مو طبيعي؟" })).toBeVisible({
+      timeout: PHASE_TIMEOUT,
+    });
     await expect(owner.page.getByText("استعدوا للتصويت")).toBeVisible({ timeout: PHASE_TIMEOUT });
   }
 
-  for (const player of players) {
+  await Promise.all(players.map(async (player) => {
     await expect(player.page.getByRole("heading", { name: "مين تحس إنه المتخفي؟" })).toBeVisible({ timeout: PHASE_TIMEOUT });
     await expect(player.page.locator(".vote-board")).toHaveCount(0);
-  }
+  }));
 
   await castVote(impostor, normals[0].name);
   await castVote(normals[0], impostor.name);
