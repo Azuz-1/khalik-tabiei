@@ -1,5 +1,46 @@
+import { useEffect, useState } from "react";
 import type { ClientView, RoundResult, VoteTallyEntry } from "../../../shared/types.js";
 import { voteCountText } from "../i18n/counts.js";
+import { estimatedServerNow } from "../net/clock.js";
+
+function secondsUntil(endsAt: number | undefined): number | null {
+  if (endsAt === undefined) return null;
+  return Math.max(0, Math.ceil((endsAt - estimatedServerNow()) / 1_000));
+}
+
+export function PhaseCountdown({
+  endsAt,
+  warningAtSeconds,
+  warningText,
+}: {
+  endsAt: number | undefined;
+  warningAtSeconds?: number;
+  warningText?: string;
+}) {
+  const [seconds, setSeconds] = useState<number | null>(() => secondsUntil(endsAt));
+
+  useEffect(() => {
+    setSeconds(secondsUntil(endsAt));
+    if (endsAt === undefined) return;
+    const timer = window.setInterval(() => setSeconds(secondsUntil(endsAt)), 200);
+    return () => window.clearInterval(timer);
+  }, [endsAt]);
+
+  if (seconds === null) return null;
+  const showWarning =
+    warningAtSeconds !== undefined &&
+    warningText !== undefined &&
+    seconds > 0 &&
+    seconds <= warningAtSeconds;
+
+  return (
+    <div className="card center stack" style={{ gap: 8 }} data-testid="phase-countdown">
+      <div className="eyebrow">الوقت المتبقي</div>
+      <div className="big num-ltr" aria-label={`${seconds} ثانية`}>{seconds} ث</div>
+      {showWarning ? <div className="pill-note" role="status"><strong>{warningText}</strong></div> : null}
+    </div>
+  );
+}
 
 export function VoteBoard({ rows, live = false }: { rows: VoteTallyEntry[]; live?: boolean }) {
   return (
@@ -21,8 +62,7 @@ export function ResultBody({ result }: { result: RoundResult }) {
     return (
       <div className="stack" style={{ gap: 18 }}>
         <div className="verdict stack">
-          <div className="big escaped">ما مسكتوه</div>
-          <div className="subtitle center">نفس المتخفي مكمل…</div>
+          <div className="big escaped">المتخفي نجا 👀</div>
         </div>
       </div>
     );
@@ -52,6 +92,7 @@ export function ResultBody({ result }: { result: RoundResult }) {
 
       <div className="stack result-vote-section" style={{ gap: 12 }}>
         <div className="eyebrow center">الأصوات في آخر تحدّي</div>
+        <div className="subtitle center">صوّت {result.votesCast} من {result.participantCount}</div>
         <VoteBoard rows={result.voteTally} />
       </div>
     </div>
