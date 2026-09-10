@@ -63,6 +63,7 @@ export function validateClientMessage(
     case "LEAVE_ROOM":
     case "START_GAME":
     case "MARK_READY":
+    case "REDEAL_CHALLENGE":
     case "START_VOTING":
     case "NEXT_ROUND":
     case "CLOSE_ROOM":
