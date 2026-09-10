@@ -235,9 +235,9 @@ test("COUNTDOWN ACTION and HOLD restart same physical Challenge from preparation
   }
 });
 
-test("PROMPT_REVEAL never rolls back and DISCUSSION remains forward-only", () => {
+test("PROMPT_REVEAL never rolls back and timed DISCUSSION resumes forward-only", () => {
   let now = 1_000;
-  const manager = new RoomManager({ rng: () => 0, now: () => now, promptRevealMs: 10_000 });
+  const manager = new RoomManager({ rng: () => 0, now: () => now, promptRevealMs: 10_000, discussionMs: 10_000 });
   const host = createRoom(manager);
   [2, 3, 4].forEach((index) => joinPlayer(manager, host.code, index));
   const room = manager.roomForTests(host.code)!;
@@ -255,10 +255,13 @@ test("PROMPT_REVEAL never rolls back and DISCUSSION remains forward-only", () =>
   assert.equal(room.phase, "PROMPT_REVEAL");
   assert.equal(room.phaseEndsAt, now + 5_000);
   engine.toDiscussion(room, deps);
+  room.phaseEndsAt = now + 10_000;
   manager.disconnect(resumed.conn);
   assert.equal(room.phase, "DISCUSSION");
+  assert.equal(room.pause?.remainingMs, 10_000);
   authenticatedConnection(manager, host.uid);
   assert.equal(room.phase, "DISCUSSION");
+  assert.equal(room.phaseEndsAt, now + 10_000);
   manager.dispose();
 });
 
