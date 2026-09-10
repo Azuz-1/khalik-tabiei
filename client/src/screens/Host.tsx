@@ -148,6 +148,27 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
     }
   };
 
+  const revokeDisplay = async () => {
+    if (displayBusy || !displayUrl) return;
+    setDisplayBusy(true);
+    setDisplayError(null);
+    try {
+      const response = await fetch(`/api/rooms/${encodeURIComponent(view.room.code)}/display-link`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error("display revoke unavailable");
+      setDisplayUrl(null);
+      setDisplayCopied(false);
+    } catch {
+      setDisplayError("ما قدرنا نوقف شاشة العرض. تأكد من الاتصال وحاول مرة ثانية.");
+    } finally {
+      setDisplayBusy(false);
+    }
+  };
+
   return (
     <div className="screen host host-lobby-screen">
       <div className="center" style={{ marginBottom: 8 }}><h1 className="brand">خلك طبيعي</h1></div>
@@ -196,7 +217,9 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
                 <div className="row" style={{ flexWrap: "wrap" }}>
                   <a className="btn btn-ghost" href={displayUrl} target="_blank" rel="noopener noreferrer">فتح شاشة العرض</a>
                   <button type="button" className="btn btn-ghost" onClick={() => void copyDisplay()}>{displayCopied ? "تم نسخ رابط العرض ✓" : "نسخ رابط العرض"}</button>
+                  <button type="button" className="btn btn-ghost" disabled={displayBusy} onClick={() => void revokeDisplay()}>{displayBusy ? "جاري الإيقاف…" : "إيقاف شاشة العرض"}</button>
                 </div>
+                <p className="helper" style={{ margin: 0 }}>الإيقاف يفصل الشاشة الحالية ويبطل الرابط القديم. تقدر تولّد رابط جديد بعدها.</p>
               </div>
             )}
             {displayError ? <p className="helper" role="alert" style={{ color: "var(--bad)", margin: 0 }}>{displayError}</p> : null}
