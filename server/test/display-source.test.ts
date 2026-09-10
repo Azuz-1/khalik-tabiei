@@ -49,11 +49,14 @@ test("display server uses a dedicated projection and one revocable active slot",
   assert.ok(projection.includes('uid: "display"'));
 });
 
-test("owner lobby exposes display as an explicitly optional surface", async () => {
+test("owner lobby exposes optional display generation and explicit revocation", async () => {
   const host = await readFile(hostUrl, "utf8");
   assert.ok(host.includes('data-testid="optional-display-card"'));
   assert.ok(host.includes("شاشة عرض"));
   assert.ok(host.includes("اختيارية"));
   assert.ok(host.includes("ما ينحسب لاعب وما يقدر يتحكم بالغرفة"));
   assert.ok(host.includes("/display-link"));
+  assert.ok(host.includes('method: "DELETE"'), "owner UI must be able to revoke the issued display capability");
+  assert.ok(host.includes("إيقاف شاشة العرض"));
+  assert.ok(host.includes("يبطل الرابط القديم"));
 });
