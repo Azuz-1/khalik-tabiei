@@ -48,7 +48,7 @@ async function expectDisplayWriteRejected(ws: WebSocket, message: ClientMessage 
   });
 }
 
-test("display transport is owner-issued, aliased, single-slot, revocable, sessionless, and read-only", async () => {
+test("display transport is owner-issued, aliased, reconnectable, single-slot, revocable, sessionless, and read-only", async () => {
   const runtime = createGameServer();
   runtime.server.listen(0, "127.0.0.1");
   await once(runtime.server, "listening");
@@ -57,10 +57,13 @@ test("display transport is owner-issued, aliased, single-slot, revocable, sessio
   const origin = `http://127.0.0.1:${address.port}`;
   const browserOrigin = "http://127.0.0.1:8080";
   const wsOrigin = `ws://127.0.0.1:${address.port}`;
+  const primaryClientId = "dc_primary_display_01";
+  const secondClientId = "dc_second_display_02";
   let owner: WebSocket | undefined;
   let display: WebSocket | undefined;
   let secondDisplay: WebSocket | undefined;
   let rejectedDisplay: WebSocket | undefined;
+  let replacementDisplay: WebSocket | undefined;
   let rotatedDisplay: WebSocket | undefined;
 
   try {
@@ -118,7 +121,12 @@ test("display transport is owner-issued, aliased, single-slot, revocable, sessio
 
     display = await open(displayWsUrl, browserOrigin);
     const displayStateMessage = nextMessage(display);
-    display.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: token }));
+    display.send(JSON.stringify({
+      t: "HELLO",
+      protocolVersion: 2,
+      displayToken: token,
+      displayClientId: primaryClientId,
+    }));
     const publicState = await displayStateMessage;
     assert.equal(publicState.t, "STATE");
     if (publicState.t !== "STATE") throw new Error("display state missing");
@@ -136,10 +144,34 @@ test("display transport is owner-issued, aliased, single-slot, revocable, sessio
     assert.match(publicState.view.players[0]!.uid, /^d_[A-Za-z0-9_-]{16}$/);
     assert.match(publicState.view.room.hostUid, /^d_[A-Za-z0-9_-]{16}$/);
 
+    // The same Display identity may reconnect before the server observes the old
+    // socket close. It must atomically reclaim the one active slot.
+    replacementDisplay = await open(displayWsUrl, browserOrigin);
+    const oldDisplayClosed = once(display, "close");
+    const replacementStateMessage = nextMessage(replacementDisplay);
+    replacementDisplay.send(JSON.stringify({
+      t: "HELLO",
+      protocolVersion: 2,
+      displayToken: token,
+      displayClientId: primaryClientId,
+    }));
+    const replacementState = await replacementStateMessage;
+    assert.equal(replacementState.t, "STATE");
+    await oldDisplayClosed;
+    display = replacementDisplay;
+    replacementDisplay = undefined;
+
+    // A genuinely different Display identity using the same bearer link is not
+    // allowed to become a second active public screen.
     secondDisplay = await open(displayWsUrl, browserOrigin);
     const secondResponse = nextMessage(secondDisplay);
     const secondClosed = once(secondDisplay, "close");
-    secondDisplay.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: token }));
+    secondDisplay.send(JSON.stringify({
+      t: "HELLO",
+      protocolVersion: 2,
+      displayToken: token,
+      displayClientId: secondClientId,
+    }));
     const inUse = await secondResponse;
     assert.equal(inUse.t, "ERROR");
     if (inUse.t !== "ERROR") throw new Error("second display rejection missing");
@@ -174,7 +206,12 @@ test("display transport is owner-issued, aliased, single-slot, revocable, sessio
     rejectedDisplay = await open(displayWsUrl, browserOrigin);
     const oldTokenResponse = nextMessage(rejectedDisplay);
     const oldTokenClosed = once(rejectedDisplay, "close");
-    rejectedDisplay.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: token }));
+    rejectedDisplay.send(JSON.stringify({
+      t: "HELLO",
+      protocolVersion: 2,
+      displayToken: token,
+      displayClientId: primaryClientId,
+    }));
     const oldTokenRejected = await oldTokenResponse;
     assert.equal(oldTokenRejected.t, "ERROR");
     if (oldTokenRejected.t !== "ERROR") throw new Error("old token rejection missing");
@@ -191,7 +228,12 @@ test("display transport is owner-issued, aliased, single-slot, revocable, sessio
 
     rotatedDisplay = await open(displayWsUrl, browserOrigin);
     const rotatedStateMessage = nextMessage(rotatedDisplay);
-    rotatedDisplay.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: rotatedToken }));
+    rotatedDisplay.send(JSON.stringify({
+      t: "HELLO",
+      protocolVersion: 2,
+      displayToken: rotatedToken,
+      displayClientId: "dc_rotated_display_03",
+    }));
     const rotatedState = await rotatedStateMessage;
     assert.equal(rotatedState.t, "STATE");
 
@@ -207,6 +249,7 @@ test("display transport is owner-issued, aliased, single-slot, revocable, sessio
   } finally {
     try { rejectedDisplay?.terminate(); } catch { /* ignore */ }
     try { secondDisplay?.terminate(); } catch { /* ignore */ }
+    try { replacementDisplay?.terminate(); } catch { /* ignore */ }
     try { rotatedDisplay?.terminate(); } catch { /* ignore */ }
     try { display?.terminate(); } catch { /* ignore */ }
     try { owner?.terminate(); } catch { /* ignore */ }
