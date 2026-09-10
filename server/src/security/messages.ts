@@ -1,4 +1,4 @@
-import type { ClientMessage } from "../../../shared/types.js";
+import type { ClientMessage, FeedbackIssueReason, FeedbackRating } from "../../../shared/types.js";
 import {
   ANSWER_MAX,
   CATEGORY_IDS,
@@ -13,6 +13,8 @@ type JsonObject = Record<string, unknown>;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SAMPLE_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const RAW_NAME_MAX_CODE_POINTS = 128;
+const FEEDBACK_RATINGS: FeedbackRating[] = ["EXCELLENT", "GOOD", "OK", "NEEDS_WORK"];
+const FEEDBACK_ISSUE_REASONS: FeedbackIssueReason[] = ["UNCLEAR", "TOO_REVEALING", "TOO_SIMILAR", "NOT_SUITABLE"];
 
 function isObject(value: unknown): value is JsonObject {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -109,6 +111,17 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
       return exactKeys(value, ["t", "targetUid"], ["rid"]) && validRid(value) && typeof value.targetUid === "string" && UID_RE.test(value.targetUid)
         ? (value as ClientMessage)
         : null;
+
+    case "SUBMIT_FEEDBACK": {
+      if (!exactKeys(value, ["t", "rating"], ["challengeOrdinal", "issueReason", "rid"]) || !validRid(value)) return null;
+      if (typeof value.rating !== "string" || !FEEDBACK_RATINGS.includes(value.rating as FeedbackRating)) return null;
+      const hasOrdinal = value.challengeOrdinal !== undefined;
+      const hasReason = value.issueReason !== undefined;
+      if (hasOrdinal !== hasReason) return null;
+      if (hasOrdinal && (!Number.isInteger(value.challengeOrdinal) || (value.challengeOrdinal as number) < 1 || (value.challengeOrdinal as number) > 12)) return null;
+      if (hasReason && (typeof value.issueReason !== "string" || !FEEDBACK_ISSUE_REASONS.includes(value.issueReason as FeedbackIssueReason))) return null;
+      return value as ClientMessage;
+    }
 
     case "KICK_PLAYER":
     case "UNBLOCK_PLAYER":
