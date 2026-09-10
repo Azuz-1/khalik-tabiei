@@ -142,7 +142,9 @@ export function createGameServer(options: GameServerOptions = {}) {
       return;
     }
     const token = createDisplayToken(room, config.sessionSecret);
-    res.json({ ok: true, path: `/display/${room.code}?token=${encodeURIComponent(token)}` });
+    // Fragments are not transmitted in HTTP requests or Referer headers. The
+    // display client captures this capability locally and clears it immediately.
+    res.json({ ok: true, path: `/display/${room.code}#token=${encodeURIComponent(token)}` });
   });
 
   app.post("/api/telemetry", express.json({ limit: "8kb", strict: true }), (req, res) => {
@@ -221,9 +223,9 @@ export function createGameServer(options: GameServerOptions = {}) {
     if (requestedMode === "display") {
       const code = normalizeCode(requestUrl.searchParams.get("code"));
       const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
-      if (!room || room.closed || !verifyDisplayToken(room, config.sessionSecret, requestUrl.searchParams.get("token"))) {
-        return rejectUpgrade(socket, 403, "Forbidden");
-      }
+      // The capability intentionally does not travel in the WebSocket URL. The
+      // room code is public; possession is proven by the first validated HELLO.
+      if (!room || room.closed) return rejectUpgrade(socket, 403, "Forbidden");
       kind = "display";
       displayCode = code;
       displayCreatedAt = room.createdAt;
@@ -322,11 +324,28 @@ export function createGameServer(options: GameServerOptions = {}) {
           return;
         }
         if (context.kind === "display") {
+          const room = context.displayCode ? manager.roomForTests(context.displayCode) : undefined;
+          if (
+            !room
+            || room.closed
+            || room.createdAt !== context.displayCreatedAt
+            || room.hostUid !== context.displayHostUid
+            || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken)
+          ) {
+            conn.send({ t: "ERROR", code: "UNAUTHORIZED", message: "invalid display capability", ...(msg.rid ? { rid: msg.rid } : {}) });
+            conn.closePolicy("invalid display capability");
+            return;
+          }
           conn.authenticate(context.uid);
           conn.roomCode = context.displayCode ?? null;
           pushDisplayState();
           displayTimer = setInterval(pushDisplayState, 250);
           displayTimer.unref?.();
+          return;
+        }
+        if (msg.displayToken !== undefined) {
+          conn.send({ t: "ERROR", code: "BAD_REQUEST", ...(msg.rid ? { rid: msg.rid } : {}) });
+          conn.closePolicy("display capability on participant connection");
           return;
         }
         if (!abuse.allowSession(conn.ip, context.uid)) return violate("RATE_LIMITED", msg.rid);
