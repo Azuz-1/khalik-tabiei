@@ -22,13 +22,16 @@ async function newContext(browser, options) {
   return context;
 }
 
-async function createHost(browser, viewport = DESKTOP) {
+async function createOwner(browser, viewport = DESKTOP) {
   const context = await newContext(browser, { viewport });
   const page = await context.newPage();
   await page.goto("/");
-  await page.getByRole("button", { name: "سوّ غرفة" }).click();
+  await page.getByRole("button", { name: "سوّ غرفة والعب معنا", exact: true }).click();
+  await page.getByLabel("اسمك").fill("المالك");
+  await page.getByRole("button", { name: "إنشاء الغرفة", exact: true }).click();
   const code = (await page.locator(".code-value").textContent())?.trim();
   expect(code).toMatch(/^[A-Z2-9]{5}$/);
+  await expect(page.locator(".chip", { hasText: "المالك" })).toContainText("مالك الغرفة");
   return { context, page, code };
 }
 
@@ -57,13 +60,13 @@ async function expectRtlAndNoOverflow(page, label) {
   expect(await horizontalOverflow(page), `${label} must not scroll horizontally`).toBeLessThanOrEqual(1);
 }
 
-test("Host challenge selector offers 3, 6, 9, and 12 and synchronizes the chosen target to Player Lobby", async ({
+test("Owner challenge selector offers 3, 6, 9, and 12 and synchronizes the chosen target to Player Lobby", async ({
   browser,
 }) => {
-  const host = await createHost(browser);
+  const owner = await createOwner(browser);
   const players = [];
   try {
-    const selector = host.page.getByRole("radiogroup", { name: "عدد التحدّيات" });
+    const selector = owner.page.getByRole("radiogroup", { name: "عدد التحدّيات" });
     const options = selector.getByRole("radio");
     await expect(options).toHaveCount(4);
     await expect(options.nth(0)).toHaveText("3");
@@ -72,49 +75,50 @@ test("Host challenge selector offers 3, 6, 9, and 12 and synchronizes the chosen
     await expect(options.nth(3)).toHaveText("12");
     await expect(selector.getByRole("radio", { name: "9" })).toHaveAttribute("aria-checked", "true");
 
-    const player = await joinPlayer(browser, host.code, "سالم", PHONE_SMALL);
+    const player = await joinPlayer(browser, owner.code, "سالم", PHONE_SMALL);
     players.push(player);
     await expect(player.page.getByText(/9 تحدّيات بالضبط/)).toBeVisible();
     await expect(player.page.getByText("كيف تجمع نقاط؟")).toBeVisible();
 
     await selector.getByRole("radio", { name: "3" }).click();
     await expect(selector.getByRole("radio", { name: "3" })).toHaveAttribute("aria-checked", "true");
-    await expect(host.page.getByText("🏅 3 تحدّيات")).toBeVisible();
+    await expect(owner.page.getByText("🏅 3 تحدّيات")).toBeVisible();
     await expect(player.page.getByText(/3 تحدّيات بالضبط/)).toBeVisible();
 
     await selector.getByRole("radio", { name: "12" }).click();
     await expect(selector.getByRole("radio", { name: "12" })).toHaveAttribute("aria-checked", "true");
-    await expect(host.page.getByText("🏅 12 تحدّيات")).toBeVisible();
+    await expect(owner.page.getByText("🏅 12 تحدّيات")).toBeVisible();
     await expect(player.page.getByText(/12 تحدّيات بالضبط/)).toBeVisible();
-    await expectRtlAndNoOverflow(host.page, "Host challenge selector");
+    await expectRtlAndNoOverflow(owner.page, "Owner challenge selector");
     await expectRtlAndNoOverflow(player.page, "Player selected challenge target");
   } finally {
     await Promise.allSettled(players.map((player) => player.context.close()));
-    await host.context.close();
+    await owner.context.close();
   }
 });
 
-test("Host at 1920x1080 renders a full ten-player roster in RTL without horizontal overflow", async ({
+test("Owner at 1920x1080 renders a full ten-player roster in RTL without horizontal overflow", async ({
   browser,
 }) => {
   test.setTimeout(120_000);
-  const host = await createHost(browser, DESKTOP);
+  const owner = await createOwner(browser, DESKTOP);
   const players = [];
   try {
-    const viewportSize = host.page.viewportSize();
+    const viewportSize = owner.page.viewportSize();
     expect(viewportSize).toEqual(DESKTOP);
 
-    for (let index = 1; index <= 10; index += 1) {
-      players.push(await joinPlayer(browser, host.code, `لاعب${index}`, PHONE_SMALL));
+    // Owner is player #1, so nine joins fill the supported 10-player roster.
+    for (let index = 1; index <= 9; index += 1) {
+      players.push(await joinPlayer(browser, owner.code, `لاعب${index}`, PHONE_SMALL));
     }
 
-    await expect(host.page.locator(".seat-badge")).toHaveCount(10);
-    await expect(host.page.locator(".count-pill")).toContainText("10");
-    const seats = await host.page.locator(".seat-badge").allTextContents();
+    await expect(owner.page.locator(".seat-badge")).toHaveCount(10);
+    await expect(owner.page.locator(".count-pill")).toContainText("10");
+    const seats = await owner.page.locator(".seat-badge").allTextContents();
     expect(new Set(seats).size, "every seat number is distinct").toBe(10);
 
-    await expectRtlAndNoOverflow(host.page, "Host 1920x1080 with 10 players");
-    for (const chip of await host.page.locator(".chip").all()) {
+    await expectRtlAndNoOverflow(owner.page, "Owner 1920x1080 with 10 players");
+    for (const chip of await owner.page.locator(".chip").all()) {
       const box = await chip.boundingBox();
       expect(box, "every player chip is actually rendered").not.toBeNull();
       expect(box.width).toBeGreaterThan(0);
@@ -123,21 +127,21 @@ test("Host at 1920x1080 renders a full ten-player roster in RTL without horizont
     }
   } finally {
     await Promise.allSettled(players.map((player) => player.context.close()));
-    await host.context.close();
+    await owner.context.close();
   }
 });
 
 test("small and large phone viewports render the Player UI in RTL without horizontal overflow", async ({
   browser,
 }) => {
-  const host = await createHost(browser);
+  const owner = await createOwner(browser);
   const players = [];
   try {
     for (const [label, viewport] of [
       ["small phone", PHONE_SMALL],
       ["large phone", PHONE_LARGE],
     ]) {
-      const player = await joinPlayer(browser, host.code, `لاعب${players.length + 1}`, viewport);
+      const player = await joinPlayer(browser, owner.code, `لاعب${players.length + 1}`, viewport);
       players.push(player);
       expect(player.page.viewportSize()).toEqual(viewport);
       await expectRtlAndNoOverflow(player.page, `${label} player lobby`);
@@ -153,32 +157,32 @@ test("small and large phone viewports render the Player UI in RTL without horizo
     }
   } finally {
     await Promise.allSettled(players.map((player) => player.context.close()));
-    await host.context.close();
+    await owner.context.close();
   }
 });
 
 test("a valid near-NAME_MAX Arabic display name is accepted and rendered intact", async ({
   browser,
 }) => {
-  const host = await createHost(browser);
+  const owner = await createOwner(browser);
   const players = [];
   try {
     const longName = "عبدالرحمن الشمري";
     expect([...longName].length, "the fixture should sit at the documented ceiling").toBe(NAME_MAX);
 
-    const player = await joinPlayer(browser, host.code, longName, PHONE_SMALL);
+    const player = await joinPlayer(browser, owner.code, longName, PHONE_SMALL);
     players.push(player);
 
     await expect(player.page.locator(".chip", { hasText: `${longName} (أنت)` })).toBeVisible();
-    await expect(host.page.locator(".chip", { hasText: longName })).toHaveCount(1);
+    await expect(owner.page.locator(".chip", { hasText: longName })).toHaveCount(1);
 
     await expectRtlAndNoOverflow(player.page, "small phone with a long Arabic name");
-    await expectRtlAndNoOverflow(host.page, "Host roster with a long Arabic name");
+    await expectRtlAndNoOverflow(owner.page, "Owner roster with a long Arabic name");
 
     const rejected = await newContext(browser, { viewport: PHONE_SMALL });
     try {
       const page = await rejected.newPage();
-      await page.goto(`/join/${host.code}`);
+      await page.goto(`/join/${owner.code}`);
       const field = page.getByLabel("اسمك");
       const join = page.getByRole("button", { name: "دخول الغرفة" });
 
@@ -192,7 +196,7 @@ test("a valid near-NAME_MAX Arabic display name is accepted and rendered intact"
     }
   } finally {
     await Promise.allSettled(players.map((player) => player.context.close()));
-    await host.context.close();
+    await owner.context.close();
   }
 });
 
@@ -200,10 +204,10 @@ test("network loss disables gameplay but keeps Exit reachable and reports unsent
   browser,
 }) => {
   test.setTimeout(120_000);
-  const host = await createHost(browser);
+  const owner = await createOwner(browser);
   const players = [];
   try {
-    const player = await joinPlayer(browser, host.code, "سالم", PHONE_LARGE);
+    const player = await joinPlayer(browser, owner.code, "سالم", PHONE_LARGE);
     players.push(player);
 
     const exit = player.page.getByRole("button", { name: "الخروج من الغرفة" });
@@ -230,7 +234,7 @@ test("network loss disables gameplay but keeps Exit reachable and reports unsent
     await expect(player.page.locator(".confirm-error")).toHaveText(
       "الاتصال مو جاهز، لذلك ما أرسلنا الطلب.",
     );
-    await expect(player.page.getByRole("button", { name: "سوّ غرفة" })).toHaveCount(0);
+    await expect(player.page.getByRole("button", { name: "سوّ غرفة والعب معنا" })).toHaveCount(0);
 
     await dialog.getByRole("button", { name: "إلغاء" }).click();
     await expect(dialog).toBeHidden();
@@ -238,9 +242,9 @@ test("network loss disables gameplay but keeps Exit reachable and reports unsent
     await expect(banner).toBeHidden({ timeout: 30_000 });
     await expect(surface).not.toHaveAttribute("disabled", "");
     await expect(exit).toBeEnabled();
-    await expect(host.page.locator(".seat-badge")).toHaveCount(1);
+    await expect(owner.page.locator(".seat-badge")).toHaveCount(2);
   } finally {
     await Promise.allSettled(players.map((player) => player.context.close()));
-    await host.context.close();
+    await owner.context.close();
   }
 });
