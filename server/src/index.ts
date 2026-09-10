@@ -7,6 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import express from "express";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
 import { config } from "./config.js";
+import { track } from "./analytics.js";
 import { RoomManager } from "./game/roomManager.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
@@ -17,6 +18,7 @@ import { AbuseGuard, clientIp } from "./security/rateLimit.js";
 import { securityHeaders } from "./security/headers.js";
 import { GameError } from "./game/errors.js";
 import { totalPairs } from "./game/questions.js";
+import { createConfiguredSuggestionService, type SuggestionService } from "./suggestions.js";
 
 const sourceDir = dirname(fileURLToPath(import.meta.url));
 const clientDistCandidates = [
@@ -26,6 +28,10 @@ const clientDistCandidates = [
 const clientDist = clientDistCandidates.find((candidate) => existsSync(candidate)) ?? clientDistCandidates[0]!;
 
 interface UpgradeContext { uid: string; origin: string; ip: string; lease: CapacityLease }
+
+interface GameServerOptions {
+  suggestions?: SuggestionService;
+}
 
 function rejectUpgrade(socket: Duplex, status: number, reason: string): void {
   if (!socket.writable) {
@@ -42,7 +48,7 @@ function rawDataBytes(data: RawData): number {
   return data.byteLength;
 }
 
-export function createGameServer() {
+export function createGameServer(options: GameServerOptions = {}) {
   const app = express();
   const manager = new RoomManager({
     emptyLobbyExpiryMs: config.emptyLobbyExpiryMs,
@@ -50,6 +56,7 @@ export function createGameServer() {
     maxRequestsPerUid: config.maxRequestsPerUid,
   });
   const abuse = new AbuseGuard({ limits: config.abuseLimits });
+  const suggestions = options.suggestions ?? createConfiguredSuggestionService();
   const capacity = new ConnectionCapacity(config.maxConcurrentSockets, config.maxConcurrentSocketsPerIp);
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true, maxPayload: config.maxMessageBytes });
@@ -88,6 +95,33 @@ export function createGameServer() {
     }
     ensureAnonymousSession(req, res, config.sessionSecret, config.production);
     res.json({ ok: true });
+  });
+
+  app.post("/api/suggestions", express.json({ limit: "2kb", strict: true }), async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (draining) {
+      res.status(503).json({ ok: false, code: "SERVER_RESTARTING" });
+      return;
+    }
+    const session = readAnonymousSession(req, config.sessionSecret);
+    if (!session) {
+      res.status(401).json({ ok: false, code: "UNAUTHORIZED" });
+      return;
+    }
+
+    const result = await suggestions.submit(clientIp(req, config.clientIpMode), session.uid, req.body);
+    if (result.ok) {
+      track("suggestion_submitted", { category: result.category, lengthBucket: result.lengthBucket });
+      res.status(201).json({ ok: true });
+      return;
+    }
+
+    const status = result.code === "RATE_LIMITED"
+      ? 429
+      : result.code === "UNAVAILABLE" || result.code === "STORAGE_FAILED"
+        ? 503
+        : 400;
+    res.status(status).json({ ok: false, code: result.code });
   });
 
   app.use(express.static(clientDist));
@@ -254,6 +288,7 @@ export function createGameServer() {
     clearInterval(heartbeat);
     if (drainTimer) clearTimeout(drainTimer);
     abuse.dispose();
+    suggestions.cleanup();
     manager.dispose();
     for (const ws of wss.clients) ws.terminate();
   };
