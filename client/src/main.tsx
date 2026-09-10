@@ -9,6 +9,7 @@ import "./telemetry.js";
 import { App } from "./App.js";
 import "./styles.css";
 import "./c-ux.css";
+import "./home-suggestion-dialog.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
