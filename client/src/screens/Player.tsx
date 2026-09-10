@@ -112,7 +112,7 @@ function PlayerReadyWaiting() {
       <div className="spacer" />
       <div className="ok-badge">جاهز ✓</div>
       <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>ننتظر الباقين</h1>
-      <p className="subtitle">إذا بدأ العد، بيظهر هنا وعلى الشاشة.</p>
+      <p className="subtitle">إذا بدأ العد، بيظهر هنا مباشرة.</p>
       <div className="spacer" />
     </div>
   );
@@ -164,7 +164,7 @@ function PlayerHold() {
 }
 
 function PlayerWatchScreen() {
-  return <div className="screen center stack"><div className="spacer" /><h1 className="title" style={{ fontSize: "clamp(38px,11vw,58px)" }}>طالع الشاشة</h1><div className="spacer" /></div>;
+  return <div className="screen center stack"><div className="spacer" /><h1 className="title" style={{ fontSize: "clamp(38px,11vw,58px)" }}>انتظر شوي…</h1><p className="subtitle">بتتحدث حالتك هنا تلقائيًا.</p><div className="spacer" /></div>;
 }
 
 function PlayerPromptReveal({ view }: { view: ClientView }) {
@@ -278,7 +278,7 @@ function PlayerGameOver({ view }: { view: ClientView }) {
           </>
         ) : null}
         {view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} /> : null}
-        <p className="subtitle center">ننتظر المضيف يبدأ لعبة جديدة أو يقفل الغرفة</p>
+        <p className="subtitle center">ننتظر مالك الغرفة يبدأ لعبة جديدة أو يقفل الغرفة</p>
       </div>
       <div className="spacer" />
     </div>
