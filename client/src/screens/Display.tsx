@@ -13,13 +13,17 @@ interface DisplayRoute {
 
 function routeFromLocation(): DisplayRoute | null {
   const match = location.pathname.match(/^\/display\/([A-Za-z0-9]+)/);
-  const token = new URLSearchParams(location.search).get("token") ?? "";
+  const hashParams = new URLSearchParams(location.hash.startsWith("#") ? location.hash.slice(1) : location.hash);
+  const token = hashParams.get("token") ?? "";
   if (!match || !token) return null;
+  // A URL fragment is never sent in the HTTP request or Referer. Once captured,
+  // remove the capability from the visible/history URL as an extra shoulder-surfing guard.
+  history.replaceState(null, "", `${location.pathname}${location.search}`);
   return { code: match[1]!.toUpperCase(), token };
 }
 
 function displaySocketUrl(route: DisplayRoute): string {
-  const params = new URLSearchParams({ mode: "display", code: route.code, token: route.token });
+  const params = new URLSearchParams({ mode: "display", code: route.code });
   return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?${params.toString()}`;
 }
 
@@ -58,7 +62,7 @@ function useDisplayFeed(route: DisplayRoute | null) {
 
       current.onopen = () => {
         if (stopped || socket !== current) return;
-        current.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 } satisfies ClientMessage));
+        current.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: route.token } satisfies ClientMessage));
       };
 
       current.onmessage = (event) => {
