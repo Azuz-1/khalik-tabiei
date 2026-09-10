@@ -138,7 +138,8 @@ export function createGameServer(options: GameServerOptions = {}) {
     }
     const room = manager.roomForTests(code);
     if (!room || room.closed || room.hostUid !== session.uid) {
-      res.status(room && !room.closed ? 403 : 404).json({ ok: false, code: room && !room.closed ? "NOT_HOST" : "ROOM_NOT_FOUND" });
+      // Do not reveal whether a valid room code belongs to someone else.
+      res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
       return;
     }
     const token = createDisplayToken(room, config.sessionSecret);
