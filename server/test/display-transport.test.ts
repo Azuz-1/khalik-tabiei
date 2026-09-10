@@ -90,6 +90,12 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     if (created.t !== "STATE") throw new Error("room state missing");
     const code = created.view.room.code;
 
+    const outsiderBootstrap = await fetch(`${origin}/api/session`);
+    const outsiderCookie = outsiderBootstrap.headers.get("set-cookie")?.split(";")[0];
+    assert.ok(outsiderCookie);
+    const forbiddenLink = await fetch(`${origin}/api/rooms/${code}/display-link`, { headers: { Cookie: outsiderCookie } });
+    assert.equal(forbiddenLink.status, 403, "an authenticated non-owner must not mint a display capability");
+
     const linkResponse = await fetch(`${origin}/api/rooms/${code}/display-link`, { headers: { Cookie: cookie } });
     assert.equal(linkResponse.status, 200);
     const linkBody = await linkResponse.json() as { path?: string };
