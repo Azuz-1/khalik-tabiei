@@ -152,10 +152,12 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       challengeIndex: round.challengeIndex,
       maxChallenges: roundMaxChallenges,
       mode: round.mode,
-      requiredVotes: round.resultRequiredVotes ?? 0,
-      votesCast,
-      participantCount,
-      ...(revealIdentity ? { completionReason: completionReason(room, round, roundMaxChallenges) } : {}),
+      ...(revealIdentity ? {
+        requiredVotes: round.resultRequiredVotes ?? 0,
+        votesCast,
+        participantCount,
+        completionReason: completionReason(room, round, roundMaxChallenges),
+      } : {}),
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
       voteTally: revealIdentity ? round.resultVoteTally ?? [] : [],
     };
