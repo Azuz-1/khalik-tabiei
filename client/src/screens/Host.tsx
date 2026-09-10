@@ -6,8 +6,8 @@ import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
 import { Qr } from "../components/Qr.js";
 import { Players, Progress } from "../components/Players.js";
-import { ResultBody, roundLabel } from "../components/Bits.js";
-import { requiredVotesText, waitForPlayersText } from "../i18n/counts.js";
+import { PhaseCountdown, ResultBody, roundLabel } from "../components/Bits.js";
+import { waitForPlayersText } from "../i18n/counts.js";
 import { roundDeltaText, scoreReasonText } from "../i18n/score.js";
 
 export interface ConfirmActionRequest {
@@ -149,7 +149,7 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
               <strong>🏅 {view.room.targetChallenges} تحدّيات</strong>
               <span className="helper">كل متخفي يستمر حتى ينمسك أو يكمل 3 تحدّيات كحد أقصى.</span>
               <span className="helper">المباراة تنتهي عند عدد التحدّيات المختار بالضبط.</span>
-              <span className="helper">كل لاعب يجمع نقاطه، والأغلبية هي اللي تمسك المتخفي.</span>
+              <span className="helper">كل لاعب يجمع نقاطه، وأغلبية الأصوات اللي انرسلت هي اللي تمسك المتخفي.</span>
             </div>
 
             <span className="code-label" style={{ marginTop: 8 }}>اختر عدد التحدّيات</span>
@@ -250,30 +250,31 @@ function HostDiscussion({ view, confirmAction }: { view: ClientView; confirmActi
       <div className="eyebrow host-prompt-eyebrow">المطلوب كان</div>
       <div className="host-prompt host-prompt-discussion">{view.publicPrompt?.text ?? "…"}</div>
       <h1 className="title host-discussion-question">مين تصرفه مو طبيعي؟</h1>
-      <button className="btn btn-primary" onClick={() => actions.startVoting()}>ابدأ التصويت</button>
+      <PhaseCountdown endsAt={view.room.phaseEndsAt} warningAtSeconds={10} warningText="استعدوا للتصويت" />
+      <p className="subtitle">التصويت يبدأ تلقائيًا بعد انتهاء النقاش.</p>
       <CloseRoom confirmAction={confirmAction} />
     </HostStage>
   );
 }
 
 function HostVoting({ view }: { view: ClientView }) {
-  const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
+  const progress = view.votesProgress ?? { submitted: 0, total: 0 };
   const percent = progress.total ? (progress.submitted / progress.total) * 100 : 0;
   return (
     <HostStage className="host-voting-stage">
       <div className="eyebrow">{roundLabel(view)}</div>
       <h1 className="title host-voting-title">صوّتوا</h1>
+      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
       <div className="vote-progress-summary">
-        <strong>{progress.submitted} من {progress.total} صوّتوا</strong>
+        <strong>صوّت {progress.submitted} من {progress.total}</strong>
         <div className="vote-progress-bar" aria-label={`تقدم التصويت ${progress.submitted} من ${progress.total}`} role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.submitted}>
           <i style={{ width: `${percent}%` }} />
         </div>
       </div>
       <div className="card center stack" style={{ width: "min(100%, 680px)" }}>
         <strong>الأصوات مخفية للحين</strong>
-        <p className="subtitle" style={{ margin: 0 }}>ما يظهر اتجاه التصويت إلا بعد نهاية دور المتخفي.</p>
+        <p className="subtitle" style={{ margin: 0 }}>ما يظهر اتجاه التصويت ولا أسماء اللي ما صوّتوا.</p>
       </div>
-      {progress.requiredVotes > 0 ? <p className="vote-majority-note">يحتاج {requiredVotesText(progress.requiredVotes)} عشان ينمسك</p> : null}
     </HostStage>
   );
 }
@@ -297,10 +298,7 @@ function Scoreboard({ rows, round }: { rows: ScoreEntry[]; round?: boolean }) {
 
 function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
   const result = view.result;
-  const targetReached = view.room.completedChallenges >= view.room.targetChallenges;
-  const next = targetReached
-    ? "شوفوا الترتيب النهائي"
-    : result?.roundComplete ? "متخفي جديد" : "التحدّي الجاي";
+  const fullReveal = result?.roundComplete === true;
   const advance = () => {
     if (!view.nextRoundWarning) {
       actions.nextRound();
@@ -317,8 +315,9 @@ function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: 
   return (
     <HostStage className="host-result-stage">
       <div className="card host-result-panel">{result ? <ResultBody result={result} /> : null}</div>
-      {result?.roundComplete && view.scoreboard ? <Scoreboard rows={view.scoreboard} round /> : null}
-      <button className="btn btn-primary" onClick={advance}>{next}</button>
+      {fullReveal && view.scoreboard ? <Scoreboard rows={view.scoreboard} round /> : null}
+      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
+      {fullReveal ? <button className="btn btn-primary" onClick={advance}>التالي الآن</button> : <p className="subtitle">نكمل تلقائيًا بالتحدّي الجاي.</p>}
     </HostStage>
   );
 }
