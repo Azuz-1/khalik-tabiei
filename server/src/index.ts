@@ -41,6 +41,8 @@ interface UpgradeContext {
   lease: CapacityLease;
   kind: ConnectionKind;
   displayCode?: string;
+  displayCreatedAt?: number;
+  displayHostUid?: string;
 }
 
 interface GameServerOptions {
@@ -213,6 +215,8 @@ export function createGameServer(options: GameServerOptions = {}) {
     let contextUid: string;
     let kind: ConnectionKind = "participant";
     let displayCode: string | undefined;
+    let displayCreatedAt: number | undefined;
+    let displayHostUid: string | undefined;
 
     if (requestedMode === "display") {
       const code = normalizeCode(requestUrl.searchParams.get("code"));
@@ -222,6 +226,8 @@ export function createGameServer(options: GameServerOptions = {}) {
       }
       kind = "display";
       displayCode = code;
+      displayCreatedAt = room.createdAt;
+      displayHostUid = room.hostUid;
       contextUid = `display:${randomUUID()}`;
     } else {
       const session = readAnonymousSession(req, config.sessionSecret);
@@ -236,7 +242,14 @@ export function createGameServer(options: GameServerOptions = {}) {
 
     try {
       wss.handleUpgrade(req, socket, head, (ws) => {
-        contexts.set(ws, { uid: contextUid, origin, ip, lease, kind, ...(displayCode ? { displayCode } : {}) });
+        contexts.set(ws, {
+          uid: contextUid,
+          origin,
+          ip,
+          lease,
+          kind,
+          ...(displayCode ? { displayCode, displayCreatedAt, displayHostUid } : {}),
+        });
         wss.emit("connection", ws, req);
       });
     } catch (error) {
@@ -257,7 +270,12 @@ export function createGameServer(options: GameServerOptions = {}) {
     const pushDisplayState = () => {
       if (context.kind !== "display" || !context.displayCode || !conn.uid) return;
       const room = manager.roomForTests(context.displayCode);
-      if (!room || room.closed) {
+      if (
+        !room
+        || room.closed
+        || room.createdAt !== context.displayCreatedAt
+        || room.hostUid !== context.displayHostUid
+      ) {
         conn.send({ t: "ROOM_CLOSED", reason: "display_room_closed" });
         conn.closePolicy("room closed");
         return;
