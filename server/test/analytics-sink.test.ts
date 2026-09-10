@@ -54,7 +54,9 @@ test("Supabase sink failure exposes only status, never provider response text", 
     fetchImpl: fakeFetch,
   });
 
-  await assert.rejects(() => sink([record]), (error: unknown) => {
+  await assert.rejects(async () => {
+    await sink([record]);
+  }, (error: unknown) => {
     assert.ok(error instanceof Error);
     assert.match(error.message, /HTTP 500/);
     assert.equal(error.message.includes("secret echoed"), false);
