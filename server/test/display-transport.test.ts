@@ -64,6 +64,7 @@ test("display link is owner-only and display socket is sessionless, spectator-on
   const address = runtime.server.address();
   if (!address || typeof address === "string") throw new Error("test server address missing");
   const origin = `http://127.0.0.1:${address.port}`;
+  const browserOrigin = "http://127.0.0.1:8080";
   const wsOrigin = `ws://127.0.0.1:${address.port}`;
   let owner: WebSocket | undefined;
   let display: WebSocket | undefined;
@@ -77,7 +78,7 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     const cookie = bootstrap.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie);
 
-    owner = await open(`${wsOrigin}/ws`, origin, cookie);
+    owner = await open(`${wsOrigin}/ws`, browserOrigin, cookie);
     const ownerHello = nextMessage(owner);
     owner.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
     assert.equal((await ownerHello).t, "HELLO_OK");
@@ -102,7 +103,7 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     assert.equal(displayWsUrl.includes("token="), false, "display capability must not appear in the WebSocket URL");
     assert.equal(displayWsUrl.includes(token), false, "display capability must not be embedded in the WebSocket URL");
 
-    rejectedDisplay = await open(displayWsUrl, origin);
+    rejectedDisplay = await open(displayWsUrl, browserOrigin);
     const rejectedHelloMessage = nextMessage(rejectedDisplay);
     const rejectedClosed = once(rejectedDisplay, "close");
     rejectedDisplay.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
@@ -113,7 +114,7 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     await rejectedClosed;
     rejectedDisplay = undefined;
 
-    display = await open(displayWsUrl, origin);
+    display = await open(displayWsUrl, browserOrigin);
     const displayAuth = nextMessages(display, 2);
     display.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: token }));
     const [displayHello, publicState] = await displayAuth;
