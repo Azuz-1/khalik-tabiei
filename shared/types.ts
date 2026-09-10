@@ -128,7 +128,8 @@ export interface RoundResult {
   normalQuestion?: string;
   impostorQuestion?: string;
   category?: CategoryId;
-  voteTally: VoteTallyEntry[];
+  /** Full-reveal aggregate only; omitted entirely from intermediate survival results. */
+  voteTally?: VoteTallyEntry[];
 }
 
 export interface GameOverInfo {
