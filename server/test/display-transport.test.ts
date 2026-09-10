@@ -75,12 +75,13 @@ test("display link is owner-only and display socket is sessionless, spectator-on
 
     rejectedDisplay = await open(displayWsUrl, origin);
     const rejectedHelloMessage = nextMessage(rejectedDisplay);
+    const rejectedClosed = once(rejectedDisplay, "close");
     rejectedDisplay.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
     const rejectedHello = await rejectedHelloMessage;
     assert.equal(rejectedHello.t, "ERROR");
     if (rejectedHello.t !== "ERROR") throw new Error("display authentication error missing");
     assert.equal(rejectedHello.code, "UNAUTHORIZED");
-    await once(rejectedDisplay, "close");
+    await rejectedClosed;
     rejectedDisplay = undefined;
 
     display = await open(displayWsUrl, origin);
