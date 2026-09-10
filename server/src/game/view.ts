@@ -157,9 +157,9 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
         votesCast,
         participantCount,
         completionReason: completionReason(room, round, roundMaxChallenges),
+        voteTally: round.resultVoteTally ?? [],
       } : {}),
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
-      voteTally: revealIdentity ? round.resultVoteTally ?? [] : [],
     };
     if (room.playStyle === "INDIVIDUAL" && revealIdentity) {
       view.scoreboard = ranking(room).map((row) => {
