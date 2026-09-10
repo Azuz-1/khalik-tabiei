@@ -235,7 +235,7 @@ async function runPhysical(group, challengeNo) {
   await waitFor(group.host, (client) => client.phase() === "PROMPT_REVEAL", `${group.id} C${challengeNo} PROMPT_REVEAL`, PHASE_TIMEOUT_MS);
   check(group.host.view?.publicPrompt?.text === prompt, `${group.id}: public prompt revealed after HOLD`);
   await waitForAll([group.host, ...group.players], (client) => client.phase() === "DISCUSSION", `${group.id} C${challengeNo} DISCUSSION`, PHASE_TIMEOUT_MS);
-  return currentRoles(group.players, `${group.id} C${challengeNo} post-physical`);
+  return roles;
 }
 
 async function runVoting(group, roles, outcome, challengeNo) {
