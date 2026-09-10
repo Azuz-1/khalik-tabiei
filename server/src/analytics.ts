@@ -73,6 +73,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   room_closed: ["reason", "matchOrdinal", "duringMatch"],
   room_ended_unknown: ["reason", "matchOrdinal", "phase"],
   game_error: ["code", "action", "phase", "duringMatch"],
+  suggestion_submitted: ["category", "lengthBucket"],
 };
 
 const queue: AnalyticsRecord[] = [];

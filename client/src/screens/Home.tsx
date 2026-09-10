@@ -13,6 +13,7 @@ import {
 
 type Step = "home" | "code" | "name";
 type InfoTab = "how" | "modes" | "points";
+type SuggestionCategory = "idea" | "content" | "bug" | "other";
 
 function readDeepLinkCode(): string | null {
   const match = location.pathname.match(/^\/join\/([A-Za-z0-9]+)/);
@@ -42,11 +43,126 @@ function hasVisibleContent(value: string): boolean {
   return value.replace(/\s/gu, "").replace(/\p{Default_Ignorable_Code_Point}/gu, "").length > 0;
 }
 
+function SuggestionCard({ disabled }: { disabled: boolean }) {
+  const [category, setCategory] = useState<SuggestionCategory>("idea");
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ good: boolean; text: string } | null>(null);
+  const length = [...text.trim()].length;
+  const canSubmit = !disabled && !submitting && length >= 4 && length <= 600;
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setFeedback(null);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 7_000);
+
+    try {
+      const response = await fetch("/api/suggestions", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ category, text }),
+        signal: controller.signal,
+      });
+      const payload = await response.json().catch(() => ({})) as { code?: string };
+      if (response.ok) {
+        setText("");
+        setFeedback({ good: true, text: "وصل اقتراحك، يعطيك العافية 🙌" });
+      } else if (response.status === 429) {
+        setFeedback({ good: false, text: "وصلتنا منك اقتراحات كثيرة. جرّب بعد شوي." });
+      } else if (payload.code === "CONTACT_INFO") {
+        setFeedback({ good: false, text: "خل الاقتراح بدون رقم جوال أو إيميل، حفاظًا على خصوصيتك." });
+      } else if (response.status === 400) {
+        setFeedback({ good: false, text: "تأكد إن الاقتراح من 4 إلى 600 حرف وجرّب مرة ثانية." });
+      } else {
+        setFeedback({ good: false, text: "استقبال الاقتراحات مو جاهز الحين. جرّب لاحقًا." });
+      }
+    } catch {
+      setFeedback({ good: false, text: "ما قدرنا نرسل الاقتراح الحين. جرّب لاحقًا." });
+    } finally {
+      window.clearTimeout(timeout);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="card stack" aria-labelledby="home-suggestion-title">
+      <div className="stack" style={{ gap: 5 }}>
+        <div className="eyebrow">ساعدنا نحسنها</div>
+        <h2 className="title" id="home-suggestion-title">عندك فكرة أو ملاحظة؟</h2>
+        <p className="subtitle" style={{ margin: 0 }}>قول لنا وش ودك يتغير في اللعب، التحدّيات، الأسئلة أو التجربة.</p>
+      </div>
+
+      <form className="stack" onSubmit={submit} style={{ gap: 10 }}>
+        <label className="stack" style={{ gap: 6 }}>
+          <span className="helper">نوع الملاحظة</span>
+          <select
+            className="input"
+            value={category}
+            disabled={disabled || submitting}
+            onChange={(event) => setCategory(event.target.value as SuggestionCategory)}
+          >
+            <option value="idea">فكرة للعبة</option>
+            <option value="content">اقتراح تحدّي أو محتوى</option>
+            <option value="bug">مشكلة واجهتني</option>
+            <option value="other">شيء ثاني</option>
+          </select>
+        </label>
+
+        <label className="stack" style={{ gap: 6 }}>
+          <span className="helper">اقتراحك</span>
+          <textarea
+            className="input"
+            aria-label="اقتراحك لتحسين اللعبة"
+            rows={4}
+            maxLength={600}
+            value={text}
+            disabled={disabled || submitting}
+            placeholder="مثال: ودي تحدّيات أشر تكون أكثر تنوع…"
+            onChange={(event) => {
+              setText(event.target.value);
+              if (feedback) setFeedback(null);
+            }}
+          />
+        </label>
+
+        <div className="row between" style={{ alignItems: "flex-start", gap: 12 }}>
+          <p className="helper" style={{ margin: 0 }}>
+            لا تكتب اسمك أو رقمك أو إيميلك. نستخدم اقتراحك لتحسين اللعبة فقط.
+          </p>
+          <span className="helper" style={{ direction: "ltr", whiteSpace: "nowrap" }}>{length}/600</span>
+        </div>
+
+        <button className="btn btn-ghost" type="submit" disabled={!canSubmit}>
+          {submitting ? "جاري الإرسال…" : "أرسل الاقتراح"}
+        </button>
+        {feedback ? (
+          <p
+            className="helper"
+            role="status"
+            style={{ margin: 0, color: feedback.good ? "var(--good)" : "var(--bad)" }}
+          >
+            {feedback.text}
+          </p>
+        ) : null}
+      </form>
+
+      <p className="helper" style={{ margin: 0 }}>
+        ونستخدم إحصائيات لعب مجهولة لتحسين توازن التحدّيات والأسئلة — بدون أسماء أو أكواد غرف أو معرفة مين صوّت لمين.
+      </p>
+    </section>
+  );
+}
+
 function RulesTabs() {
   const [tab, setTab] = useState<InfoTab>("how");
   const tabs: Array<{ id: InfoTab; label: string }> = [
     { id: "how", label: "كيف نلعب؟" },
-    { id: "modes", label: "التحدّيات" },
+    { id: "modes", label: "طرق اللعب" },
     { id: "points", label: "النقاط" },
   ];
 
@@ -182,6 +298,7 @@ export function Home() {
           <p className="helper" style={{ margin: 0 }}>بدون تحميل ولا تسجيل</p>
         </div>
 
+        <SuggestionCard disabled={offline} />
         <RulesTabs />
         <div className="spacer" />
       </div>
