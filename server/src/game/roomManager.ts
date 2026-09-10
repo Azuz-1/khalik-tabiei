@@ -30,6 +30,8 @@ interface Deps {
   rng: () => number;
   now: () => number;
   hostDisconnectGraceMs: number;
+  ownerTransferGraceMs: number;
+  readyDisconnectGraceMs: number;
   countdownMs: number;
   actionMs: number;
   holdMs: number;
@@ -75,6 +77,7 @@ const IDLE_ROOM_MS = 30 * 60 * 1_000;
 const GC_INTERVAL_MS = 60_000;
 const IMITATION_STAGE_TIMER = "imitation-stage";
 const HOST_DISCONNECT_TIMER = "host-disconnect";
+const OWNER_TRANSFER_TIMER = "owner-transfer";
 const SAFE_REMOVAL_PHASES = new Set<GamePhase>(["LOBBY", "GAME_OVER"]);
 const RESTART_PHYSICAL_PHASES = new Set<GamePhase>(["COUNTDOWN", "ACTION", "HOLD"]);
 const PAUSABLE_TIMED_PHASES = new Set<GamePhase>(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
@@ -95,6 +98,8 @@ export class RoomManager {
       rng: deps.rng ?? secureRng,
       now: deps.now ?? Date.now,
       hostDisconnectGraceMs: deps.hostDisconnectGraceMs ?? TIMERS.HOST_DISCONNECT_GRACE,
+      ownerTransferGraceMs: deps.ownerTransferGraceMs ?? TIMERS.OWNER_TRANSFER_GRACE,
+      readyDisconnectGraceMs: deps.readyDisconnectGraceMs ?? TIMERS.READY_DISCONNECT_GRACE,
       countdownMs: deps.countdownMs ?? TIMERS.COUNTDOWN,
       actionMs: deps.actionMs ?? TIMERS.ACTION,
       holdMs: deps.holdMs ?? TIMERS.HOLD,
@@ -140,6 +145,13 @@ export class RoomManager {
       player.disconnectedAt = undefined;
       player.connected = true;
       player.lastSeen = this.deps.now();
+      if (uid === room.hostUid) {
+        room.ownerTransferDeadline = undefined;
+        this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+      } else if (room.ownerTransferDeadline !== undefined && this.deps.now() >= room.ownerTransferDeadline) {
+        this.maybeTransferOwnership(room);
+      }
+      this.refreshReadyRecoveryDeadline(room);
     }
     // hostConnected and its pause/close grace belong only to the legacy
     // external-Host compatibility path. A named owner is a normal player seat:
@@ -178,6 +190,8 @@ export class RoomManager {
       player.disconnectedAt = player.lastSeen;
       player.disconnectGeneration += 1;
       this.emitAnalytics("player_disconnected", this.connectionAnalyticsProps(room));
+      if (uid === room.hostUid) this.scheduleOwnerTransfer(room, player);
+      this.refreshReadyRecoveryDeadline(room);
     }
 
     // Only legacy rooms have an owner identity outside players. Named owners are
@@ -295,6 +309,7 @@ export class RoomManager {
       case "START_GAME": return this.startGame(uid);
       case "MARK_READY": return this.markReady(uid);
       case "SUBMIT_ANSWER": throw new GameError("INVALID_PHASE");
+      case "REDEAL_CHALLENGE": return this.redealChallenge(uid);
       case "START_VOTING": return this.withRoom(uid, (room) => {
         // Deprecated compatibility path for automated/dev clients. Production
         // gameplay is server-authoritative and cannot skip the discussion timer.
@@ -380,6 +395,8 @@ export class RoomManager {
       existing.connected = true;
       existing.lastSeen = this.deps.now();
       this.attachAll(uid, code);
+      if (room.ownerTransferDeadline !== undefined && this.deps.now() >= room.ownerTransferDeadline) this.maybeTransferOwnership(room);
+      this.refreshReadyRecoveryDeadline(room);
       this.broadcast(room);
       return;
     }
@@ -428,9 +445,21 @@ export class RoomManager {
   private leaveRoom(uid: string): void {
     const room = this.roomOf(uid);
     if (!room) return;
-    if (uid === room.hostUid) return this.doClose(room, "host_left");
+    const player = room.players.get(uid);
+    if (uid === room.hostUid && !player) return this.doClose(room, "host_left");
+
+    if (uid === room.hostUid && player) {
+      const successor = this.ownerCandidate(room, uid);
+      if (successor) this.transferOwnership(room, successor.uid);
+      else {
+        this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+        room.ownerTransferDeadline = this.deps.now();
+      }
+    }
+
     this.emitAnalytics("player_left", this.connectionAnalyticsProps(room));
     this.removePlayerByChoice(room, uid);
+    this.refreshReadyRecoveryDeadline(room);
     this.markMeaningful(room);
     this.broadcast(room);
     this.sendIdleToUid(uid);
@@ -445,6 +474,7 @@ export class RoomManager {
 
       engine.startGame(room, uid, this.deps);
       room.matchGeneration += 1;
+      room.readyRecoveryDeadline = undefined;
       analytics.matchOrdinal += 1;
       analytics.matchId = randomUUID();
       analytics.abandonedMatchOrdinal = 0;
@@ -489,6 +519,7 @@ export class RoomManager {
       const { allReady } = engine.markReady(room, uid, this.deps);
       const analytics = this.analyticsState(room);
       if (allReady && analytics.allReadyAt === undefined) analytics.allReadyAt = this.deps.now();
+      this.refreshReadyRecoveryDeadline(room);
       this.markMeaningful(room);
       if (allReady && room.hostConnected && !room.pause) this.beginPhysicalSequence(room);
       this.broadcast(room);
@@ -496,6 +527,7 @@ export class RoomManager {
   }
 
   private beginPhysicalSequence(room: RoomState, restart = false): void {
+    room.readyRecoveryDeadline = undefined;
     const generation = ++room.timerGeneration;
     const endsAt = this.deps.now() + this.deps.countdownMs;
     if (restart) engine.restartCountdown(room, endsAt, this.deps);
@@ -549,8 +581,8 @@ export class RoomManager {
   private beginVoting(room: RoomState, hostUid: string): void {
     const round = room.round;
     if (!round || round.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
-    this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
     engine.startVoting(room, hostUid, this.deps);
+    this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
     const analytics = this.analyticsState(room);
     if (analytics.votingStartedAt === undefined) analytics.votingStartedAt = this.deps.now();
     this.scheduleVotingEnd(room, round, this.deps.votingMs);
@@ -738,6 +770,7 @@ export class RoomManager {
       if (!room.players.has(round.impostorUid) || roundParticipants(room).length < room.minPlayers) {
         this.emitGameAbandoned(room, "stint_roster_invalid");
         engine.abortToLobby(room, this.deps);
+        room.readyRecoveryDeadline = undefined;
         this.markMeaningful(room);
         this.broadcast(room);
         return;
@@ -748,15 +781,43 @@ export class RoomManager {
       if (activePlayers(room).length < room.minPlayers) {
         this.emitGameAbandoned(room, "below_min_players");
         engine.abortToLobby(room, this.deps);
+        room.readyRecoveryDeadline = undefined;
         this.markMeaningful(room);
         this.broadcast(room);
         return;
       }
     }
     engine.nextRound(room, actorUid, this.deps);
+    this.refreshReadyRecoveryDeadline(room);
     if ((room.phase as GamePhase) === "QUESTION") this.beginChallengeAnalytics(room);
     this.markMeaningful(room);
     this.broadcast(room);
+  }
+
+  private redealChallenge(uid: string): void {
+    this.withRoom(uid, (room) => {
+      if (room.hostUid !== uid) throw new GameError("NOT_HOST");
+      const round = room.round;
+      if (room.phase !== "QUESTION" || round?.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
+      this.refreshReadyRecoveryDeadline(room);
+      const blockers = roundParticipants(room).filter((player) => !player.connected && !round.readyUids.has(player.uid));
+      if (!blockers.length || room.readyRecoveryDeadline === undefined || this.deps.now() < room.readyRecoveryDeadline) {
+        throw new GameError("INVALID_PHASE", "recovery is not available yet");
+      }
+
+      this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+      if (activePlayers(room).length < room.minPlayers) {
+        this.emitGameAbandoned(room, "below_min_players");
+        engine.abortToLobby(room, this.deps);
+        room.readyRecoveryDeadline = undefined;
+      } else {
+        engine.redealCurrentRound(room, this.deps);
+        room.readyRecoveryDeadline = undefined;
+        this.beginChallengeAnalytics(room);
+      }
+      this.markMeaningful(room);
+      this.broadcast(room);
+    });
   }
 
   private kick(hostUid: string, targetUid: string): void {
@@ -765,11 +826,22 @@ export class RoomManager {
       if (targetUid === room.hostUid) throw new GameError("BAD_REQUEST", "room owner cannot kick themselves");
       const target = room.players.get(targetUid);
       if (!target) throw new GameError("NOT_PLAYER");
+      const round = room.round;
+      if (
+        room.phase === "QUESTION" &&
+        round?.kind === "IMITATION" &&
+        round.participantUids.includes(targetUid) &&
+        !target.connected &&
+        !round.readyUids.has(targetUid)
+      ) {
+        throw new GameError("INVALID_PHASE", "use the role-blind challenge recovery for an unready disconnect");
+      }
       const analytics = this.analyticsState(room);
       const phaseBefore = room.phase;
       const wasDuringMatch = this.matchInProgress(room, analytics);
       room.kickedIdentities.set(targetUid, target.name);
       this.removePlayerByChoice(room, targetUid);
+      this.refreshReadyRecoveryDeadline(room);
       this.markMeaningful(room);
       this.emitAnalytics("player_kicked", {
         roomSessionId: analytics.roomSessionId,
@@ -807,6 +879,7 @@ export class RoomManager {
       if (wasImpostor || roundParticipants(room).length < room.minPlayers) {
         this.emitGameAbandoned(room, wasImpostor ? "impostor_left" : "below_min_players");
         engine.abortToLobby(room, this.deps);
+        room.readyRecoveryDeadline = undefined;
       }
       return;
     }
@@ -816,6 +889,7 @@ export class RoomManager {
       this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
       this.emitGameAbandoned(room, currentImpostorStillRequired ? "impostor_left" : "below_min_players");
       engine.abortToLobby(room, this.deps);
+      room.readyRecoveryDeadline = undefined;
       return;
     }
     if (phase === "QUESTION" && room.hostConnected && !room.pause && participants.length > 0 && participants.every((participant) => round.readyUids.has(participant.uid))) {
@@ -823,6 +897,79 @@ export class RoomManager {
       return;
     }
     if (phase === "VOTING") this.resolveVotingIfReady(room);
+  }
+
+  private ownerCandidate(room: RoomState, excludedUid?: string): InternalPlayer | undefined {
+    return [...room.players.values()]
+      .filter((player) => player.uid !== excludedUid && player.connected && !player.pendingRemoval)
+      .sort((a, b) => a.joinedAt - b.joinedAt || a.uid.localeCompare(b.uid))[0];
+  }
+
+  private transferOwnership(room: RoomState, nextOwnerUid: string): boolean {
+    const nextOwner = room.players.get(nextOwnerUid);
+    if (!nextOwner || !nextOwner.connected || nextOwner.pendingRemoval) return false;
+    if (room.hostUid === nextOwnerUid) {
+      room.ownerTransferDeadline = undefined;
+      this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+      return true;
+    }
+    const previousOwner = room.players.get(room.hostUid);
+    if (previousOwner) previousOwner.isHost = false;
+    for (const player of room.players.values()) if (player.uid !== nextOwnerUid) player.isHost = false;
+    nextOwner.isHost = true;
+    room.hostUid = nextOwnerUid;
+    room.hostConnected = true;
+    room.hostCloseDeadline = undefined;
+    room.ownerTransferDeadline = undefined;
+    this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+    room.updatedAt = this.deps.now();
+    return true;
+  }
+
+  private maybeTransferOwnership(room: RoomState): boolean {
+    if (room.ownerTransferDeadline === undefined || this.deps.now() < room.ownerTransferDeadline) return false;
+    const currentOwner = room.players.get(room.hostUid);
+    if (currentOwner?.connected) {
+      room.ownerTransferDeadline = undefined;
+      this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+      return false;
+    }
+    const successor = this.ownerCandidate(room, room.hostUid);
+    return successor ? this.transferOwnership(room, successor.uid) : false;
+  }
+
+  private scheduleOwnerTransfer(room: RoomState, owner: InternalPlayer): void {
+    const ownerUid = owner.uid;
+    const disconnectGeneration = owner.disconnectGeneration;
+    const deadline = this.deps.now() + this.deps.ownerTransferGraceMs;
+    room.ownerTransferDeadline = deadline;
+    this.schedule(room, OWNER_TRANSFER_TIMER, this.deps.ownerTransferGraceMs, () => {
+      const currentOwner = room.players.get(ownerUid);
+      if (
+        room.hostUid !== ownerUid ||
+        !currentOwner ||
+        currentOwner.connected ||
+        currentOwner.disconnectGeneration !== disconnectGeneration ||
+        room.ownerTransferDeadline !== deadline
+      ) return;
+      if (this.maybeTransferOwnership(room)) this.broadcast(room);
+    });
+  }
+
+  private refreshReadyRecoveryDeadline(room: RoomState): void {
+    const round = room.round;
+    if (room.phase !== "QUESTION" || round?.kind !== "IMITATION") {
+      room.readyRecoveryDeadline = undefined;
+      return;
+    }
+    const blockers = roundParticipants(room).filter((player) => !player.connected && !round.readyUids.has(player.uid));
+    if (!blockers.length) {
+      room.readyRecoveryDeadline = undefined;
+      return;
+    }
+    room.readyRecoveryDeadline = Math.min(
+      ...blockers.map((player) => (player.disconnectedAt ?? this.deps.now()) + this.deps.readyDisconnectGraceMs),
+    );
   }
 
   private pauseForHostDisconnect(room: RoomState): void {
@@ -923,6 +1070,8 @@ export class RoomManager {
     room.timerGeneration += 1;
     room.pause = undefined;
     room.hostCloseDeadline = undefined;
+    room.ownerTransferDeadline = undefined;
+    room.readyRecoveryDeadline = undefined;
     room.closed = true;
     room.phase = "CLOSED";
     const memberUids = new Set([room.hostUid, ...room.players.keys()]);
