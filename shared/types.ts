@@ -119,7 +119,11 @@ export interface RoundResult {
   challengeIndex: number;
   maxChallenges: number;
   mode: GameMode;
+  /** Majority threshold among ballots actually cast; zero when nobody voted. */
   requiredVotes: number;
+  /** Aggregate turnout only. Individual abstainers are never serialized. */
+  votesCast: number;
+  participantCount: number;
   completionReason?: RoundCompletionReason;
   normalQuestion?: string;
   impostorQuestion?: string;
@@ -192,7 +196,8 @@ export interface ClientView {
   answersProgress?: { submitted: number; total: number };
   reveal?: RevealedAnswer[];
   myVoteSubmitted?: boolean;
-  votesProgress?: { submitted: number; total: number; requiredVotes: number };
+  /** Live voting reveals turnout progress only, never a quorum or target totals. */
+  votesProgress?: { submitted: number; total: number };
   /** Deprecated live aggregate tally. New product UI intentionally withholds target totals until stint end. */
   liveVoteTally?: VoteTallyEntry[];
   voteTargets?: Array<{ uid: string; name: string }>;
@@ -220,6 +225,7 @@ export type ClientMessage =
   | ({ t: "START_GAME" } & RequestMeta)
   | ({ t: "MARK_READY" } & RequestMeta)
   | ({ t: "SUBMIT_ANSWER"; answer: string } & RequestMeta)
+  /** @deprecated Voting starts automatically after the authoritative discussion deadline. */
   | ({ t: "START_VOTING" } & RequestMeta)
   | ({ t: "SUBMIT_VOTE"; targetUid: string } & RequestMeta)
   | ({ t: "NEXT_ROUND" } & RequestMeta)
