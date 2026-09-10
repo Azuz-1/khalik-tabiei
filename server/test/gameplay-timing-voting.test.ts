@@ -258,7 +258,8 @@ test("zero-vote timeout survives privately then auto-advances after the short tr
     assert.equal(view.result?.requiredVotes, undefined);
     assert.equal(view.result?.votesCast, undefined);
     assert.equal(view.result?.participantCount, undefined);
-    assert.deepEqual(view.result?.voteTally, []);
+    assert.equal(view.result?.voteTally, undefined);
+    assert.equal(JSON.stringify(view.result).includes("voteTally"), false);
     assert.equal(view.scoreboard, undefined);
     assert.ok(view.room.phaseEndsAt);
 

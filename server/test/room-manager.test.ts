@@ -200,13 +200,14 @@ test("reconnect during countdown restores normal prompt but never leaks it to im
   manager.dispose();
 });
 
-test("all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> DISCUSSION", async () => {
+test("all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> timed DISCUSSION", async () => {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 30,
     actionMs: 30,
     holdMs: 30,
     promptRevealMs: 30,
+    discussionMs: 500,
   });
   const { players, room } = start(manager);
 
@@ -227,7 +228,8 @@ test("all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> DISCUSSION"
   assert.equal(room.phase, "PROMPT_REVEAL");
   await wait(35);
   assert.equal(room.phase, "DISCUSSION");
-  assert.equal(room.phaseEndsAt, undefined);
+  assert.ok(room.phaseEndsAt);
+  assert.ok(room.phaseEndsAt > Date.now(), "DISCUSSION exposes the authoritative future deadline");
   manager.dispose();
 });
 
