@@ -100,8 +100,12 @@ export const TIMERS = {
   SURVIVED_TRANSITION: 4_000,
   /** Full reveal window before the next stint/Challenge begins automatically. */
   FULL_RESULT: 20_000,
-  // Only the Host has a disconnect expiry. Player seats have no transport
-  // expiry timer: they remain until reconnect, LEAVE_ROOM, KICK_PLAYER, or room close.
+  /** Named owner authority transfers after this long without a live owner connection. */
+  OWNER_TRANSFER_GRACE: 60_000,
+  /** Unready disconnects expose one role-blind redeal recovery after this grace. */
+  READY_DISCONNECT_GRACE: 30_000,
+  // Legacy external-Host compatibility only. Named owners are real players and
+  // use OWNER_TRANSFER_GRACE instead of pausing/closing the game clock.
   HOST_DISCONNECT_GRACE: 5 * 60 * 1_000,
 } as const;
 
