@@ -74,6 +74,7 @@ export interface PublicPlayer {
   /** Stable numeric identity for the occupied seat; color/status remains supplementary. */
   seatNumber: number;
   connected: boolean;
+  /** True only for the player who owns room-management capabilities. */
   isHost: boolean;
 }
 
@@ -150,6 +151,8 @@ export interface ClientView {
     role: Role;
     name?: string;
     connected: boolean;
+    /** Management capability is independent from gameplay role. New room owners are players. */
+    isOwner?: boolean;
   };
   room: {
     code: string;
@@ -178,7 +181,7 @@ export interface ClientView {
   };
   players: PublicPlayer[];
   settingsEditable?: boolean;
-  /** Host-only list. A blocked signed anonymous identity is not a physical-person ban. */
+  /** Owner-only list. A blocked signed anonymous identity is not a physical-person ban. */
   blockedPlayers?: Array<{ uid: string; name: string }>;
   nextRoundWarning?: string;
   challenge?: {
@@ -210,7 +213,8 @@ type RequestMeta = { rid?: RequestId };
 
 export type ClientMessage =
   | ({ t: "HELLO"; protocolVersion?: 2 } & RequestMeta)
-  | ({ t: "CREATE_ROOM" } & RequestMeta)
+  /** New clients provide the owner's display name so the room owner joins as a player. */
+  | ({ t: "CREATE_ROOM"; name?: string } & RequestMeta)
   | ({ t: "JOIN_ROOM"; code: string; name: string } & RequestMeta)
   | ({ t: "LEAVE_ROOM" } & RequestMeta)
   | ({
