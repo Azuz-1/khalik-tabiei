@@ -63,9 +63,13 @@ export function App() {
     }
   }, [view]);
 
+  const isOwner = view?.self.isOwner === true;
+  const legacyHost = view?.self.role === "host";
+  const canManageRoom = isOwner || legacyHost;
+
   useEffect(() => {
-    if (view?.self.role !== "host") setShowHostPlayers(false);
-  }, [view?.self.role]);
+    if (!canManageRoom) setShowHostPlayers(false);
+  }, [canManageRoom]);
 
   useEffect(() => {
     if (!confirmRequest) return;
@@ -124,15 +128,16 @@ export function App() {
 
   const offlinePlayers = view?.players.filter((player) => !player.connected) ?? [];
   const activeRoom = view != null && !["LOBBY", "GAME_OVER", "CLOSED"].includes(view.room.phase);
-  const hostAlreadyHasClose = view?.self.role === "host" && ["LOBBY", "DISCUSSION", "GAME_OVER"].includes(view.room.phase);
-  const showHostDisconnected = view?.self.role === "player" && view.room.hostConnected === false && view.room.phase !== "CLOSED";
+  const ownerControlSurface = isOwner && ["LOBBY", "RESULT", "GAME_OVER"].includes(view?.room.phase ?? "");
+  const managementSurfaceHasClose = canManageRoom && ["LOBBY", "GAME_OVER"].includes(view?.room.phase ?? "");
+  const showOwnerDisconnected = view?.self.role === "player" && !isOwner && view.room.hostConnected === false && view.room.phase !== "CLOSED";
   const hostDeadline = view?.room.hostCloseDeadline
     ? new Date(view.room.hostCloseDeadline).toLocaleTimeString("ar-SA", { hour: "numeric", minute: "2-digit" })
     : null;
   const disableGameSurface = view != null && status !== "online";
 
   const requestPlayerExit = () => {
-    if (!view || view.self.role !== "player") return;
+    if (!view || view.self.role !== "player" || view.self.isOwner) return;
     const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
     openConfirm({
       title: "الخروج من الغرفة؟",
@@ -145,19 +150,44 @@ export function App() {
     });
   };
 
+  const renderRoomSurface = () => {
+    if (!view) return <Home />;
+
+    if (isOwner) {
+      return (
+        <HostAudioLayer view={view}>
+          {ownerControlSurface
+            ? <Host view={view} confirmAction={openConfirm} />
+            : <Player view={view} />}
+        </HostAudioLayer>
+      );
+    }
+
+    if (legacyHost) {
+      return (
+        <HostAudioLayer view={view}>
+          <Host view={view} confirmAction={openConfirm} />
+        </HostAudioLayer>
+      );
+    }
+
+    if (view.self.role === "player") return <Player view={view} />;
+    return <Spectator />;
+  };
+
   return (
     <div className="app">
       <div data-app-content>
         {showConn ? <div className="conn" role="status">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
 
-        {showHostDisconnected ? (
+        {showOwnerDisconnected ? (
           <div className="card host-disconnect-banner" role="status">
-            <strong>المضيف انقطع… ننتظره يرجع</strong>
+            <strong>مالك الغرفة انقطع… ننتظره يرجع</strong>
             {hostDeadline ? <div className="helper">إذا ما رجع قبل {hostDeadline} بتنقفل الغرفة.</div> : null}
           </div>
         ) : null}
 
-        {view?.self.role === "host" && activeRoom && offlinePlayers.length > 0 ? (
+        {canManageRoom && activeRoom && offlinePlayers.length > 0 ? (
           <div className="card offline-player-banner">
             <strong>اتصال {offlinePlayers.map((player) => player.name).join("، ")} منقطع</strong>
             <div className="helper">مكانه محفوظ وما راح نغيّر المتخفي بسبب نوم الجوال أو انقطاع الشبكة.</div>
@@ -171,23 +201,13 @@ export function App() {
           aria-busy={disableGameSurface}
           style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
         >
-          {view == null ? (
-            <Home />
-          ) : view.self.role === "host" ? (
-            <HostAudioLayer view={view}>
-              <Host view={view} confirmAction={openConfirm} />
-            </HostAudioLayer>
-          ) : view.self.role === "player" ? (
-            <Player view={view} />
-          ) : (
-            <Spectator />
-          )}
+          {renderRoomSurface()}
 
-          {view?.self.role === "host" && view.room.phase !== "CLOSED" ? (
+          {canManageRoom && view?.room.phase !== "CLOSED" ? (
             <button type="button" className="btn btn-ghost btn-sm floating-players" onClick={() => setShowHostPlayers(true)}>اللاعبين</button>
           ) : null}
 
-          {view?.self.role === "host" && !hostAlreadyHasClose ? (
+          {canManageRoom && view && !managementSurfaceHasClose ? (
             <RoomExitButton
               label="إنهاء اللعبة"
               onClick={() => openConfirm({
@@ -201,11 +221,11 @@ export function App() {
           ) : null}
         </fieldset>
 
-        {view?.self.role === "player" ? (
+        {view?.self.role === "player" && !isOwner ? (
           <RoomExitButton label="🚪 خروج" ariaLabel="الخروج من الغرفة" onClick={requestPlayerExit} />
         ) : null}
 
-        {view?.self.role === "host" && showHostPlayers ? (
+        {canManageRoom && view && showHostPlayers ? (
           <HostPlayerManager
             players={view.players}
             active={activeRoom}
@@ -344,23 +364,30 @@ function HostPlayerManager({
 
         {orderedPlayers.map((player) => (
           <div key={player.uid} className="row between card manager-player-row">
-            <div><strong>مقعد {player.seatNumber} · {player.name}</strong><div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div></div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => onConfirm({
-                title: `إخراج ${player.name}؟`,
-                description: active
-                  ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع لشاشة الانتظار. غير كذا تكملون بنفس المتخفي والتحدّي."
-                  : "بيطلع من الغرفة وما يقدر يرجع بنفس الهوية إلا إذا سمحت له من إدارة اللاعبين.",
-                confirmLabel: "إخراج",
-                actionType: "KICK_PLAYER",
-                targetUid: player.uid,
-                run: () => actions.kick(player.uid),
-              })}
-            >
-              إخراج
-            </button>
+            <div>
+              <strong>مقعد {player.seatNumber} · {player.name}{player.isHost ? " · مالك الغرفة" : ""}</strong>
+              <div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div>
+            </div>
+            {player.isHost ? (
+              <span className="pill-note">أنت</span>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => onConfirm({
+                  title: `إخراج ${player.name}؟`,
+                  description: active
+                    ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع لشاشة الانتظار. غير كذا تكملون بنفس المتخفي والتحدّي."
+                    : "بيطلع من الغرفة وما يقدر يرجع بنفس الهوية إلا إذا سمحت له من إدارة اللاعبين.",
+                  confirmLabel: "إخراج",
+                  actionType: "KICK_PLAYER",
+                  targetUid: player.uid,
+                  run: () => actions.kick(player.uid),
+                })}
+              >
+                إخراج
+              </button>
+            )}
           </div>
         ))}
 
@@ -375,7 +402,7 @@ function HostPlayerManager({
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>السماح له يرجع</button>
               </div>
             ))}
-            <p className="helper">هذي القائمة تمنع رجوع نفس هوية اللعبة. المضيف يقدر يسمح للاعب يرجع من هنا.</p>
+            <p className="helper">هذي القائمة تمنع رجوع نفس هوية اللعبة. مالك الغرفة يقدر يسمح للاعب يرجع من هنا.</p>
           </div>
         ) : null}
       </div>
@@ -392,7 +419,7 @@ function Spectator() {
     <div className="screen center stack">
       <div className="spacer" />
       <h2 className="title">اللعبة شغّالة الحين</h2>
-      <p className="subtitle">ما تقدر تدخل لين يخلص دور المتخفي الحالي. تابع الشاشة لين يخلص.</p>
+      <p className="subtitle">ما تقدر تدخل لين يخلص دور المتخفي الحالي. انتظر لين يرجعون لشاشة الانتظار.</p>
       <button className="btn btn-ghost" onClick={() => resetToHome()}>الرئيسية</button>
       <div className="spacer" />
     </div>
