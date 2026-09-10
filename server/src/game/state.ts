@@ -79,6 +79,10 @@ export interface RoomState {
   hostUid: string;
   hostConnected: boolean;
   hostCloseDeadline?: number;
+  /** Named-owner authority transfer deadline; never pauses gameplay. */
+  ownerTransferDeadline?: number;
+  /** Earliest time the owner may use the role-blind QUESTION redeal recovery. */
+  readyRecoveryDeadline?: number;
   pause?: PauseState;
   phase: GamePhase;
   createdAt: number;
