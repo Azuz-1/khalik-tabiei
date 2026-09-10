@@ -1,8 +1,14 @@
 /** Authoritative room, connection, timer, membership, and action orchestration. */
 import { randomInt } from "node:crypto";
-import type { ClientMessage, ErrorCode, GamePhase } from "../../../shared/types.js";
+import type { AnalyticsEvent, ClientMessage, ErrorCode, GamePhase } from "../../../shared/types.js";
 import { MAX_ACTIVE_ROOMS, MAX_CONNECTIONS_PER_UID, MAX_PLAYERS, TIMERS } from "../../../shared/constants.js";
-import { track } from "../analytics.js";
+import {
+  ANALYTICS_CONTENT_VERSION,
+  ANALYTICS_RULES_VERSION,
+  track,
+  type AnalyticsProps,
+  type AnalyticsTracker,
+} from "../analytics.js";
 import { Connection } from "../net/connection.js";
 import { GameError, isGameError } from "./errors.js";
 import { generateCode, normalizeCode } from "./code.js";
@@ -32,6 +38,7 @@ interface Deps {
   emptyLobbyExpiryMs: number;
   requestRetentionMs: number;
   maxRequestsPerUid: number;
+  analytics: AnalyticsTracker;
 }
 
 interface CachedRequest {
@@ -40,6 +47,15 @@ interface CachedRequest {
   expiresAt: number;
   ok: boolean;
   error?: { code: ErrorCode; message?: string };
+}
+
+interface RoomAnalyticsState {
+  matchOrdinal: number;
+  completedMatchOrdinal: number;
+  rematchRequestedOrdinal: number;
+  matchStartedAt?: number;
+  startingPlayerCount?: number;
+  challengeKeys: Set<string>;
 }
 
 const secureRng = () => randomInt(0, 2 ** 32) / 2 ** 32;
@@ -61,6 +77,7 @@ export class RoomManager {
   private readonly connsByUid = new Map<string, Set<Connection>>();
   private readonly timers = new Map<string, Map<string, NodeJS.Timeout>>();
   private readonly requestsByUid = new Map<string, Map<string, CachedRequest>>();
+  private readonly analyticsByRoom = new WeakMap<RoomState, RoomAnalyticsState>();
   private draining = false;
   private readonly deps: Deps;
   private readonly gcTimer: NodeJS.Timeout;
@@ -80,6 +97,7 @@ export class RoomManager {
       emptyLobbyExpiryMs: deps.emptyLobbyExpiryMs ?? 20 * 60 * 1_000,
       requestRetentionMs: deps.requestRetentionMs ?? 5 * 60 * 1_000,
       maxRequestsPerUid: deps.maxRequestsPerUid ?? 128,
+      analytics: deps.analytics ?? track,
     };
     this.gcTimer = setInterval(() => this.gcIdleRooms(), GC_INTERVAL_MS);
     this.gcTimer.unref?.();
@@ -102,6 +120,7 @@ export class RoomManager {
     if (!room) return this.sendState(conn);
     const player = room.players.get(uid);
     if (player?.pendingRemoval) return this.sendState(conn);
+    const playerWasDisconnected = Boolean(player && !player.connected);
 
     conn.roomCode = room.code;
     if (player) {
@@ -120,6 +139,9 @@ export class RoomManager {
       this.resumeAfterHostReconnect(room);
     }
     room.updatedAt = this.deps.now();
+    if (playerWasDisconnected) {
+      this.emitAnalytics("player_reconnected", this.connectionAnalyticsProps(room));
+    }
     this.broadcast(room);
   }
 
@@ -164,6 +186,7 @@ export class RoomManager {
     ) {
       this.scheduleVotingDisconnectGrace(room, uid);
     }
+    this.emitAnalytics("player_disconnected", this.connectionAnalyticsProps(room));
     this.broadcast(room);
   }
 
@@ -212,6 +235,13 @@ export class RoomManager {
         ? { code: error.code, message: error.message }
         : { code: "INTERNAL" as const, message: undefined };
       if (!isGameError(error)) console.error("unexpected error handling", message.t, error);
+      const room = this.roomOf(uid);
+      this.emitAnalytics("game_error", {
+        code: result.code,
+        action: message.t,
+        phase: room?.phase ?? "NONE",
+        duringMatch: room ? this.matchInProgress(room) : false,
+      });
       if (rid) {
         this.rememberRequest(uid, rid, {
           fingerprint,
@@ -240,7 +270,6 @@ export class RoomManager {
       case "LEAVE_ROOM": return this.leaveRoom(uid);
       case "SET_SETTINGS": return this.withRoom(uid, (room) => {
         engine.setSettings(room, uid, message, this.deps);
-        if (message.categories) track("selected_category", { count: message.categories.length });
         this.broadcast(room);
       });
       case "SET_ADMISSION": return this.setAdmission(uid, message.locked);
@@ -264,6 +293,15 @@ export class RoomManager {
         if (room.hostUid !== uid) throw new GameError("NOT_HOST");
         if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
         this.prunePendingPlayers(room);
+        const analytics = this.analyticsState(room);
+        if (analytics.matchOrdinal > 0 && analytics.rematchRequestedOrdinal !== analytics.matchOrdinal) {
+          analytics.rematchRequestedOrdinal = analytics.matchOrdinal;
+          this.emitAnalytics("rematch_requested", {
+            matchOrdinal: analytics.matchOrdinal,
+            targetChallenges: room.targetChallenges,
+            startingPlayerCount: analytics.startingPlayerCount ?? room.players.size,
+          });
+        }
         engine.rematch(room, uid, this.deps);
         this.markMeaningful(room);
         this.broadcast(room);
@@ -280,7 +318,7 @@ export class RoomManager {
     this.rooms.set(code, room);
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
-    track("room_created", {});
+    this.emitAnalytics("room_created", {});
     this.broadcast(room);
   }
 
@@ -325,7 +363,6 @@ export class RoomManager {
     room.meaningfulAt = now;
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
-    track("player_count", { count: room.players.size });
     this.broadcast(room);
   }
 
@@ -353,6 +390,7 @@ export class RoomManager {
     const room = this.roomOf(uid);
     if (!room) return;
     if (uid === room.hostUid) return this.doClose(room, "host_left");
+    this.emitAnalytics("player_left", this.connectionAnalyticsProps(room));
     this.removePlayerByChoice(room, uid);
     this.markMeaningful(room);
     this.broadcast(room);
@@ -361,10 +399,36 @@ export class RoomManager {
 
   private startGame(uid: string): void {
     this.withRoom(uid, (room) => {
+      const analytics = this.analyticsState(room);
+      const previousMatchOrdinal = analytics.matchOrdinal;
+      const startsAfterCompletedMatch = previousMatchOrdinal > 0 && analytics.completedMatchOrdinal === previousMatchOrdinal;
+
       engine.startGame(room, uid, this.deps);
       room.matchGeneration += 1;
+      analytics.matchOrdinal += 1;
+      analytics.matchStartedAt = this.deps.now();
+      analytics.startingPlayerCount = activePlayers(room).length;
+      analytics.challengeKeys.clear();
+      analytics.rematchRequestedOrdinal = 0;
       this.markMeaningful(room);
-      track("game_started", { rounds: room.totalRounds, modes: room.selectedModes.length, players: activePlayers(room).length });
+
+      this.emitAnalytics("game_started", {
+        matchOrdinal: analytics.matchOrdinal,
+        isFirstMatch: analytics.matchOrdinal === 1,
+        targetChallenges: room.targetChallenges,
+        startingPlayerCount: analytics.startingPlayerCount,
+        modeCount: room.selectedModes.length,
+        rulesVersion: ANALYTICS_RULES_VERSION,
+        contentVersion: ANALYTICS_CONTENT_VERSION,
+      });
+      if (startsAfterCompletedMatch) {
+        this.emitAnalytics("rematch_started", {
+          previousMatchOrdinal,
+          matchOrdinal: analytics.matchOrdinal,
+          targetChallenges: room.targetChallenges,
+          startingPlayerCount: analytics.startingPlayerCount,
+        });
+      }
       this.broadcast(room);
     });
   }
@@ -461,8 +525,58 @@ export class RoomManager {
     for (const participantUid of participantUids) {
       this.cancelTimer(room.code, votingDisconnectTimerKey(participantUid));
     }
-    if (room.hostConnected && !room.pause) engine.computeResult(room, this.deps);
+    if (room.hostConnected && !room.pause) this.computeResultAndTrack(room);
     return true;
+  }
+
+  private computeResultAndTrack(room: RoomState): void {
+    const before = room.round;
+    const wasComputed = before?.resultComputed ?? false;
+    engine.computeResult(room, this.deps);
+    const round = room.round;
+    if (!round || round.kind !== "IMITATION" || wasComputed || !round.resultComputed) return;
+
+    const analytics = this.analyticsState(room);
+    const challengeKey = `${analytics.matchOrdinal}:${room.completedChallenges}`;
+    if (!analytics.challengeKeys.has(challengeKey)) {
+      analytics.challengeKeys.add(challengeKey);
+      this.emitAnalytics("challenge_completed", {
+        matchOrdinal: analytics.matchOrdinal,
+        targetChallenges: room.targetChallenges,
+        challengeOrdinal: room.completedChallenges,
+        challengeWithinStint: round.challengeIndex,
+        stintMaxChallenges: round.maxChallenges ?? 3,
+        participantCount: round.sealedParticipants?.length ?? round.participantUids.length,
+        mode: round.mode,
+        promptId: round.promptId,
+        caught: round.groupFound ?? false,
+        stintComplete: round.roundComplete,
+        rulesVersion: ANALYTICS_RULES_VERSION,
+        contentVersion: ANALYTICS_CONTENT_VERSION,
+      });
+    }
+
+    if (
+      round.roundComplete &&
+      room.completedChallenges >= room.targetChallenges &&
+      analytics.completedMatchOrdinal !== analytics.matchOrdinal
+    ) {
+      analytics.completedMatchOrdinal = analytics.matchOrdinal;
+      const durationMs = analytics.matchStartedAt === undefined ? 0 : Math.max(0, this.deps.now() - analytics.matchStartedAt);
+      const roundedDurationSeconds = Math.min(7_200, Math.round(durationMs / 30_000) * 30);
+      this.emitAnalytics("game_completed", {
+        matchOrdinal: analytics.matchOrdinal,
+        isFirstMatch: analytics.matchOrdinal === 1,
+        targetChallenges: room.targetChallenges,
+        completedChallenges: room.completedChallenges,
+        startingPlayerCount: analytics.startingPlayerCount ?? round.participantUids.length,
+        durationSeconds: roundedDurationSeconds,
+        impostorStints: room.roundOutcomes.length,
+        caughtStints: room.roundOutcomes.filter((outcome) => outcome.caught).length,
+        rulesVersion: ANALYTICS_RULES_VERSION,
+        contentVersion: ANALYTICS_CONTENT_VERSION,
+      });
+    }
   }
 
   private nextRound(uid: string): void {
@@ -492,7 +606,6 @@ export class RoomManager {
       }
       engine.nextRound(room, uid, this.deps);
       this.markMeaningful(room);
-      if (wasFinal) track("game_completed", { rounds: room.currentRound });
       this.broadcast(room);
     });
   }
@@ -587,7 +700,7 @@ export class RoomManager {
       return;
     }
     if (pause.originalPhase === "VOTING" && room.phase === "VOTING" && room.round?.resolutionSealed && !room.round.resultComputed) {
-      engine.computeResult(room, this.deps);
+      this.computeResultAndTrack(room);
     }
   }
 
@@ -603,6 +716,12 @@ export class RoomManager {
   }
 
   private doClose(room: RoomState, reason: string): void {
+    const analytics = this.analyticsState(room);
+    this.emitAnalytics("room_closed", {
+      reason,
+      matchOrdinal: analytics.matchOrdinal,
+      duringMatch: this.matchInProgress(room, analytics),
+    });
     room.timerGeneration += 1;
     room.pause = undefined;
     room.hostCloseDeadline = undefined;
@@ -670,6 +789,41 @@ export class RoomManager {
     const now = this.deps.now();
     room.meaningfulAt = now;
     room.updatedAt = now;
+  }
+
+  private analyticsState(room: RoomState): RoomAnalyticsState {
+    let state = this.analyticsByRoom.get(room);
+    if (!state) {
+      state = {
+        matchOrdinal: 0,
+        completedMatchOrdinal: 0,
+        rematchRequestedOrdinal: 0,
+        challengeKeys: new Set(),
+      };
+      this.analyticsByRoom.set(room, state);
+    }
+    return state;
+  }
+
+  private matchInProgress(room: RoomState, analytics = this.analyticsState(room)): boolean {
+    return analytics.matchOrdinal > analytics.completedMatchOrdinal && room.phase !== "LOBBY" && room.phase !== "CLOSED";
+  }
+
+  private connectionAnalyticsProps(room: RoomState): AnalyticsProps {
+    const analytics = this.analyticsState(room);
+    return {
+      matchOrdinal: analytics.matchOrdinal,
+      phase: room.phase,
+      duringMatch: this.matchInProgress(room, analytics),
+    };
+  }
+
+  private emitAnalytics(event: AnalyticsEvent, props: AnalyticsProps = {}): void {
+    try {
+      this.deps.analytics(event, props);
+    } catch {
+      // Analytics is never allowed to block or roll back gameplay.
+    }
   }
 
   private attachAll(uid: string, code: string): void {
@@ -744,6 +898,14 @@ export class RoomManager {
       const memberUids = [room.hostUid, ...room.players.keys()];
       const hasConnection = memberUids.some((uid) => this.hasRoomConnection(uid, room.code));
       if (!hasConnection && now - room.updatedAt > IDLE_ROOM_MS) {
+        const analytics = this.analyticsState(room);
+        if (this.matchInProgress(room, analytics)) {
+          this.emitAnalytics("room_ended_unknown", {
+            reason: "idle_gc",
+            matchOrdinal: analytics.matchOrdinal,
+            phase: room.phase,
+          });
+        }
         this.clearTimers(room.code);
         for (const uid of memberUids) if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
         this.rooms.delete(room.code);
