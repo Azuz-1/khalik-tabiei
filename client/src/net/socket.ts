@@ -446,7 +446,6 @@ export const actions = {
   startGame: () => sendAction({ t: "START_GAME" }),
   markReady: () => sendAction({ t: "MARK_READY" }),
   submitAnswer: (answer: string) => sendAction({ t: "SUBMIT_ANSWER", answer }),
-  startVoting: () => sendAction({ t: "START_VOTING" }),
   submitVote: (targetUid: string) => sendAction({ t: "SUBMIT_VOTE", targetUid }),
   nextRound: () => sendAction({ t: "NEXT_ROUND" }),
   kick: (uid: string) => sendAction({ t: "KICK_PLAYER", uid }),
