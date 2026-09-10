@@ -92,6 +92,10 @@ export const TIMERS = {
   ACTION: 1_000,
   HOLD: 2_000,
   PROMPT_REVEAL: 2_500,
+  // A disconnected voter keeps their ballot for a short reconnect window.
+  // After this grace, the missing ballot is an abstention; the original
+  // participant count still determines the majority needed to catch the impostor.
+  VOTING_DISCONNECT_GRACE: 20_000,
   // Only the Host has a disconnect expiry. Player seats have no transport
   // expiry timer: they remain until reconnect, LEAVE_ROOM, KICK_PLAYER, or room close.
   HOST_DISCONNECT_GRACE: 5 * 60 * 1_000,
