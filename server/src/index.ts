@@ -43,6 +43,12 @@ interface UpgradeContext {
   displayCreatedAt?: number;
   displayHostUid?: string;
   displayEpoch?: number;
+  displayClientId?: string;
+}
+
+interface ActiveDisplay {
+  ws: WebSocket;
+  clientId: string;
 }
 
 interface GameServerOptions {
@@ -86,7 +92,7 @@ export function createGameServer(options: GameServerOptions = {}) {
   const connections = new WeakMap<WebSocket, Connection>();
   const violations = new WeakMap<Connection, number>();
   const displayEpochs = new Map<string, number>();
-  const activeDisplays = new Map<string, WebSocket>();
+  const activeDisplays = new Map<string, ActiveDisplay>();
   let draining = false;
   let drainDeadlineMs: number | undefined;
   let drainTimer: NodeJS.Timeout | undefined;
@@ -98,7 +104,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     displayEpochs.set(key, (displayEpochs.get(key) ?? 0) + 1);
     const active = activeDisplays.get(key);
     if (active) {
-      const activeConn = connections.get(active);
+      const activeConn = connections.get(active.ws);
       activeConn?.send({ t: "ROOM_CLOSED", reason: "display_revoked" });
       activeConn?.closePolicy("display revoked");
       activeDisplays.delete(key);
@@ -356,27 +362,39 @@ export function createGameServer(options: GameServerOptions = {}) {
         if (context.kind === "display") {
           const room = context.displayCode ? manager.roomForTests(context.displayCode) : undefined;
           const epoch = room ? displayEpoch(room.code, room.createdAt) : -1;
-          if (!room || room.closed || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken, epoch)) {
+          if (
+            !room
+            || room.closed
+            || !msg.displayClientId
+            || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken, epoch)
+          ) {
             conn.send({ t: "ERROR", code: "UNAUTHORIZED", message: "invalid display capability", ...(msg.rid ? { rid: msg.rid } : {}) });
             conn.closePolicy("invalid display capability");
             return;
           }
           const key = displayRoomKey(room.code, room.createdAt);
           const existing = activeDisplays.get(key);
-          if (existing && existing !== ws && existing.readyState <= 1) {
-            conn.send({ t: "ERROR", code: "DISPLAY_IN_USE", message: "display already active", ...(msg.rid ? { rid: msg.rid } : {}) });
-            conn.closePolicy("display already active");
-            return;
+          if (existing && existing.ws !== ws && existing.ws.readyState <= 1) {
+            if (existing.clientId !== msg.displayClientId) {
+              conn.send({ t: "ERROR", code: "DISPLAY_IN_USE", message: "display already active", ...(msg.rid ? { rid: msg.rid } : {}) });
+              conn.closePolicy("display already active");
+              return;
+            }
+            // Same physical/display-tab identity reconnecting after a network
+            // transition may arrive before the old socket's close event. Let it
+            // atomically reclaim the slot rather than stranding the TV.
+            connections.get(existing.ws)?.closePolicy("display connection replaced");
           }
-          if (existing && existing.readyState > 1) activeDisplays.delete(key);
+          if (existing && existing.ws.readyState > 1) activeDisplays.delete(key);
 
           // Bind this authenticated connection to one exact room incarnation,
-          // current owner, and revocation epoch. None of these affect gameplay
-          // participant liveness/accounting.
+          // current owner, revocation epoch and display-client identity. None of
+          // these enter gameplay participant liveness/accounting.
           context.displayCreatedAt = room.createdAt;
           context.displayHostUid = room.hostUid;
           context.displayEpoch = epoch;
-          activeDisplays.set(key, ws);
+          context.displayClientId = msg.displayClientId;
+          activeDisplays.set(key, { ws, clientId: msg.displayClientId });
           conn.authenticate(context.uid);
           conn.roomCode = context.displayCode ?? null;
           pushDisplayState();
@@ -384,9 +402,9 @@ export function createGameServer(options: GameServerOptions = {}) {
           displayTimer.unref?.();
           return;
         }
-        if (msg.displayToken !== undefined) {
+        if (msg.displayToken !== undefined || msg.displayClientId !== undefined) {
           conn.send({ t: "ERROR", code: "BAD_REQUEST", ...(msg.rid ? { rid: msg.rid } : {}) });
-          conn.closePolicy("display capability on participant connection");
+          conn.closePolicy("display fields on participant connection");
           return;
         }
         if (!abuse.allowSession(conn.ip, context.uid)) return violate("RATE_LIMITED", msg.rid);
@@ -433,7 +451,7 @@ export function createGameServer(options: GameServerOptions = {}) {
       if (context.kind === "display") {
         if (context.displayCode && context.displayCreatedAt !== undefined) {
           const key = displayRoomKey(context.displayCode, context.displayCreatedAt);
-          if (activeDisplays.get(key) === ws) activeDisplays.delete(key);
+          if (activeDisplays.get(key)?.ws === ws) activeDisplays.delete(key);
         }
         conn.markDisconnected();
       } else {
