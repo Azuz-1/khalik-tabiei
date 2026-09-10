@@ -1,7 +1,7 @@
 import type { ClientView, PublicPlayer, RevealedAnswer, Role, ScoreReason } from "../../../shared/types.js";
 import { CATEGORIES, GAME_MODES, MAX_CHALLENGES_PER_ROUND } from "../../../shared/constants.js";
 import { activePlayers, roundParticipants, type RoomState, type RoundState } from "./state.js";
-import { questionFor, ranking, requiredVotesFor } from "./engine.js";
+import { questionFor, ranking } from "./engine.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
 const PUBLIC_PROMPT_PHASES = new Set(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
@@ -130,12 +130,11 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   if (room.phase === "VOTING" && round) {
     const participants = roundParticipants(room);
     view.votesProgress = {
-      submitted: round.resolutionSealed ? participants.length : round.votes.size,
+      submitted: round.votes.size,
       total: participants.length,
-      requiredVotes: requiredVotesFor(participants.length),
     };
-    // Deliberately do not serialize live target totals. During voting the shared
-    // screen shows only submitted/total so later voters cannot follow a live leader.
+    // Deliberately do not serialize live target totals or a live quorum. During
+    // voting every recipient sees only submitted/total plus the phase deadline.
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
       view.voteTargets = participants.filter((player) => player.uid !== uid).map((player) => ({ uid: player.uid, name: player.name }));
       view.myVoteSubmitted = round.votes.has(uid) || Boolean(round.resolutionSealed);
@@ -144,6 +143,8 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
 
   if (room.phase === "RESULT" && round && round.resultComputed) {
     const revealIdentity = round.roundComplete;
+    const participantCount = round.sealedParticipants?.length ?? round.participantUids.length;
+    const votesCast = round.sealedVotes?.size ?? round.votes.size;
     view.result = {
       ...(revealIdentity ? { impostorUid: round.impostorUid, impostorName: round.resultImpostorName ?? "—" } : {}),
       groupFound: round.groupFound ?? false,
@@ -152,6 +153,8 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       maxChallenges: roundMaxChallenges,
       mode: round.mode,
       requiredVotes: round.resultRequiredVotes ?? 0,
+      votesCast,
+      participantCount,
       ...(revealIdentity ? { completionReason: completionReason(room, round, roundMaxChallenges) } : {}),
       ...(round.kind === "TEXT_PAIR" ? { normalQuestion: round.normalQuestion, impostorQuestion: round.impostorQuestion, category: round.category } : {}),
       voteTally: revealIdentity ? round.resultVoteTally ?? [] : [],
