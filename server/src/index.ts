@@ -8,6 +8,7 @@ import express from "express";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
 import { config } from "./config.js";
 import { track } from "./analytics.js";
+import { ClientTelemetryIngestor } from "./clientTelemetry.js";
 import { RoomManager } from "./game/roomManager.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
@@ -31,6 +32,7 @@ interface UpgradeContext { uid: string; origin: string; ip: string; lease: Capac
 
 interface GameServerOptions {
   suggestions?: SuggestionService;
+  clientTelemetry?: ClientTelemetryIngestor;
 }
 
 function rejectUpgrade(socket: Duplex, status: number, reason: string): void {
@@ -57,6 +59,7 @@ export function createGameServer(options: GameServerOptions = {}) {
   });
   const abuse = new AbuseGuard({ limits: config.abuseLimits });
   const suggestions = options.suggestions ?? createConfiguredSuggestionService();
+  const clientTelemetry = options.clientTelemetry ?? new ClientTelemetryIngestor();
   const capacity = new ConnectionCapacity(config.maxConcurrentSockets, config.maxConcurrentSocketsPerIp);
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true, maxPayload: config.maxMessageBytes });
@@ -95,6 +98,21 @@ export function createGameServer(options: GameServerOptions = {}) {
     }
     ensureAnonymousSession(req, res, config.sessionSecret, config.production);
     res.json({ ok: true });
+  });
+
+  app.post("/api/telemetry", express.json({ limit: "8kb", strict: true }), (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const session = readAnonymousSession(req, config.sessionSecret);
+    if (!session) {
+      res.status(401).json({ ok: false, code: "UNAUTHORIZED" });
+      return;
+    }
+    const result = clientTelemetry.ingest(session.uid, req.body);
+    if (result.ok) {
+      res.status(204).end();
+      return;
+    }
+    res.status(result.code === "RATE_LIMITED" ? 429 : 400).json({ ok: false, code: result.code });
   });
 
   app.post("/api/suggestions", express.json({ limit: "2kb", strict: true }), async (req, res) => {
