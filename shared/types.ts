@@ -240,9 +240,15 @@ export type ServerMessage =
 
 export type AnalyticsEvent =
   | "room_created"
+  | "settings_changed"
+  | "player_joined"
+  | "player_kicked"
+  | "host_disconnected"
+  | "host_reconnected"
   | "game_started"
   | "challenge_completed"
   | "game_completed"
+  | "game_abandoned"
   | "rematch_requested"
   | "rematch_started"
   | "player_left"
