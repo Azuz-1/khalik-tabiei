@@ -345,6 +345,10 @@ export class RoomManager {
 
   private markReady(uid: string): void {
     this.withRoom(uid, (room) => {
+      const round = room.round;
+      // A transport retry or impatient double-tap for an already-recorded Ready
+      // is an idempotent no-op: do not refresh activity or rebroadcast the room.
+      if (room.phase === "QUESTION" && round?.kind === "IMITATION" && round.readyUids.has(uid)) return;
       const { allReady } = engine.markReady(room, uid, this.deps);
       this.markMeaningful(room);
       if (allReady && room.hostConnected && !room.pause) this.beginPhysicalSequence(room);
