@@ -141,6 +141,12 @@ function actionCompleted(entry: PendingAction, view: ClientView, previous: Clien
       return view.room.phase !== "LOBBY" && view.room.currentRound >= 1;
     case "MARK_READY":
       return view.myReady === true || view.room.phase !== "QUESTION";
+    case "REDEAL_CHALLENGE":
+      return previous !== null && (
+        view.room.phase !== previous.room.phase ||
+        view.challenge?.index !== previous.challenge?.index ||
+        view.readyRecovery === undefined
+      );
     case "START_VOTING":
       return view.room.phase === "VOTING" || view.room.phase === "RESULT";
     case "SUBMIT_VOTE":
@@ -410,7 +416,7 @@ if (typeof window !== "undefined") {
     // so the socket can sit in OPEN long after the phone left the network. The
     // UI would keep offering actions that silently go nowhere. Treat the
     // browser's own offline signal as authoritative, drop the socket, and let
-    // the normal reconnect path own recovery so pending requests fail visibly.
+    // normal reconnect path own recovery so pending requests fail visibly.
     const socket = ws;
     if (!socket) {
       set({ status: "offline" });
@@ -446,6 +452,7 @@ export const actions = {
   startGame: () => sendAction({ t: "START_GAME" }),
   markReady: () => sendAction({ t: "MARK_READY" }),
   submitAnswer: (answer: string) => sendAction({ t: "SUBMIT_ANSWER", answer }),
+  redealChallenge: () => sendAction({ t: "REDEAL_CHALLENGE" }),
   submitVote: (targetUid: string) => sendAction({ t: "SUBMIT_VOTE", targetUid }),
   nextRound: () => sendAction({ t: "NEXT_ROUND" }),
   kick: (uid: string) => sendAction({ t: "KICK_PLAYER", uid }),
