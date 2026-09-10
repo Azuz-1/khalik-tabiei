@@ -250,4 +250,5 @@ export type AnalyticsEvent =
   | "player_reconnected"
   | "room_closed"
   | "room_ended_unknown"
-  | "game_error";
+  | "game_error"
+  | "suggestion_submitted";
