@@ -1,0 +1,99 @@
+.suggestion-trigger {
+  position: fixed;
+  left: calc(14px + env(safe-area-inset-left));
+  top: calc(14px + env(safe-area-inset-top));
+  z-index: 34;
+  width: auto;
+  min-width: 88px;
+  min-height: 44px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  box-shadow: 0 12px 30px -18px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.conn ~ fieldset .suggestion-trigger {
+  top: calc(46px + env(safe-area-inset-top));
+}
+
+.suggestion-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding:
+    calc(20px + env(safe-area-inset-top))
+    calc(20px + env(safe-area-inset-right))
+    calc(20px + env(safe-area-inset-bottom))
+    calc(20px + env(safe-area-inset-left));
+  background: rgba(4, 2, 10, 0.84);
+  overscroll-behavior: contain;
+}
+
+.suggestion-dialog {
+  width: min(100%, 560px);
+  max-height: min(86dvh, 760px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.suggestion-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.suggestion-dialog-close {
+  flex: 0 0 auto;
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.suggestion-dialog-close:disabled {
+  opacity: 0.45;
+}
+
+@media (max-width: 620px) {
+  .suggestion-trigger {
+    left: calc(10px + env(safe-area-inset-left));
+    top: calc(10px + env(safe-area-inset-top));
+    min-width: 78px;
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  .conn ~ fieldset .suggestion-trigger {
+    top: calc(44px + env(safe-area-inset-top));
+  }
+
+  .suggestion-backdrop {
+    place-items: end center;
+    padding:
+      calc(64px + env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      0
+      max(10px, env(safe-area-inset-left));
+  }
+
+  .suggestion-dialog {
+    width: 100%;
+    max-height: 88dvh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom));
+  }
+}
