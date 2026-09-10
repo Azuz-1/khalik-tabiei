@@ -260,6 +260,7 @@ function prepareChallenge(
     impostorQuestion: "",
     answers: new Map(),
     votes: new Map(),
+    abstainedUids: new Set(),
     resultComputed: false,
     roundScores: new Map(),
   };
@@ -313,6 +314,7 @@ export function beginLegacyRound(room: RoomState, deps: EngineDeps = defaultDeps
     impostorQuestion: pair.impostorQuestion,
     answers: new Map(),
     votes: new Map(),
+    abstainedUids: new Set(),
     resultComputed: false,
     roundScores: new Map(),
   };
@@ -504,6 +506,7 @@ export function submitVote(
   }
   if (round.votes.has(uid)) throw new GameError("VOTE_ALREADY_SUBMITTED");
 
+  round.abstainedUids?.delete(uid);
   round.votes.set(uid, targetUid);
   touch(room, deps);
   return { allVoted: allVoted(room) };
@@ -514,7 +517,9 @@ export function allVoted(room: RoomState): boolean {
   if (!round) return false;
   if (round.resolutionSealed) return true;
   const participants = roundParticipants(room);
-  return participants.length > 0 && participants.every((player) => round.votes.has(player.uid));
+  return participants.length > 0 && participants.every(
+    (player) => round.votes.has(player.uid) || Boolean(round.abstainedUids?.has(player.uid)),
+  );
 }
 
 export function sealVoteResolution(room: RoomState, deps: EngineDeps = defaultDeps): void {

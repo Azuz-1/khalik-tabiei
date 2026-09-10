@@ -55,6 +55,8 @@ export interface RoundState {
   impostorQuestion: string;
   answers: Map<string, string>;
   votes: Map<string, string>;
+  /** Server-only missing ballots that became abstentions after disconnect grace. */
+  abstainedUids?: Set<string>;
   resolutionSealed?: boolean;
   sealedParticipants?: SealedParticipant[];
   sealedVotes?: Map<string, string>;
