@@ -1,5 +1,5 @@
 import type { AnalyticsEvent } from "../../shared/types.js";
-import { track, type AnalyticsProps, type AnalyticsTracker } from "./analytics.js";
+import { sanitizeAnalyticsProps, track, type AnalyticsProps, type AnalyticsTracker } from "./analytics.js";
 import { FixedWindowLimiter } from "./security/rateLimit.js";
 
 export type ClientTelemetryEvent = Extract<
@@ -56,7 +56,8 @@ export function parseClientTelemetryBatch(value: unknown): TelemetryEnvelope[] |
       if (scalar === undefined) return null;
       props[key] = scalar;
     }
-    parsed.push({ event: raw.event as ClientTelemetryEvent, props });
+    const event = raw.event as ClientTelemetryEvent;
+    parsed.push({ event, props: sanitizeAnalyticsProps(event, props) });
   }
   return parsed;
 }
