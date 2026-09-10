@@ -22,6 +22,15 @@ test("display route is code-split before the participant socket is imported", as
   assert.ok(display.includes("شاشة عرض · بدون تحكم"));
 });
 
+test("display capability stays out of HTTP and WebSocket query strings", async () => {
+  const display = await readFile(displayUrl, "utf8");
+  assert.ok(display.includes("location.hash"), "display page must consume its capability from the URL fragment");
+  assert.ok(display.includes("history.replaceState"), "display page must clear the captured capability from the visible URL");
+  assert.equal(display.includes("new URLSearchParams(location.search).get(\"token\")"), false);
+  assert.ok(display.includes('displayToken: route.token'), "display capability must travel in the first HELLO frame");
+  assert.equal(display.includes('token: route.token }), false, "WebSocket URL builder must not serialize the capability");
+});
+
 test("owner lobby exposes display as an explicitly optional surface", async () => {
   const host = await readFile(hostUrl, "utf8");
   assert.ok(host.includes('data-testid="optional-display-card"'));
