@@ -40,7 +40,10 @@ function actionNoFields(value: JsonObject): boolean {
   return exactKeys(value, ["t"], ["rid"]) && validRid(value);
 }
 
-export function validateClientMessage(value: unknown): ClientMessage | null {
+export function validateClientMessage(
+  value: unknown,
+  production = process.env.NODE_ENV === "production",
+): ClientMessage | null {
   if (!isObject(value) || typeof value.t !== "string") return null;
 
   switch (value.t) {
@@ -51,8 +54,9 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
 
     case "CREATE_ROOM":
       if (!exactKeys(value, ["t"], ["name", "rid"]) || !validRid(value)) return null;
-      // `name` remains optional only for legacy/internal callers. Production PR2
-      // clients provide it so the owner is created as a real player.
+      // Legacy/internal fixtures may still omit `name` outside production. The
+      // deployed product must always create the room owner as a real player.
+      if (production && value.name === undefined) return null;
       if (value.name !== undefined && !boundedString(value.name, 1, RAW_NAME_MAX_CODE_POINTS)) return null;
       return value as ClientMessage;
 
