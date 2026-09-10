@@ -47,7 +47,7 @@ async function completedIndividualResult() {
   assert.ok(before.result);
   assert.ok(before.scoreboard);
   assert.equal(before.result.requiredVotes, 3);
-  assert.equal(before.result.voteTally.length, 4);
+  assert.equal(before.result.voteTally?.length, 4);
   assert.equal(room.round!.resultRequiredVotes, 3);
   assert.equal(room.round!.resultImpostorName, before.result.impostorName);
   assert.deepEqual(room.round!.resultVoteTally, before.result.voteTally);
@@ -71,7 +71,7 @@ test("completed RESULT stays historically frozen when a normal is kicked afterwa
   const after = lastMessage(host.socket, "STATE")!.view;
   assert.equal(JSON.stringify(after.result), beforeResult, "historical result must not be recomputed");
   assert.equal(after.result?.requiredVotes, 3, "original four-player majority remains frozen");
-  assert.equal(after.result?.voteTally.length, 4, "historical tally keeps the removed participant row");
+  assert.equal(after.result?.voteTally?.length, 4, "historical tally keeps the removed participant row");
   assert.equal(after.players.some((player) => player.uid === removed.uid), false);
   assert.equal(after.scoreboard?.some((row) => row.uid === removed.uid), false);
   for (const [uid, score] of remainingScores) {
