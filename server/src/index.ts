@@ -217,19 +217,14 @@ export function createGameServer(options: GameServerOptions = {}) {
     let contextUid: string;
     let kind: ConnectionKind = "participant";
     let displayCode: string | undefined;
-    let displayCreatedAt: number | undefined;
-    let displayHostUid: string | undefined;
 
     if (requestedMode === "display") {
       const code = normalizeCode(requestUrl.searchParams.get("code"));
-      const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
-      // The capability intentionally does not travel in the WebSocket URL. The
-      // room code is public; possession is proven by the first validated HELLO.
-      if (!room || room.closed) return rejectUpgrade(socket, 403, "Forbidden");
+      // The room code itself is public. Do not probe room existence during the
+      // HTTP upgrade; possession is proven by the first validated HELLO frame.
+      if (code.length !== ROOM_CODE_LENGTH) return rejectUpgrade(socket, 400, "Bad Request");
       kind = "display";
       displayCode = code;
-      displayCreatedAt = room.createdAt;
-      displayHostUid = room.hostUid;
       contextUid = `display:${randomUUID()}`;
     } else {
       const session = readAnonymousSession(req, config.sessionSecret);
@@ -250,7 +245,7 @@ export function createGameServer(options: GameServerOptions = {}) {
           ip,
           lease,
           kind,
-          ...(displayCode ? { displayCode, displayCreatedAt, displayHostUid } : {}),
+          ...(displayCode ? { displayCode } : {}),
         });
         wss.emit("connection", ws, req);
       });
@@ -325,17 +320,15 @@ export function createGameServer(options: GameServerOptions = {}) {
         }
         if (context.kind === "display") {
           const room = context.displayCode ? manager.roomForTests(context.displayCode) : undefined;
-          if (
-            !room
-            || room.closed
-            || room.createdAt !== context.displayCreatedAt
-            || room.hostUid !== context.displayHostUid
-            || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken)
-          ) {
+          if (!room || room.closed || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken)) {
             conn.send({ t: "ERROR", code: "UNAUTHORIZED", message: "invalid display capability", ...(msg.rid ? { rid: msg.rid } : {}) });
             conn.closePolicy("invalid display capability");
             return;
           }
+          // Bind this authenticated connection to this exact room incarnation.
+          // Reuse of the short room code later can never revive the display.
+          context.displayCreatedAt = room.createdAt;
+          context.displayHostUid = room.hostUid;
           conn.authenticate(context.uid);
           conn.roomCode = context.displayCode ?? null;
           pushDisplayState();
