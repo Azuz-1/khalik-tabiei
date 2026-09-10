@@ -39,7 +39,7 @@ test("a real full-game browser journey exists and drives the competitive product
     "ابدأ اللعبة",
     "identifyRoles",
     "استعدوا للتصويت",
-    "الأصوات مخفية للحين",
+    ".vote-board",
     "النقاط بعد دور المتخفي",
     "خلصت اللعبة",
   ]) {
