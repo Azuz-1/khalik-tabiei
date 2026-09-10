@@ -42,6 +42,10 @@ function rawDataBytes(data: RawData): number {
   return data.byteLength;
 }
 
+function deployedCommit(): string {
+  return process.env.RENDER_GIT_COMMIT?.trim() || "unknown";
+}
+
 export function createGameServer() {
   const app = express();
   const manager = new RoomManager({
@@ -71,6 +75,11 @@ export function createGameServer() {
   app.get("/readyz", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.status(draining ? 503 : 200).json({ ok: !draining, draining, ...(drainDeadlineMs ? { deadlineMs: drainDeadlineMs } : {}) });
+  });
+
+  app.get("/version", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ sha: deployedCommit() });
   });
 
   app.get("/api/session", (req, res) => {
