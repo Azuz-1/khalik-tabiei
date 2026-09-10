@@ -114,6 +114,11 @@ export function createGameServer() {
     if (!abuse.allowConnection(ip, session.uid)) return rejectUpgrade(socket, 429, "Too Many Requests");
     const lease = capacity.acquire(ip);
     if (!lease) return rejectUpgrade(socket, 503, "Capacity Reached");
+    // A malformed WebSocket handshake can be rejected inside ws.handleUpgrade()
+    // before its success callback runs. Tie the lease to the underlying socket
+    // immediately so every abort/close path releases capacity. The later WS
+    // cleanup also releases it; CapacityLease.release() is intentionally idempotent.
+    socket.once("close", () => lease.release());
     const origin = config.publicOrigin ?? (rawOrigin ? canonicalOrigin(rawOrigin) : `http://localhost:${config.port}`);
     if (!origin) {
       lease.release();
