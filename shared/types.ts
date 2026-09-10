@@ -216,8 +216,8 @@ export interface ClientView {
 type RequestMeta = { rid?: RequestId };
 
 export type ClientMessage =
-  /** displayToken is valid only on a display WebSocket's first HELLO frame. */
-  | ({ t: "HELLO"; protocolVersion?: 2; displayToken?: string } & RequestMeta)
+  /** Display-only fields are valid only on a display WebSocket's first HELLO frame. */
+  | ({ t: "HELLO"; protocolVersion?: 2; displayToken?: string; displayClientId?: string } & RequestMeta)
   /** New clients provide the owner's display name so the room owner joins as a player. */
   | ({ t: "CREATE_ROOM"; name?: string } & RequestMeta)
   | ({ t: "JOIN_ROOM"; code: string; name: string } & RequestMeta)
