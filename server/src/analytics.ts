@@ -4,7 +4,8 @@
  * Contract:
  * - event properties are allowlisted per event, never copied wholesale;
  * - no room code, player/session UID, display name, vote mapping, prompt text,
- *   raw client message, raw error text, IP address, or device fingerprint;
+ *   raw client message, raw error text, IP address, or persistent device fingerprint;
+ * - client/device telemetry is deliberately coarse and low-cardinality;
  * - delivery is queued, bounded, async, and never allowed to block gameplay.
  */
 import type { AnalyticsEvent } from "../../shared/types.js";
@@ -74,6 +75,51 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   room_ended_unknown: ["reason", "matchOrdinal", "phase"],
   game_error: ["code", "action", "phase", "duringMatch"],
   suggestion_submitted: ["category", "lengthBucket"],
+  client_started: [
+    "deviceClass",
+    "viewportBucket",
+    "browserFamily",
+    "osFamily",
+    "displayMode",
+    "languageGroup",
+    "touch",
+    "connectionType",
+    "saveData",
+    "reducedMotion",
+    "hardwareConcurrencyBucket",
+    "deviceMemoryBucket",
+    "pixelRatioBucket",
+    "orientation",
+    "audioContext",
+    "vibration",
+    "share",
+    "intlSegmenter",
+    "visualViewport",
+    "networkInfo",
+    "routeBucket",
+  ],
+  client_performance: [
+    "navigationType",
+    "domContentLoadedMs",
+    "loadMs",
+    "fcpMs",
+    "ttfbMs",
+    "resourceCount",
+    "transferKb",
+    "routeBucket",
+  ],
+  client_vital: ["metric", "value", "rating", "routeBucket"],
+  client_session_summary: [
+    "lifetimeSeconds",
+    "foregroundSeconds",
+    "backgroundTransitions",
+    "offlineTransitions",
+    "onlineTransitions",
+    "resizeEvents",
+    "orientationChanges",
+    "routeBucket",
+  ],
+  client_error: ["kind", "routeBucket", "online"],
 };
 
 const queue: AnalyticsRecord[] = [];
