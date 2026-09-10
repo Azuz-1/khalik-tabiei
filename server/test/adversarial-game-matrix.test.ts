@@ -16,14 +16,14 @@ const MODE_SETS: readonly GameMode[][] = [
   ["POINT", "NUMBER"],
   ["HANDS", "POINT", "NUMBER"],
 ];
-const OUTCOME_PATTERNS = [
+const OUTCOME_PATTERNS: readonly (readonly Outcome[])[] = [
   ["catch"],
   ["survive"],
   ["survive", "catch"],
   ["catch", "survive"],
   ["survive", "survive", "catch"],
   ["catch", "survive", "survive"],
-] as const;
+];
 
 type Outcome = "catch" | "survive";
 
@@ -276,9 +276,10 @@ test("rematch resets progress and scores but preserves selected Challenge total"
   assert.ok([...room.players.values()].every((player) => player.score === 0));
 
   assert.equal(manager.handle(host.conn, { t: "START_GAME" }), true);
-  assert.equal(room.phase, "QUESTION");
-  assert.equal(room.targetChallenges, 3);
-  assert.equal(room.completedChallenges, 0);
-  assert.equal(room.round?.mode, "NUMBER");
+  const restarted = manager.roomForTests(host.code)!;
+  assert.equal(restarted.phase, "QUESTION");
+  assert.equal(restarted.targetChallenges, 3);
+  assert.equal(restarted.completedChallenges, 0);
+  assert.equal(restarted.round?.mode, "NUMBER");
   manager.dispose();
 });
