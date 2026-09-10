@@ -65,7 +65,12 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     const outsiderCookie = outsiderBootstrap.headers.get("set-cookie")?.split(";")[0];
     assert.ok(outsiderCookie);
     const forbiddenLink = await fetch(`${origin}/api/rooms/${code}/display-link`, { headers: { Cookie: outsiderCookie } });
-    assert.equal(forbiddenLink.status, 403, "an authenticated non-owner must not mint a display capability");
+    assert.equal(forbiddenLink.status, 404, "an authenticated non-owner must not learn that the room exists");
+    assert.deepEqual(await forbiddenLink.json(), { ok: false, code: "ROOM_NOT_FOUND" });
+
+    const missingLink = await fetch(`${origin}/api/rooms/ZZZZZ/display-link`, { headers: { Cookie: outsiderCookie } });
+    assert.equal(missingLink.status, 404);
+    assert.deepEqual(await missingLink.json(), { ok: false, code: "ROOM_NOT_FOUND" });
 
     const linkResponse = await fetch(`${origin}/api/rooms/${code}/display-link`, { headers: { Cookie: cookie } });
     assert.equal(linkResponse.status, 200);
