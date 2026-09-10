@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
  * stand in for gameplay correctness.
  */
 
-const PHASE_TIMEOUT = 40_000;
+const PHASE_TIMEOUT = 65_000;
 
 const RECORD_FRAMES = `
 window.__frames = [];
@@ -103,7 +103,7 @@ async function castVote(voter, targetName) {
 
 function assertNoVoterMapping(frames, label) {
   const violations = [];
-  const forbiddenKey = /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores/i;
+  const forbiddenKey = /voter|ballot|votedFor|votesByUid|correctVoteStreakStart|pendingRoundScores|abstainedUids|sealedVotes/i;
   const expectedTallyKeys = ["name", "uid", "votes"];
 
   const walk = (node, path) => {
@@ -164,8 +164,11 @@ async function playCaughtChallenge(host, players, globalChallenge) {
   await expect(host.page.getByRole("heading", { name: "مين تصرفه مو طبيعي؟" })).toBeVisible({
     timeout: PHASE_TIMEOUT,
   });
+  await expect(host.page.getByTestId("phase-countdown")).toBeVisible();
+  if (globalChallenge === 1) {
+    await expect(host.page.getByText("استعدوا للتصويت")).toBeVisible({ timeout: PHASE_TIMEOUT });
+  }
 
-  await host.page.getByRole("button", { name: "ابدأ التصويت" }).click();
   await expect(host.page.getByRole("heading", { name: "صوّتوا" })).toBeVisible({ timeout: PHASE_TIMEOUT });
   await expect(host.page.getByText("الأصوات مخفية للحين")).toBeVisible();
   await expect(host.page.locator(".vote-board")).toHaveCount(0);
@@ -188,9 +191,8 @@ async function playCaughtChallenge(host, players, globalChallenge) {
 test("full game journey: reconnect, kick, competitive scoring, nine Challenges, real GAME_OVER", async ({
   browser,
 }) => {
-  // Nine production-timed Challenges take roughly 7–8 minutes end-to-end.
-  // Keep the real timers here so this journey validates the shipped physical cadence.
-  test.setTimeout(600_000);
+  // Nine production-timed Challenges now include 45-second automatic discussions.
+  test.setTimeout(720_000);
   const startedAt = Date.now();
 
   const host = await createHost(browser);
@@ -236,13 +238,8 @@ test("full game journey: reconnect, kick, competitive scoring, nine Challenges, 
     for (let challenge = 1; challenge <= 9; challenge += 1) {
       await playCaughtChallenge(host, players, challenge);
       const primary = host.page.locator(".host-result-stage .btn-primary");
-      if (challenge < 9) {
-        await expect(primary).toHaveText("متخفي جديد");
-        await primary.click();
-      } else {
-        await expect(primary).toHaveText("شوفوا الترتيب النهائي");
-        await primary.click();
-      }
+      await expect(primary).toHaveText("التالي الآن");
+      await primary.click();
     }
 
     await expect(host.page.getByRole("heading", { name: "خلصت اللعبة 🎉" })).toBeVisible({
