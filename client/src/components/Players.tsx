@@ -18,9 +18,13 @@ export function Players({
         <span key={player.uid} className={`chip${player.connected ? "" : " off"}`}>
           <span className="seat-badge" aria-label={`مقعد ${player.seatNumber}`}>{player.seatNumber}</span>
           <span className="dot" aria-hidden="true" />
-          <span>{player.name}{player.uid === selfUid ? " (أنت)" : ""}</span>
+          <span>
+            {player.name}
+            {player.uid === selfUid ? " (أنت)" : ""}
+            {player.isHost ? " · مالك الغرفة" : ""}
+          </span>
           <span className="sr-only">{player.connected ? "متصل" : "منقطع"}</span>
-          {canKick && onKick ? (
+          {canKick && onKick && !player.isHost ? (
             <button
               type="button"
               className="kick"
