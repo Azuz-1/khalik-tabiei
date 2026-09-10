@@ -1,20 +1,27 @@
 /**
- * Minimal server-side gameplay analytics.
+ * Privacy-safe server-side gameplay analytics.
  *
- * Privacy contract:
+ * Contract:
  * - event properties are allowlisted per event, never copied wholesale;
  * - no room code, player/session UID, display name, vote mapping, prompt text,
  *   raw client message, raw error text, IP address, or device fingerprint;
- * - delivery is queued and bounded so analytics can never sit on the gameplay path.
+ * - delivery is queued, bounded, async, and never allowed to block gameplay.
  */
 import type { AnalyticsEvent } from "../../shared/types.js";
+import { createConfiguredAnalyticsSink } from "./analyticsSink.js";
 
 export type AnalyticsValue = string | number | boolean;
 export type AnalyticsProps = Record<string, AnalyticsValue | undefined>;
 export type AnalyticsTracker = (event: AnalyticsEvent, props?: AnalyticsProps) => void;
+export interface AnalyticsRecord {
+  event: AnalyticsEvent;
+  occurredAt: string;
+  props: AnalyticsProps;
+}
+export type AnalyticsSink = (records: readonly AnalyticsRecord[]) => void | Promise<void>;
 
-export const ANALYTICS_RULES_VERSION = "competitive-v1";
-export const ANALYTICS_CONTENT_VERSION = "imitation-bank-v1";
+export const ANALYTICS_RULES_VERSION = "competitive-exact-challenges-v2";
+export const ANALYTICS_CONTENT_VERSION = "imitation-330-quality-v1";
 
 const ENABLED = process.env.ANALYTICS !== "off";
 const MAX_QUEUE = 512;
@@ -68,14 +75,19 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   game_error: ["code", "action", "phase", "duringMatch"],
 };
 
-export interface AnalyticsRecord {
-  event: AnalyticsEvent;
-  props: AnalyticsProps;
-}
-
 const queue: AnalyticsRecord[] = [];
 let flushScheduled = false;
+let flushInProgress = false;
 let dropped = 0;
+
+const consoleSink: AnalyticsSink = (records) => {
+  for (const record of records) {
+    // eslint-disable-next-line no-console
+    console.log(`[analytics] ${record.event}`, JSON.stringify(record.props));
+  }
+};
+
+let sink: AnalyticsSink = createConfiguredAnalyticsSink(process.env, consoleSink);
 
 function cleanValue(value: AnalyticsValue | undefined): AnalyticsValue | undefined {
   if (value === undefined) return undefined;
@@ -98,55 +110,58 @@ export function sanitizeAnalyticsProps(event: AnalyticsEvent, props: AnalyticsPr
 }
 
 function scheduleFlush(): void {
-  if (flushScheduled) return;
+  if (flushScheduled || flushInProgress) return;
   flushScheduled = true;
-  setImmediate(flush);
+  setImmediate(() => { void flush(); });
 }
 
-function flush(): void {
+async function flush(): Promise<void> {
+  if (flushInProgress) return;
   flushScheduled = false;
+  if (!queue.length) return;
+  flushInProgress = true;
   const batch = queue.splice(0, FLUSH_BATCH);
-  for (const record of batch) {
-    try {
-      // Default MVP sink. A durable sink can replace this module later without
-      // changing gameplay transitions or the event privacy contract.
-      // eslint-disable-next-line no-console
-      console.log(`[analytics] ${record.event}`, JSON.stringify(record.props));
-    } catch {
-      dropped += 1;
-    }
-  }
 
-  if (dropped > 0) {
+  try {
+    await sink(batch);
+  } catch {
+    // Telemetry is best-effort. Failed batches are dropped rather than retried
+    // indefinitely in memory, and no failure can escape into gameplay.
+    dropped += batch.length;
     try {
-      // Operational signal only; this is not a gameplay event.
       // eslint-disable-next-line no-console
-      console.warn("[analytics] dropped", JSON.stringify({ count: dropped }));
+      console.warn("[analytics] dropped batch", JSON.stringify({ count: batch.length }));
     } catch { /* analytics failures stay isolated */ }
-    dropped = 0;
+  } finally {
+    flushInProgress = false;
+    if (queue.length) scheduleFlush();
   }
-
-  if (queue.length) scheduleFlush();
 }
 
 export const track: AnalyticsTracker = (event, props = {}) => {
   if (!ENABLED) return;
   try {
-    const record: AnalyticsRecord = { event, props: sanitizeAnalyticsProps(event, props) };
+    const record: AnalyticsRecord = {
+      event,
+      occurredAt: new Date().toISOString(),
+      props: sanitizeAnalyticsProps(event, props),
+    };
     if (queue.length >= MAX_QUEUE) {
       dropped += 1;
-      scheduleFlush();
       return;
     }
     queue.push(record);
     scheduleFlush();
   } catch {
-    // Analytics is deliberately non-critical. Never throw into game logic.
     dropped += 1;
-    scheduleFlush();
   }
 };
 
-export function analyticsQueueStateForTests(): { queued: number; dropped: number } {
-  return { queued: queue.length, dropped };
+export function analyticsQueueStateForTests(): { queued: number; dropped: number; flushing: boolean } {
+  return { queued: queue.length, dropped, flushing: flushInProgress };
+}
+
+/** Test-only hook; production configuration is fixed at module initialization. */
+export function setAnalyticsSinkForTests(next: AnalyticsSink): void {
+  sink = next;
 }
