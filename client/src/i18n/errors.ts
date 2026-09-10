@@ -24,6 +24,7 @@ export const ERROR_AR: Record<ErrorCode, string> = {
   RATE_LIMITED: "شوي شوي، جرّب بعد لحظة",
   BAD_REQUEST: "ما ضبطت، جرّب مرة ثانية",
   UNAUTHORIZED: "حدّث الصفحة وجرّب مرة ثانية",
+  DISPLAY_IN_USE: "فيه شاشة عرض ثانية مربوطة بالغرفة الحين",
   SERVER_RESTARTING: "قاعدين نحدّث الخدمة الحين؛ انتظر شوي قبل تبدأ لعبة جديدة",
   INTERNAL: "صار خطأ عندنا، جرّب مرة ثانية",
 };
