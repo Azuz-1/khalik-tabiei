@@ -7,6 +7,7 @@ import {
   resetToHome,
   useGame,
 } from "./net/socket.js";
+import { estimatedServerNow } from "./net/clock.js";
 import { errorText } from "./i18n/errors.js";
 import { HostAudioLayer } from "./audio/HostAudioLayer.js";
 import { ConfirmDialog, type ConfirmDialogState } from "./components/ConfirmDialog.js";
@@ -14,7 +15,20 @@ import { Home } from "./screens/Home.js";
 import { Host, type ConfirmActionRequest } from "./screens/Host.js";
 import { Player } from "./screens/Player.js";
 
-interface ActiveConfirm extends ConfirmDialogState, ConfirmActionRequest {
+interface RecoveryConfirmActionRequest {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  actionType: "REDEAL_CHALLENGE";
+  run: () => string | null;
+}
+
+type AppConfirmActionRequest = ConfirmActionRequest | RecoveryConfirmActionRequest;
+
+interface ActiveConfirm extends ConfirmDialogState {
+  actionType: AppConfirmActionRequest["actionType"];
+  targetUid?: string;
+  run: () => string | null;
   roomCode: string;
   errorBaseline: number;
   phaseBaseline: string;
@@ -81,10 +95,11 @@ export function App() {
       setConfirmRequest(null);
       return;
     }
-    if (confirmRequest.actionType === "NEXT_ROUND" && confirmRequest.pending) {
+    if ((confirmRequest.actionType === "NEXT_ROUND" || confirmRequest.actionType === "REDEAL_CHALLENGE") && confirmRequest.pending) {
       const progressed = view.room.phase !== confirmRequest.phaseBaseline ||
         view.room.currentRound !== confirmRequest.roundBaseline ||
-        view.challenge?.index !== confirmRequest.challengeBaseline;
+        view.challenge?.index !== confirmRequest.challengeBaseline ||
+        (confirmRequest.actionType === "REDEAL_CHALLENGE" && view.readyRecovery === undefined);
       if (progressed) {
         setConfirmRequest(null);
         return;
@@ -113,7 +128,7 @@ export function App() {
     return () => window.clearTimeout(h);
   }, [confirmRequest, error, pendingActions, view]);
 
-  const openConfirm = (request: ConfirmActionRequest) => {
+  const openConfirm = (request: AppConfirmActionRequest) => {
     if (!view || confirmRequest) return;
     setConfirmRequest({
       ...request,
@@ -137,14 +152,19 @@ export function App() {
   const disableGameSurface = view != null && status !== "online";
 
   const requestPlayerExit = () => {
-    if (!view || view.self.role !== "player" || view.self.isOwner) return;
+    if (!view || view.self.role !== "player") return;
+    const owner = view.self.isOwner === true;
     const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
     openConfirm({
-      title: "الخروج من الغرفة؟",
-      description: active
-        ? "إذا خروجك يمنع استمرار دور المتخفي الحالي، ممكن ترجع اللعبة لشاشة الانتظار. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك."
-        : "بتطلع من الغرفة وترجع للرئيسية. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك.",
-      confirmLabel: "اخرج",
+      title: owner ? "الخروج وتسليم الإدارة؟" : "الخروج من الغرفة؟",
+      description: owner
+        ? active
+          ? "بننقل إدارة الغرفة فورًا لأقدم لاعب متصل مؤهل، ثم بتطلع من اللعب. خروجك قد يغيّر الجولة الحالية حسب دورك وعدد اللاعبين."
+          : "بننقل إدارة الغرفة فورًا لأقدم لاعب متصل مؤهل، ثم بتطلع من الغرفة وترجع للرئيسية."
+        : active
+          ? "إذا خروجك يمنع استمرار دور المتخفي الحالي، ممكن ترجع اللعبة لشاشة الانتظار. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك."
+          : "بتطلع من الغرفة وترجع للرئيسية. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك.",
+      confirmLabel: owner ? "اخرج وسلّم الإدارة" : "اخرج",
       actionType: "LEAVE_ROOM",
       run: actions.leaveRoom,
     });
@@ -187,10 +207,24 @@ export function App() {
           </div>
         ) : null}
 
+        {isOwner && view?.readyRecovery ? (
+          <ReadyRecoveryBanner
+            availableAt={view.readyRecovery.availableAt}
+            online={status === "online"}
+            onRecover={() => openConfirm({
+              title: "إعادة توزيع التحدي؟",
+              description: "بيبدأ التحدي من جديد باللاعبين المتصلين فقط. إذا كان دور المتخفي الحالي فيه نقاط مؤقتة أو سلسلة تصويت غير مدفوعة، بتنمسح عند إعادة التوزيع. وإذا ما بقي 3 لاعبين متصلين بنرجع لشاشة الانتظار.",
+              confirmLabel: "إعادة توزيع التحدي",
+              actionType: "REDEAL_CHALLENGE",
+              run: actions.redealChallenge,
+            })}
+          />
+        ) : null}
+
         {canManageRoom && activeRoom && offlinePlayers.length > 0 ? (
           <div className="card offline-player-banner">
             <strong>اتصال {offlinePlayers.map((player) => player.name).join("، ")} منقطع</strong>
-            <div className="helper">مكانه محفوظ وما راح نغيّر المتخفي بسبب نوم الجوال أو انقطاع الشبكة.</div>
+            <div className="helper">مكانه محفوظ وما راح نغيّر المتخفي تلقائيًا بسبب نوم الجوال أو انقطاع الشبكة.</div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowHostPlayers(true)}>إدارة اللاعبين</button>
           </div>
         ) : null}
@@ -232,6 +266,8 @@ export function App() {
             lobby={view.room.phase === "LOBBY"}
             admissionLocked={view.room.admissionLocked}
             blockedPlayers={view.blockedPlayers ?? []}
+            protectUnreadyDisconnects={view.readyRecovery !== undefined}
+            onOwnerLeave={isOwner ? () => { setShowHostPlayers(false); requestPlayerExit(); } : undefined}
             onConfirm={openConfirm}
             onClose={() => setShowHostPlayers(false)}
           />
@@ -268,12 +304,44 @@ export function App() {
   );
 }
 
+function ReadyRecoveryBanner({
+  availableAt,
+  online,
+  onRecover,
+}: {
+  availableAt: number;
+  online: boolean;
+  onRecover: () => void;
+}) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => tick((value) => value + 1), 250);
+    return () => window.clearInterval(timer);
+  }, []);
+  const remainingMs = Math.max(0, availableAt - estimatedServerNow());
+  const available = remainingMs <= 0;
+  const seconds = Math.max(1, Math.ceil(remainingMs / 1_000));
+  return (
+    <div className="card offline-player-banner" role="status">
+      <strong>لاعب انقطع قبل ما يجهز</strong>
+      <div className="helper">ننتظر رجوعه بدون أي تغيير تلقائي في دور المتخفي.</div>
+      {available ? (
+        <button type="button" className="btn btn-ghost btn-sm" disabled={!online} onClick={onRecover}>إعادة توزيع التحدي</button>
+      ) : (
+        <div className="helper">إعادة التوزيع تتاح بعد {seconds} ث.</div>
+      )}
+    </div>
+  );
+}
+
 function HostPlayerManager({
   players,
   active,
   lobby,
   admissionLocked,
   blockedPlayers,
+  protectUnreadyDisconnects,
+  onOwnerLeave,
   onConfirm,
   onClose,
 }: {
@@ -282,6 +350,8 @@ function HostPlayerManager({
   lobby: boolean;
   admissionLocked: boolean;
   blockedPlayers: Array<{ uid: string; name: string }>;
+  protectUnreadyDisconnects: boolean;
+  onOwnerLeave?: () => void;
   onConfirm: (request: ConfirmActionRequest) => void;
   onClose: () => void;
 }) {
@@ -370,6 +440,8 @@ function HostPlayerManager({
             </div>
             {player.isHost ? (
               <span className="pill-note">أنت</span>
+            ) : protectUnreadyDisconnects && !player.connected ? (
+              <span className="pill-note">ننتظر أو نعيد التوزيع</span>
             ) : (
               <button
                 type="button"
@@ -392,6 +464,14 @@ function HostPlayerManager({
         ))}
 
         {players.length === 0 ? <p className="subtitle center">ما فيه لاعبين الحين.</p> : null}
+
+        {onOwnerLeave ? (
+          <div className="card stack manager-subcard">
+            <strong>مالك الغرفة</strong>
+            <p className="helper">إذا بتطلع، نسلّم الإدارة تلقائيًا لأقدم لاعب متصل مؤهل بدل ما نقفل الغرفة على الكل.</p>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onOwnerLeave}>خروج وتسليم الإدارة</button>
+          </div>
+        ) : null}
 
         {blockedPlayers.length > 0 ? (
           <div className="card stack manager-subcard">
