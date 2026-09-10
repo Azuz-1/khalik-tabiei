@@ -72,6 +72,14 @@ export interface RoundOutcome {
   challengeIndex: number;
 }
 
+export interface CompletedChallengeSummary {
+  ordinal: number;
+  challengeWithinStint: number;
+  promptId: string;
+  prompt: string;
+  mode: GameMode;
+}
+
 export interface RoomState {
   code: string;
   hostUid: string;
@@ -113,6 +121,11 @@ export interface RoomState {
   usedPromptIds: Set<string>;
   impostorHistory: string[];
   roundOutcomes: RoundOutcome[];
+  /** Current-match prompt history exposed only to eligible players after GAME_OVER for optional feedback. */
+  completedChallengeSummaries: CompletedChallengeSummary[];
+  /** Server-only current-match eligibility/dedupe state; never persisted in analytics. */
+  feedbackEligibleUids: Set<string>;
+  feedbackSubmittedUids: Set<string>;
   phaseEndsAt?: number;
   timerGeneration: number;
   closed: boolean;
@@ -148,6 +161,9 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     usedPromptIds: new Set(),
     impostorHistory: [],
     roundOutcomes: [],
+    completedChallengeSummaries: [],
+    feedbackEligibleUids: new Set(),
+    feedbackSubmittedUids: new Set(),
     timerGeneration: 0,
     closed: false,
   };
