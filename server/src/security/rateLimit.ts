@@ -46,6 +46,7 @@ const ACTION_LIMITS: Partial<Record<ClientMessage["t"], [number, number]>> = {
   SUBMIT_VOTE: [40, 60_000],
   NEXT_ROUND: [30, 60_000],
   KICK_PLAYER: [20, 60_000],
+  SUBMIT_FEEDBACK: [5, 60_000],
 };
 
 /** One fixed-window quota: `limit` events allowed per `windowMs`. */
