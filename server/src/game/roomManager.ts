@@ -132,7 +132,7 @@ export class RoomManager {
     const player = room.players.get(uid);
     if (player?.pendingRemoval) return this.sendState(conn);
     const playerWasDisconnected = Boolean(player && !player.connected);
-    const hostWasDisconnected = uid === room.hostUid && !room.hostConnected;
+    const legacyHostWasDisconnected = !player && uid === room.hostUid && !room.hostConnected;
 
     conn.roomCode = room.code;
     if (player) {
@@ -141,18 +141,18 @@ export class RoomManager {
       player.connected = true;
       player.lastSeen = this.deps.now();
     }
-    // A named room owner is both a player and the liveness owner. Keep these
-    // transitions independent rather than using `else if`, otherwise reconnect
-    // would restore the player while leaving hostConnected false forever.
-    if (uid === room.hostUid) {
+    // hostConnected and its pause/close grace belong only to the legacy
+    // external-Host compatibility path. A named owner is a normal player seat:
+    // reconnect restores that player without restarting the server clock.
+    if (uid === room.hostUid && !player) {
       room.hostConnected = true;
       room.hostCloseDeadline = undefined;
       this.cancelTimer(room.code, HOST_DISCONNECT_TIMER);
-      if (hostWasDisconnected) this.resumeAfterHostReconnect(room);
+      if (legacyHostWasDisconnected) this.resumeAfterHostReconnect(room);
     }
     room.updatedAt = this.deps.now();
     if (playerWasDisconnected) this.emitAnalytics("player_reconnected", this.connectionAnalyticsProps(room));
-    if (hostWasDisconnected) this.emitAnalytics("host_reconnected", this.connectionAnalyticsProps(room));
+    if (legacyHostWasDisconnected) this.emitAnalytics("host_reconnected", this.connectionAnalyticsProps(room));
     this.broadcast(room);
   }
 
@@ -180,7 +180,9 @@ export class RoomManager {
       this.emitAnalytics("player_disconnected", this.connectionAnalyticsProps(room));
     }
 
-    if (uid === room.hostUid) {
+    // Only legacy rooms have an owner identity outside players. Named owners are
+    // players, so losing their phone must never pause timers or close the room.
+    if (uid === room.hostUid && !player) {
       room.hostConnected = false;
       room.hostCloseDeadline = this.deps.now() + this.deps.hostDisconnectGraceMs;
       this.emitAnalytics("host_disconnected", this.connectionAnalyticsProps(room));
