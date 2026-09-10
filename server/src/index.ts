@@ -13,8 +13,7 @@ import { track } from "./analytics.js";
 import { ClientTelemetryIngestor } from "./clientTelemetry.js";
 import { RoomManager } from "./game/roomManager.js";
 import { normalizeCode } from "./game/code.js";
-import { createDisplayToken, verifyDisplayToken } from "./game/display.js";
-import { buildView } from "./game/view.js";
+import { buildDisplayView, createDisplayToken, verifyDisplayToken } from "./game/display.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
 import { ensureAnonymousSession, readAnonymousSession } from "./auth/session.js";
@@ -43,6 +42,7 @@ interface UpgradeContext {
   displayCode?: string;
   displayCreatedAt?: number;
   displayHostUid?: string;
+  displayEpoch?: number;
 }
 
 interface GameServerOptions {
@@ -85,9 +85,25 @@ export function createGameServer(options: GameServerOptions = {}) {
   const contexts = new WeakMap<WebSocket, UpgradeContext>();
   const connections = new WeakMap<WebSocket, Connection>();
   const violations = new WeakMap<Connection, number>();
+  const displayEpochs = new Map<string, number>();
+  const activeDisplays = new Map<string, WebSocket>();
   let draining = false;
   let drainDeadlineMs: number | undefined;
   let drainTimer: NodeJS.Timeout | undefined;
+
+  const displayRoomKey = (code: string, createdAt: number) => `${code}:${createdAt}`;
+  const displayEpoch = (code: string, createdAt: number) => displayEpochs.get(displayRoomKey(code, createdAt)) ?? 0;
+  const revokeDisplay = (code: string, createdAt: number) => {
+    const key = displayRoomKey(code, createdAt);
+    displayEpochs.set(key, (displayEpochs.get(key) ?? 0) + 1);
+    const active = activeDisplays.get(key);
+    if (active) {
+      const activeConn = connections.get(active);
+      activeConn?.send({ t: "ROOM_CLOSED", reason: "display_revoked" });
+      activeConn?.closePolicy("display revoked");
+      activeDisplays.delete(key);
+    }
+  };
 
   app.disable("x-powered-by");
   app.use(securityHeaders(config.production, config.publicOrigin));
@@ -142,10 +158,28 @@ export function createGameServer(options: GameServerOptions = {}) {
       res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
       return;
     }
-    const token = createDisplayToken(room, config.sessionSecret);
+    const epoch = displayEpoch(room.code, room.createdAt);
+    const token = createDisplayToken(room, config.sessionSecret, epoch);
     // Fragments are not transmitted in HTTP requests or Referer headers. The
     // display client captures this capability locally and clears it immediately.
     res.json({ ok: true, path: `/display/${room.code}#token=${encodeURIComponent(token)}` });
+  });
+
+  app.delete("/api/rooms/:code/display-link", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const session = readAnonymousSession(req, config.sessionSecret);
+    if (!session) {
+      res.status(401).json({ ok: false, code: "UNAUTHORIZED" });
+      return;
+    }
+    const code = normalizeCode(req.params.code);
+    const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
+    if (!room || room.closed || room.hostUid !== session.uid) {
+      res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
+      return;
+    }
+    revokeDisplay(room.code, room.createdAt);
+    res.status(204).end();
   });
 
   app.post("/api/telemetry", express.json({ limit: "8kb", strict: true }), (req, res) => {
@@ -268,19 +302,19 @@ export function createGameServer(options: GameServerOptions = {}) {
     const pushDisplayState = () => {
       if (context.kind !== "display" || !context.displayCode || !conn.uid) return;
       const room = manager.roomForTests(context.displayCode);
+      const currentEpoch = room ? displayEpoch(room.code, room.createdAt) : -1;
       if (
         !room
         || room.closed
         || room.createdAt !== context.displayCreatedAt
         || room.hostUid !== context.displayHostUid
+        || currentEpoch !== context.displayEpoch
       ) {
-        conn.send({ t: "ROOM_CLOSED", reason: "display_room_closed" });
-        conn.closePolicy("room closed");
+        conn.send({ t: "ROOM_CLOSED", reason: "display_access_ended" });
+        conn.closePolicy("display access ended");
         return;
       }
-      // A synthetic non-member identity forces the existing projection through
-      // the spectator/public path. No owner/player secret is ever constructed.
-      const view = buildView(room, `display:${conn.id}`, `${context.origin}/join/${room.code}`);
+      const view = buildDisplayView(room, `${context.origin}/join/${room.code}`, config.sessionSecret);
       const fingerprint = JSON.stringify(view);
       if (fingerprint === lastDisplayFingerprint) return;
       lastDisplayFingerprint = fingerprint;
@@ -321,15 +355,28 @@ export function createGameServer(options: GameServerOptions = {}) {
         }
         if (context.kind === "display") {
           const room = context.displayCode ? manager.roomForTests(context.displayCode) : undefined;
-          if (!room || room.closed || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken)) {
+          const epoch = room ? displayEpoch(room.code, room.createdAt) : -1;
+          if (!room || room.closed || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken, epoch)) {
             conn.send({ t: "ERROR", code: "UNAUTHORIZED", message: "invalid display capability", ...(msg.rid ? { rid: msg.rid } : {}) });
             conn.closePolicy("invalid display capability");
             return;
           }
-          // Bind this authenticated connection to this exact room incarnation.
-          // Reuse of the short room code later can never revive the display.
+          const key = displayRoomKey(room.code, room.createdAt);
+          const existing = activeDisplays.get(key);
+          if (existing && existing !== ws && existing.readyState <= 1) {
+            conn.send({ t: "ERROR", code: "DISPLAY_IN_USE", message: "display already active", ...(msg.rid ? { rid: msg.rid } : {}) });
+            conn.closePolicy("display already active");
+            return;
+          }
+          if (existing && existing.readyState > 1) activeDisplays.delete(key);
+
+          // Bind this authenticated connection to one exact room incarnation,
+          // current owner, and revocation epoch. None of these affect gameplay
+          // participant liveness/accounting.
           context.displayCreatedAt = room.createdAt;
           context.displayHostUid = room.hostUid;
+          context.displayEpoch = epoch;
+          activeDisplays.set(key, ws);
           conn.authenticate(context.uid);
           conn.roomCode = context.displayCode ?? null;
           pushDisplayState();
@@ -383,8 +430,15 @@ export function createGameServer(options: GameServerOptions = {}) {
       if (cleaned) return;
       cleaned = true;
       if (displayTimer) clearInterval(displayTimer);
-      if (context.kind === "display") conn.markDisconnected();
-      else manager.disconnect(conn);
+      if (context.kind === "display") {
+        if (context.displayCode && context.displayCreatedAt !== undefined) {
+          const key = displayRoomKey(context.displayCode, context.displayCreatedAt);
+          if (activeDisplays.get(key) === ws) activeDisplays.delete(key);
+        }
+        conn.markDisconnected();
+      } else {
+        manager.disconnect(conn);
+      }
       context.lease.release();
     };
     ws.on("close", cleanup);
@@ -434,6 +488,8 @@ export function createGameServer(options: GameServerOptions = {}) {
     disposed = true;
     clearInterval(heartbeat);
     if (drainTimer) clearTimeout(drainTimer);
+    displayEpochs.clear();
+    activeDisplays.clear();
     abuse.dispose();
     suggestions.cleanup();
     manager.dispose();
