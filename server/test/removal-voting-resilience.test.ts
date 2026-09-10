@@ -10,13 +10,15 @@ import {
   wait,
 } from "./helpers.js";
 
-async function setupVoting() {
+async function setupVoting(votingMs = 15_000) {
   const manager = new RoomManager({
     rng: () => 0,
     countdownMs: 2,
     actionMs: 2,
     holdMs: 2,
     promptRevealMs: 2,
+    votingMs,
+    survivedTransitionMs: 500,
   });
   const host = createRoom(manager);
   const players = Array.from({ length: 4 }, (_, index) =>
@@ -54,7 +56,7 @@ function castThreeVotesWithMissingNormal(
 
   // The impostor's already-cast ballot targets D. After D leaves, this ballot
   // is intentionally wasted but remains committed. The two remaining normals
-  // vote for the impostor so the recalculated 3-player majority is exercised.
+  // vote for the impostor so the recalculated cast-vote majority is exercised.
   manager.handle(impostor.conn, {
     t: "SUBMIT_VOTE",
     targetUid: missing.uid,
@@ -92,7 +94,8 @@ function assertCommittedRemovalResult(
   assert.equal(room.phase, "RESULT");
 
   const view = lastMessage(host.socket, "STATE")!.view;
-  assert.equal(view.result?.requiredVotes, 2, "majority recalculates for three participants");
+  assert.equal(view.result?.requiredVotes, 2, "majority uses all three committed ballots");
+  assert.equal(view.result?.votesCast, 3, "ballot aimed at the removed target remains in the denominator");
   assert.equal(view.result?.groupFound, true);
   assert.equal(view.result?.roundComplete, true);
   assert.equal(view.result?.voteTally?.length, 3);
@@ -137,4 +140,43 @@ test("LEAVE_ROOM keeps votes targeting leaving normal committed and finishes vot
     voters.map((player) => player.uid),
   );
   manager.dispose();
+});
+
+async function assertRemovedTargetBallotDoesNotStrengthenRemainingVote(
+  remove: "kick" | "leave",
+): Promise<void> {
+  const { manager, host, players, room } = await setupVoting(35);
+  try {
+    const round = room.round!;
+    const impostor = players.find((player) => player.uid === round.impostorUid)!;
+    const normals = players.filter((player) => player.uid !== impostor.uid);
+    const departingTarget = normals[2]!;
+    const impostorVoter = normals[0]!;
+    const wastedBallotVoter = normals[1]!;
+
+    manager.handle(impostorVoter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    manager.handle(wastedBallotVoter.conn, { t: "SUBMIT_VOTE", targetUid: departingTarget.uid });
+
+    if (remove === "kick") manager.handle(host.conn, { t: "KICK_PLAYER", uid: departingTarget.uid });
+    else manager.handle(departingTarget.conn, { t: "LEAVE_ROOM" });
+
+    const deadline = Date.now() + 250;
+    while (room.phase !== "RESULT" && Date.now() < deadline) await wait(2);
+    assert.equal(room.phase, "RESULT");
+    assert.equal(round.sealedVotes?.size, 2, "both ballots cast by remaining voters stay in the denominator");
+    assert.equal(round.sealedVotes?.get(wastedBallotVoter.uid), departingTarget.uid, "vote on departed target remains committed");
+    assert.equal(round.resultRequiredVotes, 2);
+    assert.equal(round.groupFound, false, "one impostor vote out of two cast ballots is a tie, not a catch");
+    assert.equal(round.roundComplete, false);
+  } finally {
+    manager.dispose();
+  }
+}
+
+test("KICK_PLAYER cannot turn a wasted committed ballot into a one-vote catch", async () => {
+  await assertRemovedTargetBallotDoesNotStrengthenRemainingVote("kick");
+});
+
+test("LEAVE_ROOM cannot turn a wasted committed ballot into a one-vote catch", async () => {
+  await assertRemovedTargetBallotDoesNotStrengthenRemainingVote("leave");
 });
