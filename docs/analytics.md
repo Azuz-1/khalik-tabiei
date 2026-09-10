@@ -1,6 +1,6 @@
 # Analytics and product-learning data
 
-The game records privacy-safe, server-authored telemetry so real play can improve game balance, prompt quality, reliability, and match pacing.
+The game records privacy-safe telemetry so real play can improve game balance, prompt quality, reliability, UX, device compatibility, and match pacing.
 
 ## Privacy boundary
 
@@ -10,7 +10,8 @@ Never store or send in structured analytics:
 - session/player UIDs;
 - room codes;
 - IP addresses;
-- user-agent/device fingerprints;
+- raw user-agent strings or persistent device fingerprints;
+- exact URLs/paths that could contain a room code;
 - prompt text (use `promptId` only);
 - voter → target mappings;
 - raw WebSocket payloads;
@@ -18,6 +19,8 @@ Never store or send in structured analytics:
 - free text.
 
 The allowlist in `server/src/analytics.ts` is the source of truth. Adding a property requires an explicit allowlist change and review.
+
+Client telemetry deliberately converts potentially identifying browser signals into **coarse low-cardinality buckets before sending**. Examples: browser family instead of the raw user agent, viewport buckets instead of exact screen dimensions, device-memory/hardware-concurrency buckets instead of precise values, and route buckets (`home` / `join` / `other`) instead of URLs. The signed anonymous session is used only transiently to rate-limit telemetry ingestion; it is not written into analytics rows.
 
 The Home suggestion box is the one intentional free-text surface. Its message is stored in a **separate** `suggestions` table that has no player/session identifier, room code, IP, or device fields. IP and signed session UID are used only transiently in process memory for abuse-rate limiting and are never written with the suggestion. Structured analytics receives only the suggestion category and a coarse length bucket, never the message text.
 
@@ -38,7 +41,13 @@ Legacy `SUPABASE_SERVICE_ROLE_KEY` is accepted as a transition fallback, but new
 
 If Supabase is unavailable or misconfigured, gameplay remains available. Structured telemetry is best-effort and never participates in game-state decisions or readiness checks. The suggestion endpoint fails visibly instead of pretending a free-text suggestion was saved.
 
-## What we can answer
+## What is collected
+
+Server-authored gameplay telemetry covers room creation, game start/completion, every resolved Challenge, prompt ID, mode, participant count, Challenge/stint position, caught/not-caught result, selected Challenge total, match duration, rematch intent/start, disconnect/reconnect, room closure, and typed game errors.
+
+Anonymous client telemetry adds device/browser compatibility and UX health without storing an identity: device class; coarse viewport; browser/OS family; browser vs standalone display mode; Arabic/English/other language bucket; touch support; coarse network type and Save-Data; reduced-motion preference; coarse CPU/memory/pixel-ratio buckets; orientation; support for audio/vibration/share/Intl.Segmenter/VisualViewport/Network Information APIs; navigation type; TTFB/FCP/load/DOMContentLoaded timings; resource count and transferred KB; LCP/CLS/coarse interaction delay; foreground/background duration; online/offline transitions; resize/orientation changes; and only the **kind** of client error (`runtime`, `resource`, `promise`) without message, stack, filename or URL.
+
+## Product queries
 
 ### Funnel
 
@@ -140,7 +149,98 @@ group by 1, 2
 order by 3 desc;
 ```
 
-### Errors
+### Device/browser mix
+
+```sql
+select
+  properties->>'deviceClass' as device,
+  properties->>'osFamily' as os,
+  properties->>'browserFamily' as browser,
+  count(*) as starts
+from analytics_events
+where event_type = 'client_started'
+group by 1, 2, 3
+order by 4 desc;
+```
+
+### Small-screen/device coverage
+
+```sql
+select
+  properties->>'viewportBucket' as viewport,
+  properties->>'deviceClass' as device,
+  count(*) as starts
+from analytics_events
+where event_type = 'client_started'
+group by 1, 2
+order by 3 desc;
+```
+
+### Load performance by device
+
+```sql
+select
+  s.properties->>'deviceClass' as device,
+  p.properties->>'navigationType' as navigation,
+  count(*) as samples,
+  round(avg((p.properties->>'loadMs')::numeric), 0) as avg_load_ms,
+  round(avg((p.properties->>'fcpMs')::numeric), 0) as avg_fcp_ms
+from analytics_events p
+join lateral (
+  select properties
+  from analytics_events s
+  where s.event_type = 'client_started'
+    and s.occurred_at between p.occurred_at - interval '15 seconds' and p.occurred_at + interval '15 seconds'
+  order by abs(extract(epoch from (s.occurred_at - p.occurred_at)))
+  limit 1
+) s on true
+where p.event_type = 'client_performance'
+group by 1, 2
+order by 3 desc;
+```
+
+Because client telemetry intentionally has no persistent/session identifier, device/performance correlation is approximate by close timestamp. Use aggregate distributions, not per-user journeys.
+
+### Web-vital distribution
+
+```sql
+select
+  properties->>'metric' as metric,
+  properties->>'rating' as rating,
+  count(*) as samples,
+  round(avg((properties->>'value')::numeric), 2) as avg_value
+from analytics_events
+where event_type = 'client_vital'
+group by 1, 2
+order by 1, 2;
+```
+
+### Backgrounding / connectivity pressure
+
+```sql
+select
+  round(avg((properties->>'foregroundSeconds')::numeric), 0) as avg_foreground_seconds,
+  sum((properties->>'backgroundTransitions')::int) as background_transitions,
+  sum((properties->>'offlineTransitions')::int) as offline_transitions,
+  sum((properties->>'orientationChanges')::int) as orientation_changes
+from analytics_events
+where event_type = 'client_session_summary';
+```
+
+### Client error kinds
+
+```sql
+select
+  properties->>'kind' as kind,
+  properties->>'routeBucket' as surface,
+  count(*) as occurrences
+from analytics_events
+where event_type = 'client_error'
+group by 1, 2
+order by 3 desc;
+```
+
+### Server/game errors
 
 ```sql
 select properties->>'code' as code, properties->>'action' as action, count(*)
