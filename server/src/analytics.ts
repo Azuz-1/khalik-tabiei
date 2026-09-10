@@ -68,7 +68,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "topNormalVotes",
     "distinctTargets",
     "voteMargin",
-    "unanimousForImpostor",
+    "allNormalsVotedImpostor",
     "readySeconds",
     "discussionSeconds",
     "votingSeconds",
