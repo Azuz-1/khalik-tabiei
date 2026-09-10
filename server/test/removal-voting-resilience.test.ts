@@ -95,9 +95,9 @@ function assertCommittedRemovalResult(
   assert.equal(view.result?.requiredVotes, 2, "majority recalculates for three participants");
   assert.equal(view.result?.groupFound, true);
   assert.equal(view.result?.roundComplete, true);
-  assert.equal(view.result?.voteTally.length, 3);
-  assert.equal(view.result?.voteTally.some((row) => row.uid === missingUid), false);
-  assert.equal(view.result?.voteTally.reduce((sum, row) => sum + row.votes, 0), 2);
+  assert.equal(view.result?.voteTally?.length, 3);
+  assert.equal(view.result?.voteTally?.some((row) => row.uid === missingUid), false);
+  assert.equal(view.result?.voteTally?.reduce((sum, row) => sum + row.votes, 0), 2);
   assert.equal(view.players.some((player) => player.uid === missingUid), false);
 
   const json = JSON.stringify(view);
