@@ -13,6 +13,7 @@ export class Connection {
   roomCode: string | null = null;
   alive = true;
   private disconnected = false;
+  private policyClosing = false;
   private authTimer: NodeJS.Timeout | null = null;
 
   constructor(
@@ -28,7 +29,7 @@ export class Connection {
   }
 
   authenticate(uid: string): boolean {
-    if (this.uid !== null) return false;
+    if (this.uid !== null || this.policyClosing) return false;
     this.uid = uid;
     this.clearAuthenticationTimeout();
     return true;
@@ -55,8 +56,13 @@ export class Connection {
     return true;
   }
 
+  /** Once a policy close starts, queued/in-flight client frames are ignored. */
+  canProcessIncoming(): boolean {
+    return !this.policyClosing && !this.disconnected;
+  }
+
   send(msg: ServerMessage): boolean {
-    if (this.ws.readyState !== 1) return false;
+    if (this.policyClosing || this.ws.readyState !== 1) return false;
     if (this.ws.bufferedAmount > this.maxBufferedBytes) {
       try {
         this.ws.terminate();
@@ -79,6 +85,9 @@ export class Connection {
   }
 
   closePolicy(reason: string): void {
+    if (this.policyClosing) return;
+    this.policyClosing = true;
+    this.clearAuthenticationTimeout();
     try {
       this.ws.close(1008, reason.slice(0, 80));
     } catch {
