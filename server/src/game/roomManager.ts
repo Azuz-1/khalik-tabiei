@@ -22,6 +22,7 @@ interface Deps {
   rng: () => number;
   now: () => number;
   hostDisconnectGraceMs: number;
+  votingDisconnectGraceMs: number;
   countdownMs: number;
   actionMs: number;
   holdMs: number;
@@ -46,8 +47,13 @@ const IDLE_ROOM_MS = 30 * 60 * 1_000;
 const GC_INTERVAL_MS = 60_000;
 const IMITATION_STAGE_TIMER = "imitation-stage";
 const HOST_DISCONNECT_TIMER = "host-disconnect";
+const VOTING_DISCONNECT_TIMER_PREFIX = "voting-disconnect";
 const SAFE_REMOVAL_PHASES = new Set<GamePhase>(["LOBBY", "GAME_OVER"]);
 const RESTART_PHYSICAL_PHASES = new Set<GamePhase>(["COUNTDOWN", "ACTION", "HOLD"]);
+
+function votingDisconnectTimerKey(uid: string): string {
+  return `${VOTING_DISCONNECT_TIMER_PREFIX}:${uid}`;
+}
 
 export class RoomManager {
   private readonly rooms = new Map<string, RoomState>();
@@ -64,6 +70,7 @@ export class RoomManager {
       rng: deps.rng ?? secureRng,
       now: deps.now ?? Date.now,
       hostDisconnectGraceMs: deps.hostDisconnectGraceMs ?? TIMERS.HOST_DISCONNECT_GRACE,
+      votingDisconnectGraceMs: deps.votingDisconnectGraceMs ?? TIMERS.VOTING_DISCONNECT_GRACE,
       countdownMs: deps.countdownMs ?? TIMERS.COUNTDOWN,
       actionMs: deps.actionMs ?? TIMERS.ACTION,
       holdMs: deps.holdMs ?? TIMERS.HOLD,
@@ -102,6 +109,10 @@ export class RoomManager {
       player.disconnectedAt = undefined;
       player.connected = true;
       player.lastSeen = this.deps.now();
+      if (room.phase === "VOTING" && !room.round?.resolutionSealed) {
+        room.round?.abstainedUids?.delete(uid);
+        this.cancelTimer(room.code, votingDisconnectTimerKey(uid));
+      }
     } else if (uid === room.hostUid) {
       room.hostConnected = true;
       room.hostCloseDeadline = undefined;
@@ -145,6 +156,14 @@ export class RoomManager {
     player.lastSeen = this.deps.now();
     player.disconnectedAt = player.lastSeen;
     player.disconnectGeneration += 1;
+    if (
+      room.phase === "VOTING" &&
+      room.round?.participantUids.includes(uid) &&
+      !room.round.votes.has(uid) &&
+      !room.round.resolutionSealed
+    ) {
+      this.scheduleVotingDisconnectGrace(room, uid);
+    }
     this.broadcast(room);
   }
 
@@ -232,6 +251,9 @@ export class RoomManager {
       case "START_VOTING": return this.withRoom(uid, (room) => {
         engine.startVoting(room, uid, this.deps);
         this.markMeaningful(room);
+        for (const player of roundParticipants(room)) {
+          if (!player.connected && !room.round?.votes.has(player.uid)) this.scheduleVotingDisconnectGrace(room, player.uid);
+        }
         this.broadcast(room);
       });
       case "SUBMIT_VOTE": return this.submitVote(uid, message.targetUid);
@@ -278,6 +300,10 @@ export class RoomManager {
       existing.disconnectedAt = undefined;
       existing.connected = true;
       existing.lastSeen = this.deps.now();
+      if (room.phase === "VOTING" && !room.round?.resolutionSealed) {
+        room.round?.abstainedUids?.delete(uid);
+        this.cancelTimer(room.code, votingDisconnectTimerKey(uid));
+      }
       this.attachAll(uid, code);
       this.broadcast(room);
       return;
@@ -381,14 +407,58 @@ export class RoomManager {
 
   private submitVote(uid: string, targetUid: string): void {
     this.withRoom(uid, (room) => {
-      const { allVoted } = engine.submitVote(room, uid, targetUid, this.deps);
+      engine.submitVote(room, uid, targetUid, this.deps);
+      this.cancelTimer(room.code, votingDisconnectTimerKey(uid));
       this.markMeaningful(room);
-      if (allVoted) {
-        engine.sealVoteResolution(room, this.deps);
-        if (room.hostConnected && !room.pause) engine.computeResult(room, this.deps);
-      }
+      this.resolveVotingIfReady(room);
       this.broadcast(room);
     });
+  }
+
+  private scheduleVotingDisconnectGrace(room: RoomState, uid: string): void {
+    const round = room.round;
+    const player = room.players.get(uid);
+    if (
+      room.phase !== "VOTING" ||
+      !round ||
+      round.resolutionSealed ||
+      !round.participantUids.includes(uid) ||
+      round.votes.has(uid) ||
+      !player ||
+      player.connected
+    ) return;
+
+    const disconnectGeneration = player.disconnectGeneration;
+    this.schedule(room, votingDisconnectTimerKey(uid), this.deps.votingDisconnectGraceMs, () => {
+      const current = room.players.get(uid);
+      if (
+        room.phase !== "VOTING" ||
+        room.round !== round ||
+        round.resolutionSealed ||
+        round.votes.has(uid) ||
+        !current ||
+        current.connected ||
+        current.disconnectGeneration !== disconnectGeneration
+      ) return;
+
+      if (!round.abstainedUids) round.abstainedUids = new Set();
+      round.abstainedUids.add(uid);
+      room.updatedAt = this.deps.now();
+      this.resolveVotingIfReady(room);
+      this.broadcast(room);
+    });
+  }
+
+  private resolveVotingIfReady(room: RoomState): boolean {
+    const round = room.round;
+    if (room.phase !== "VOTING" || !round || round.resolutionSealed || !engine.allVoted(room)) return false;
+    const participantUids = [...round.participantUids];
+    engine.sealVoteResolution(room, this.deps);
+    for (const participantUid of participantUids) {
+      this.cancelTimer(room.code, votingDisconnectTimerKey(participantUid));
+    }
+    if (room.hostConnected && !room.pause) engine.computeResult(room, this.deps);
+    return true;
   }
 
   private nextRound(uid: string): void {
@@ -449,6 +519,8 @@ export class RoomManager {
       round.readyUids.delete(uid);
       round.answers.delete(uid);
       round.votes.delete(uid);
+      round.abstainedUids?.delete(uid);
+      this.cancelTimer(room.code, votingDisconnectTimerKey(uid));
     }
     this.removePlayer(room, uid);
     if (!activeGame || !round || !wasParticipant) return;
@@ -469,10 +541,7 @@ export class RoomManager {
       this.beginPhysicalSequence(room);
       return;
     }
-    if (phase === "VOTING" && engine.allVoted(room)) {
-      engine.sealVoteResolution(room, this.deps);
-      if (room.hostConnected && !room.pause) engine.computeResult(room, this.deps);
-    }
+    if (phase === "VOTING") this.resolveVotingIfReady(room);
   }
 
   private pauseForHostDisconnect(room: RoomState): void {
@@ -586,6 +655,7 @@ export class RoomManager {
   }
 
   private removePlayer(room: RoomState, uid: string): void {
+    this.cancelTimer(room.code, votingDisconnectTimerKey(uid));
     room.players.delete(uid);
     room.updatedAt = this.deps.now();
     if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
