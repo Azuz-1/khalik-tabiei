@@ -12,6 +12,7 @@ import {
 type JsonObject = Record<string, unknown>;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SAMPLE_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+const DISPLAY_CLIENT_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const RAW_NAME_MAX_CODE_POINTS = 128;
 const DISPLAY_TOKEN_MAX_CODE_POINTS = 256;
 
@@ -49,9 +50,10 @@ export function validateClientMessage(
 
   switch (value.t) {
     case "HELLO":
-      if (!exactKeys(value, ["t"], ["protocolVersion", "displayToken", "rid"]) || !validRid(value)) return null;
+      if (!exactKeys(value, ["t"], ["protocolVersion", "displayToken", "displayClientId", "rid"]) || !validRid(value)) return null;
       if (value.protocolVersion !== undefined && value.protocolVersion !== 2) return null;
       if (value.displayToken !== undefined && !boundedString(value.displayToken, 1, DISPLAY_TOKEN_MAX_CODE_POINTS)) return null;
+      if (value.displayClientId !== undefined && (typeof value.displayClientId !== "string" || !DISPLAY_CLIENT_ID_RE.test(value.displayClientId))) return null;
       return value as ClientMessage;
 
     case "CREATE_ROOM":
