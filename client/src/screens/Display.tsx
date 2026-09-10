@@ -9,10 +9,18 @@ import { estimatedServerNow, serverClock } from "../net/clock.js";
 interface DisplayRoute {
   code: string;
   token: string;
+  clientId: string;
 }
 
 interface DisplayHistoryState {
   displayToken?: string;
+  displayClientId?: string;
+}
+
+function createDisplayClientId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return `dc_${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function routeFromLocation(): DisplayRoute | null {
@@ -23,12 +31,18 @@ function routeFromLocation(): DisplayRoute | null {
   const previousState = (history.state ?? {}) as DisplayHistoryState;
   const token = fromFragment || previousState.displayToken || "";
   if (!token) return null;
-  if (fromFragment) {
-    // Keep the capability out of the visible URL while retaining it only for
-    // this history entry so a TV/tablet hard refresh can reconnect safely.
-    history.replaceState({ ...previousState, displayToken: token }, "", `${location.pathname}${location.search}`);
+  const clientId = previousState.displayClientId ?? createDisplayClientId();
+  if (fromFragment || previousState.displayClientId !== clientId) {
+    // Keep the capability out of the visible URL while retaining it, together
+    // with a device-local reconnect id, only for this history entry. A hard
+    // refresh can reclaim the same Display slot without looking like a second TV.
+    history.replaceState(
+      { ...previousState, displayToken: token, displayClientId: clientId },
+      "",
+      `${location.pathname}${location.search}`,
+    );
   }
-  return { code: match[1]!.toUpperCase(), token };
+  return { code: match[1]!.toUpperCase(), token, clientId };
 }
 
 function displaySocketUrl(route: DisplayRoute): string {
@@ -71,7 +85,12 @@ function useDisplayFeed(route: DisplayRoute | null) {
 
       current.onopen = () => {
         if (stopped || socket !== current) return;
-        current.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: route.token } satisfies ClientMessage));
+        current.send(JSON.stringify({
+          t: "HELLO",
+          protocolVersion: 2,
+          displayToken: route.token,
+          displayClientId: route.clientId,
+        } satisfies ClientMessage));
       };
 
       current.onmessage = (event) => {
@@ -147,7 +166,7 @@ function useDisplayFeed(route: DisplayRoute | null) {
       if (sampleTimer !== undefined) window.clearInterval(sampleTimer);
       try { socket?.close(1000, "display closed"); } catch { /* close race */ }
     };
-  }, [route?.code, route?.token]);
+  }, [route?.code, route?.token, route?.clientId]);
 
   return { view, status, message };
 }
