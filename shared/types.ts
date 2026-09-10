@@ -17,6 +17,8 @@ export type Role = "host" | "player" | "spectator";
 export type GameMode = "HANDS" | "POINT" | "NUMBER";
 export type PlayStyle = "TEAM" | "INDIVIDUAL";
 export type RequestId = string;
+export type FeedbackRating = "EXCELLENT" | "GOOD" | "OK" | "NEEDS_WORK";
+export type FeedbackIssueReason = "UNCLEAR" | "TOO_REVEALING" | "TOO_SIMILAR" | "NOT_SUITABLE";
 
 export interface GameModeInfo {
   id: GameMode;
@@ -140,6 +142,17 @@ export interface GameOverInfo {
   completedChallenges: number;
 }
 
+export interface FeedbackChallengeOption {
+  ordinal: number;
+  mode: GameMode;
+  prompt: string;
+}
+
+export interface FeedbackView {
+  submitted: boolean;
+  challenges: FeedbackChallengeOption[];
+}
+
 export interface ClientView {
   self: {
     uid: string;
@@ -199,6 +212,8 @@ export interface ClientView {
   result?: RoundResult;
   gameOver?: GameOverInfo;
   scoreboard?: ScoreEntry[];
+  /** Player-only, GAME_OVER-only optional feedback surface. */
+  feedback?: FeedbackView;
 }
 
 type RequestMeta = { rid?: RequestId };
@@ -226,6 +241,12 @@ export type ClientMessage =
   | ({ t: "KICK_PLAYER"; uid: string } & RequestMeta)
   | ({ t: "CLOSE_ROOM" } & RequestMeta)
   | ({ t: "REMATCH" } & RequestMeta)
+  | ({
+      t: "SUBMIT_FEEDBACK";
+      rating: FeedbackRating;
+      challengeOrdinal?: number;
+      issueReason?: FeedbackIssueReason;
+    } & RequestMeta)
   | { t: "PING"; sampleId?: string; clientMonoMs?: number };
 
 export type ServerMessage =
@@ -262,4 +283,6 @@ export type AnalyticsEvent =
   | "client_performance"
   | "client_vital"
   | "client_session_summary"
-  | "client_error";
+  | "client_error"
+  | "feedback_rating"
+  | "feedback_challenge_issue";
