@@ -163,8 +163,13 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
     }
   }
 
+  // PROMPT_REVEAL is brief. Assert it on every phone before waiting for the
+  // longer DISCUSSION phase, otherwise a sequential wait can miss the reveal
+  // on later phones even though all clients rendered it correctly.
   for (const player of players) {
     await expect(player.page.getByText("المطلوب كان…")).toBeVisible({ timeout: PHASE_TIMEOUT });
+  }
+  for (const player of players) {
     await expect(player.page.getByRole("heading", { name: "مين تصرفه مو طبيعي؟" })).toBeVisible({
       timeout: PHASE_TIMEOUT,
     });
