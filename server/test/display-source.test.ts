@@ -28,7 +28,7 @@ test("display capability stays out of HTTP and WebSocket query strings", async (
   assert.ok(display.includes("history.replaceState"), "display page must clear the captured capability from the visible URL");
   assert.equal(display.includes("new URLSearchParams(location.search).get(\"token\")"), false);
   assert.ok(display.includes('displayToken: route.token'), "display capability must travel in the first HELLO frame");
-  assert.equal(display.includes('token: route.token }), false, "WebSocket URL builder must not serialize the capability");
+  assert.equal(display.includes('token: route.token'), false, "WebSocket URL builder must not serialize the capability");
 });
 
 test("owner lobby exposes display as an explicitly optional surface", async () => {
