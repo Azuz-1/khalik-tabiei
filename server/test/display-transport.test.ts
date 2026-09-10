@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { WebSocket } from "ws";
+import { WebSocket, type RawData } from "ws";
 import type { ServerMessage } from "../../shared/types.js";
 import { createGameServer } from "../src/index.js";
 
 function nextMessage(ws: WebSocket): Promise<ServerMessage> {
   return new Promise((resolve, reject) => {
-    const onMessage = (data: WebSocket.RawData) => {
+    const onMessage = (data: RawData) => {
       cleanup();
       try { resolve(JSON.parse(data.toString()) as ServerMessage); }
       catch (error) { reject(error); }
@@ -48,10 +48,13 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     assert.ok(cookie);
 
     owner = await open(`${wsOrigin}/ws`, origin, cookie);
+    const ownerHello = nextMessage(owner);
     owner.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
-    assert.equal((await nextMessage(owner)).t, "HELLO_OK");
+    assert.equal((await ownerHello).t, "HELLO_OK");
+
+    const roomCreated = nextMessage(owner);
     owner.send(JSON.stringify({ t: "CREATE_ROOM", name: "المالك" }));
-    const created = await nextMessage(owner);
+    const created = await roomCreated;
     assert.equal(created.t, "STATE");
     if (created.t !== "STATE") throw new Error("room state missing");
     const code = created.view.room.code;
@@ -68,8 +71,9 @@ test("display link is owner-only and display socket is sessionless, spectator-on
       `${wsOrigin}/ws?mode=display&code=${encodeURIComponent(code)}&token=${encodeURIComponent(token)}`,
       origin,
     );
+    const displayHello = nextMessage(display);
     display.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 }));
-    const publicState = await nextMessage(display);
+    const publicState = await displayHello;
     assert.equal(publicState.t, "STATE");
     if (publicState.t !== "STATE") throw new Error("display state missing");
     assert.equal(publicState.view.self.role, "spectator");
@@ -81,8 +85,9 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     assert.equal(publicState.view.settingsEditable, undefined);
     assert.equal(publicState.view.blockedPlayers, undefined);
 
+    const rejectedWrite = nextMessage(display);
     display.send(JSON.stringify({ t: "START_GAME", rid: "display-write" }));
-    const rejected = await nextMessage(display);
+    const rejected = await rejectedWrite;
     assert.deepEqual(rejected, {
       t: "ERROR",
       code: "UNAUTHORIZED",
@@ -90,8 +95,9 @@ test("display link is owner-only and display socket is sessionless, spectator-on
       rid: "display-write",
     });
 
+    const displayClosed = once(display, "close");
     display.close();
-    await once(display, "close");
+    await displayClosed;
     const room = runtime.manager.roomForTests(code);
     assert.ok(room);
     assert.equal(room.hostConnected, true, "closing the display must not disconnect or pause the owner/player");
