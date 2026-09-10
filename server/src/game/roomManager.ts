@@ -1,6 +1,13 @@
 /** Authoritative room, connection, timer, membership, and action orchestration. */
 import { randomInt, randomUUID } from "node:crypto";
-import type { AnalyticsEvent, ClientMessage, ErrorCode, GamePhase } from "../../../shared/types.js";
+import type {
+  AnalyticsEvent,
+  ClientMessage,
+  ErrorCode,
+  FeedbackIssueReason,
+  FeedbackRating,
+  GamePhase,
+} from "../../../shared/types.js";
 import { MAX_ACTIVE_ROOMS, MAX_CONNECTIONS_PER_UID, MAX_PLAYERS, TIMERS } from "../../../shared/constants.js";
 import {
   ANALYTICS_CONTENT_VERSION,
@@ -285,6 +292,7 @@ export class RoomManager {
       case "NEXT_ROUND": return this.nextRound(uid);
       case "KICK_PLAYER": return this.kick(uid, message.uid);
       case "CLOSE_ROOM": return this.closeRoom(uid);
+      case "SUBMIT_FEEDBACK": return this.submitFeedback(uid, message.rating, message.challengeOrdinal, message.issueReason);
       case "REMATCH": return this.withRoom(uid, (room) => {
         if (room.hostUid !== uid) throw new GameError("NOT_HOST");
         if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
@@ -301,6 +309,7 @@ export class RoomManager {
           });
         }
         engine.rematch(room, uid, this.deps);
+        this.resetFeedbackState(room);
         this.markMeaningful(room);
         this.broadcast(room);
       });
@@ -402,6 +411,8 @@ export class RoomManager {
       const startsAfterCompletedMatch = previousMatchOrdinal > 0 && analytics.completedMatchOrdinal === previousMatchOrdinal;
 
       engine.startGame(room, uid, this.deps);
+      this.resetFeedbackState(room);
+      for (const player of activePlayers(room)) room.feedbackEligibleUids.add(player.uid);
       room.matchGeneration += 1;
       analytics.matchOrdinal += 1;
       analytics.matchId = randomUUID();
@@ -498,6 +509,16 @@ export class RoomManager {
     const round = room.round;
     if (!round || round.kind !== "IMITATION" || wasComputed || !round.resultComputed) return;
 
+    if (!room.completedChallengeSummaries.some((summary) => summary.ordinal === room.completedChallenges)) {
+      room.completedChallengeSummaries.push({
+        ordinal: room.completedChallenges,
+        challengeWithinStint: round.challengeIndex,
+        promptId: round.promptId,
+        prompt: round.prompt,
+        mode: round.mode,
+      });
+    }
+
     const analytics = this.analyticsState(room);
     const challengeKey = `${analytics.matchOrdinal}:${room.completedChallenges}`;
     if (!analytics.challengeKeys.has(challengeKey)) {
@@ -570,6 +591,64 @@ export class RoomManager {
         contentVersion: ANALYTICS_CONTENT_VERSION,
       });
     }
+  }
+
+  private submitFeedback(
+    uid: string,
+    rating: FeedbackRating,
+    challengeOrdinal?: number,
+    issueReason?: FeedbackIssueReason,
+  ): void {
+    this.withRoom(uid, (room) => {
+      if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
+      const player = room.players.get(uid);
+      if (!player || !player.connected || player.pendingRemoval || !room.feedbackEligibleUids.has(uid)) throw new GameError("NOT_PLAYER");
+      if (room.feedbackSubmittedUids.has(uid)) throw new GameError("BAD_REQUEST", "feedback already submitted");
+      if ((challengeOrdinal === undefined) !== (issueReason === undefined)) throw new GameError("BAD_REQUEST", "incomplete challenge feedback");
+      const challenge = challengeOrdinal === undefined
+        ? undefined
+        : room.completedChallengeSummaries.find((summary) => summary.ordinal === challengeOrdinal);
+      if (challengeOrdinal !== undefined && !challenge) throw new GameError("BAD_REQUEST", "challenge was not played in this match");
+
+      const analytics = this.analyticsState(room);
+      const row = engine.ranking(room).find((entry) => entry.uid === uid);
+      const score = row?.score ?? player.score;
+      const rank = row?.rank ?? 0;
+      const scoreBucket = score <= 0 ? "0" : score <= 2 ? "1-2" : score <= 5 ? "3-5" : "6+";
+      const rankBucket = rank <= 1 ? "1" : rank === 2 ? "2" : "3+";
+      room.feedbackSubmittedUids.add(uid);
+
+      this.emitAnalytics("feedback_rating", {
+        roomSessionId: analytics.roomSessionId,
+        matchId: analytics.matchId,
+        matchOrdinal: analytics.matchOrdinal,
+        rating,
+        targetChallenges: room.targetChallenges,
+        completedChallenges: room.completedChallenges,
+        startingPlayerCount: analytics.startingPlayerCount ?? room.players.size,
+        scoreBucket,
+        rankBucket,
+        rulesVersion: ANALYTICS_RULES_VERSION,
+        contentVersion: ANALYTICS_CONTENT_VERSION,
+      });
+      if (challenge && issueReason) {
+        this.emitAnalytics("feedback_challenge_issue", {
+          roomSessionId: analytics.roomSessionId,
+          matchId: analytics.matchId,
+          matchOrdinal: analytics.matchOrdinal,
+          challengeOrdinal: challenge.ordinal,
+          challengeWithinStint: challenge.challengeWithinStint,
+          promptId: challenge.promptId,
+          mode: challenge.mode,
+          reason: issueReason,
+          targetChallenges: room.targetChallenges,
+          startingPlayerCount: analytics.startingPlayerCount ?? room.players.size,
+          rulesVersion: ANALYTICS_RULES_VERSION,
+          contentVersion: ANALYTICS_CONTENT_VERSION,
+        });
+      }
+      this.broadcast(room);
+    });
   }
 
   private nextRound(uid: string): void {
@@ -847,6 +926,12 @@ export class RoomManager {
   private elapsedSeconds(start: number | undefined, end: number | undefined): number | undefined {
     if (start === undefined || end === undefined || end < start) return undefined;
     return Math.min(7_200, Math.round(((end - start) / 1_000) * 10) / 10);
+  }
+
+  private resetFeedbackState(room: RoomState): void {
+    room.completedChallengeSummaries = [];
+    room.feedbackEligibleUids.clear();
+    room.feedbackSubmittedUids.clear();
   }
 
   private emitGameAbandoned(room: RoomState, reason: string): void {
