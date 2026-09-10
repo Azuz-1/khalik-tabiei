@@ -4,7 +4,7 @@ The game records privacy-safe, server-authored telemetry so real play can improv
 
 ## Privacy boundary
 
-Never store or send in analytics:
+Never store or send in structured analytics:
 
 - player display names;
 - session/player UIDs;
@@ -19,20 +19,24 @@ Never store or send in analytics:
 
 The allowlist in `server/src/analytics.ts` is the source of truth. Adding a property requires an explicit allowlist change and review.
 
+The Home suggestion box is the one intentional free-text surface. Its message is stored in a **separate** `suggestions` table that has no player/session identifier, room code, IP, or device fields. IP and signed session UID are used only transiently in process memory for abuse-rate limiting and are never written with the suggestion. Structured analytics receives only the suggestion category and a coarse length bucket, never the message text.
+
 ## Durable storage
 
 The optional durable sink uses Supabase Data REST from the server only. No Supabase secret is exposed to the client.
 
 1. Create a Supabase project.
-2. Run `supabase/migrations/202609100001_analytics_events.sql` in the SQL editor.
+2. Run these migrations in order in the SQL editor:
+   - `supabase/migrations/202609100001_analytics_events.sql`
+   - `supabase/migrations/202609100002_suggestions.sql`
 3. Add these Render environment variables:
    - `SUPABASE_URL=https://<project-ref>.supabase.co`
    - `SUPABASE_SECRET_KEY=sb_secret_...`
-4. Keep `ANALYTICS` unset or set it to `on`. Set `ANALYTICS=off` to disable collection entirely.
+4. Keep `ANALYTICS` unset or set it to `on`. Set `ANALYTICS=off` to disable structured telemetry entirely.
 
 Legacy `SUPABASE_SERVICE_ROLE_KEY` is accepted as a transition fallback, but new deployments should use `SUPABASE_SECRET_KEY`.
 
-If Supabase is unavailable or misconfigured, gameplay remains available. Telemetry is best-effort and never participates in game-state decisions or readiness checks.
+If Supabase is unavailable or misconfigured, gameplay remains available. Structured telemetry is best-effort and never participates in game-state decisions or readiness checks. The suggestion endpoint fails visibly instead of pretending a free-text suggestion was saved.
 
 ## What we can answer
 
@@ -81,7 +85,7 @@ select
   properties->>'promptId' as prompt_id,
   (properties->>'participantCount')::int as players,
   count(*) as samples,
-  round(100.0 * avg((properties->>'caught')::boolean::int), 1) as caught_pct
+  round(100.0 * avg(((properties->>'caught')::boolean)::int), 1) as caught_pct
 from analytics_events
 where event_type = 'challenge_completed'
 group by 1, 2
@@ -96,7 +100,7 @@ select
   properties->>'mode' as mode,
   (properties->>'participantCount')::int as players,
   count(*) as challenges,
-  round(100.0 * avg((properties->>'caught')::boolean::int), 1) as caught_pct
+  round(100.0 * avg(((properties->>'caught')::boolean)::int), 1) as caught_pct
 from analytics_events
 where event_type = 'challenge_completed'
 group by 1, 2
@@ -146,6 +150,24 @@ group by 1, 2
 order by 3 desc;
 ```
 
+### Suggestions inbox
+
+```sql
+select id, occurred_at, category, message, deployment_sha
+from suggestions
+order by occurred_at desc
+limit 100;
+```
+
+### Suggestion categories over time
+
+```sql
+select date_trunc('week', occurred_at) as week, category, count(*)
+from suggestions
+group by 1, 2
+order by 1 desc, 3 desc;
+```
+
 ## Retention
 
-Start with 90 days of raw telemetry. The data intentionally has no cross-day player identity, so long-lived user profiling is neither possible nor needed for product decisions.
+Start with 90 days of raw structured telemetry. The data intentionally has no cross-day player identity, so long-lived user profiling is neither possible nor needed for product decisions. Suggestions can use the same 90-day default initially, with useful product ideas moved into the normal product backlog before expiry.
