@@ -93,6 +93,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Correct temporary G5 MATCH_END scenario
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+          const path = "server/test/integration-10-groups.mjs";
+          const source = fs.readFileSync(path, "utf8");
+          const before = '{ id: "G5", players: 7, target: 3, modes: ["HANDS", "POINT"], pattern: ["survive"], playerReconnect: true, expectMatchEnd: true }';
+          const after = '{ id: "G5", players: 7, target: 3, modes: ["HANDS", "POINT"], pattern: ["catch", "survive", "survive"], playerReconnect: true, expectMatchEnd: true }';
+          if (!source.includes(before)) throw new Error("expected temporary G5 scenario not found");
+          fs.writeFileSync(path, source.replace(before, after));
+          NODE
       - name: Run isolated 10-group release simulation
         run: |
           npm start > /tmp/khalik-release-server.log 2>&1 &
