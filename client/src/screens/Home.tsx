@@ -12,7 +12,7 @@ import {
   ROOM_CODE_LENGTH,
 } from "../../../shared/constants.js";
 
-type Step = "home" | "code" | "name";
+type Step = "home" | "code" | "join-name" | "create-name";
 type InfoTab = "how" | "modes" | "points";
 
 function readDeepLinkCode(): string | null {
@@ -91,7 +91,7 @@ function RulesTabs() {
           <p className="subtitle" style={{ margin: 0 }}>2. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
           <p className="subtitle" style={{ margin: 0 }}>3. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
           <p className="subtitle" style={{ margin: 0 }}>4. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي، وبحد أقصى 3 تحدّيات في دوره.</p>
-          <p className="helper" style={{ margin: 0 }}>المضيف يختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
+          <p className="helper" style={{ margin: 0 }}>مالك الغرفة يلعب معكم ويختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
         </div>
       </div>
 
@@ -143,7 +143,7 @@ function RulesTabs() {
 export function Home() {
   const { error, status, pendingActions } = useGame();
   const deepCode = useMemo(readDeepLinkCode, []);
-  const [step, setStep] = useState<Step>(deepCode ? "name" : "home");
+  const [step, setStep] = useState<Step>(deepCode ? "join-name" : "home");
   const [code, setCode] = useState(deepCode ?? "");
   const [name, setName] = useState("");
   const [localErr, setLocalErr] = useState<string | null>(null);
@@ -174,7 +174,7 @@ export function Home() {
         <div className="center stack home-hero">
           <h1 className="brand">خلك طبيعي</h1>
           <p className="subtitle">واحد منكم متخفي وما يعرف المطلوب. اكتشفه بدري واجمع نقاط أكثر.</p>
-          <span className="pill-note">3–10 لاعبين · شاشة مشتركة وجوال لكل لاعب</span>
+          <span className="pill-note">3–10 لاعبين · جوال لكل لاعب</span>
         </div>
 
         <div className="stack home-actions">
@@ -183,15 +183,17 @@ export function Home() {
             disabled={offline || creating}
             onClick={() => {
               void unlockAudio();
-              actions.createRoom();
+              setLocalErr(null);
+              setName("");
+              setStep("create-name");
             }}
           >
-            {creating ? "جاري إنشاء الغرفة…" : "سوّ غرفة"}
+            سوّ غرفة والعب معنا
           </button>
           <button className="btn btn-ghost" disabled={offline} onClick={() => { setLocalErr(null); setStep("code"); }}>
             ادخل غرفة
           </button>
-          <p className="helper" style={{ margin: 0 }}>بدون تحميل ولا تسجيل</p>
+          <p className="helper" style={{ margin: 0 }}>صاحب الغرفة لاعب مثل الباقين · بدون تحميل ولا تسجيل</p>
         </div>
 
         <RulesTabs />
@@ -229,23 +231,33 @@ export function Home() {
           }}
         />
         {localErr ? <p className="helper" role="alert" style={{ color: "var(--bad)" }}>{localErr}</p> : null}
-        <button className="btn btn-primary" disabled={!ok} onClick={() => setStep("name")}>التالي</button>
+        <button className="btn btn-primary" disabled={!ok} onClick={() => { setName(""); setStep("join-name"); }}>التالي</button>
         <div className="spacer" />
       </div>
     );
   }
 
+  const creatingOwner = step === "create-name";
   const cleanedName = cleanDisplayName(name);
   const length = graphemeLength(cleanedName);
   const ok = hasVisibleContent(cleanedName) && length >= NAME_MIN && length <= NAME_MAX;
+  const pending = creatingOwner ? creating : joining;
+
+  const submitName = () => {
+    if (!ok || offline || pending) return;
+    if (creatingOwner) actions.createRoom(cleanedName);
+    else actions.joinRoom(code, cleanedName);
+  };
 
   return (
     <div className="screen">
-      <button className="link-btn" onClick={() => setStep(deepCode ? "home" : "code")}>← رجوع</button>
+      <button className="link-btn" onClick={() => setStep(creatingOwner || deepCode ? "home" : "code")}>← رجوع</button>
       <div className="spacer" />
       <div className="center stack">
         <h2 className="title">وش نناديك؟</h2>
-        <span className="pill-note" style={{ direction: "ltr" }}>غرفة {code}</span>
+        {creatingOwner
+          ? <span className="pill-note">أنت مالك الغرفة وبتكون لاعب</span>
+          : <span className="pill-note" style={{ direction: "ltr" }}>غرفة {code}</span>}
       </div>
       <input
         className="input"
@@ -254,11 +266,14 @@ export function Home() {
         autoFocus
         placeholder="اسمك"
         onChange={(event) => { setName(event.target.value); setLocalErr(null); }}
-        onKeyDown={(event) => { if (event.key === "Enter" && ok && !joining && !offline) actions.joinRoom(code, cleanedName); }}
+        onKeyDown={(event) => { if (event.key === "Enter") submitName(); }}
       />
       <p className="helper" aria-live="polite">اسمك من {NAME_MIN} إلى {NAME_MAX} حرف.</p>
+      {creatingOwner ? <p className="helper center">ينحسب اسمك ضمن 3–10 لاعبين، وبيوصلك دورك وتصويتك على نفس الجوال.</p> : null}
       {localErr ? <p className="helper" role="alert" style={{ color: "var(--bad)" }}>{localErr}</p> : null}
-      <button className="btn btn-primary" disabled={!ok || offline || joining} onClick={() => actions.joinRoom(code, cleanedName)}>{joining ? "جاري الدخول…" : "دخول الغرفة"}</button>
+      <button className="btn btn-primary" disabled={!ok || offline || pending} onClick={submitName}>
+        {pending ? (creatingOwner ? "جاري إنشاء الغرفة…" : "جاري الدخول…") : (creatingOwner ? "إنشاء الغرفة" : "دخول الغرفة")}
+      </button>
       <div className="spacer" />
     </div>
   );
