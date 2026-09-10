@@ -29,14 +29,18 @@ test("display capability stays out of HTTP/WebSocket URLs and survives same-entr
   assert.ok(display.includes("location.hash"), "display page must consume its capability from the URL fragment");
   assert.ok(display.includes("history.state"), "display refresh recovery should stay scoped to the current history entry");
   assert.ok(display.includes("displayToken: token"), "captured capability should be retained only in history.state");
+  assert.ok(display.includes("displayClientId: clientId"), "display reconnect identity should stay scoped to the same history entry");
+  assert.ok(display.includes("createDisplayClientId"), "each new display entry needs its own reconnect identity");
   assert.ok(display.includes("history.replaceState"), "display page must clear the captured capability from the visible URL");
   assert.equal(display.includes("new URLSearchParams(location.search).get(\"token\")"), false);
   assert.ok(display.includes('displayToken: route.token'), "display capability must travel in the first HELLO frame");
+  assert.ok(display.includes('displayClientId: route.clientId'), "same display must identify reconnects in HELLO, not the URL");
   assert.equal(display.includes('token: route.token'), false, "WebSocket URL builder must not serialize the capability");
+  assert.equal(display.includes('displayClientId: route.clientId })'), false, "WebSocket URL builder must not serialize the display client id");
   assert.ok(display.includes('/^\\/display\\/([A-Za-z2-9]{5})\\/?$/'), "display route must match one exact room code");
 });
 
-test("display server uses a dedicated projection and one revocable active slot", async () => {
+test("display server uses a dedicated projection and one revocable reconnect-safe active slot", async () => {
   const [server, projection] = await Promise.all([
     readFile(serverUrl, "utf8"),
     readFile(projectionUrl, "utf8"),
@@ -44,6 +48,8 @@ test("display server uses a dedicated projection and one revocable active slot",
   assert.ok(server.includes("buildDisplayView("), "transport must not send the generic participant/spectator view directly");
   assert.ok(server.includes("activeDisplays"), "one active display slot must be tracked separately from players");
   assert.ok(server.includes("displayEpochs"), "display capabilities must support revocation");
+  assert.ok(server.includes("displayClientId"), "transport must distinguish same-display reconnects from a second screen");
+  assert.ok(server.includes("display connection replaced"), "same display reconnect must replace a stale old socket");
   assert.ok(server.includes('app.delete("/api/rooms/:code/display-link"'), "owner-authenticated revocation endpoint must exist");
   assert.ok(projection.includes("displayAlias("));
   assert.ok(projection.includes('uid: "display"'));
