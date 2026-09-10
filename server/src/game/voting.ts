@@ -20,6 +20,32 @@ export function requiredVotesFor(votesCast: number): number {
   return votesCast > 0 ? Math.floor(votesCast / 2) + 1 : 0;
 }
 
+export function submitVote(
+  room: RoomState,
+  uid: string,
+  targetUid: unknown,
+  deps: VotingDeps,
+): { allVoted: boolean } {
+  if (room.phase !== "VOTING") throw new GameError("INVALID_PHASE");
+  const round = room.round;
+  if (!round) throw new GameError("INVALID_PHASE");
+  if (round.resolutionSealed) throw new GameError("VOTE_ALREADY_SUBMITTED");
+
+  const voter = room.players.get(uid);
+  if (!voter || !voter.connected || !round.participantUids.includes(uid)) {
+    throw new GameError("NOT_PLAYER");
+  }
+  if (typeof targetUid !== "string" || targetUid === uid || !round.participantUids.includes(targetUid)) {
+    throw new GameError("INVALID_VOTE");
+  }
+  if (round.votes.has(uid)) throw new GameError("VOTE_ALREADY_SUBMITTED");
+
+  round.abstainedUids?.delete(uid);
+  round.votes.set(uid, targetUid);
+  touch(room, deps);
+  return { allVoted: allVoted(room) };
+}
+
 export function allVoted(room: RoomState): boolean {
   const round = room.round;
   if (!round) return false;
