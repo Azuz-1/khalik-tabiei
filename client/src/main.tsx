@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/tajawal/400.css";
 import "@fontsource/tajawal/500.css";
@@ -6,13 +6,24 @@ import "@fontsource/tajawal/700.css";
 import "@fontsource/tajawal/800.css";
 import "@fontsource/tajawal/900.css";
 import "./telemetry.js";
-import { App } from "./App.js";
 import "./styles.css";
 import "./c-ux.css";
 import "./home-suggestion-dialog.css";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+async function loadRoot(): Promise<ComponentType> {
+  // Display mode intentionally does not import App/socket.ts. This prevents a
+  // same-browser display tab from ever bootstrapping the owner's participant
+  // WebSocket or receiving player secrets before the display connection starts.
+  if (location.pathname.startsWith("/display/")) {
+    return (await import("./screens/Display.js")).DisplayApp;
+  }
+  return (await import("./App.js")).App;
+}
+
+void loadRoot().then((Root) => {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <Root />
+    </StrictMode>,
+  );
+});

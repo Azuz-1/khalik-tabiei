@@ -1,4 +1,5 @@
 /** Same-origin HTTP + authoritative cookie-authenticated WebSocket server. */
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
@@ -6,10 +7,14 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import express from "express";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
+import { ROOM_CODE_LENGTH } from "../../shared/constants.js";
 import { config } from "./config.js";
 import { track } from "./analytics.js";
 import { ClientTelemetryIngestor } from "./clientTelemetry.js";
 import { RoomManager } from "./game/roomManager.js";
+import { normalizeCode } from "./game/code.js";
+import { createDisplayToken, verifyDisplayToken } from "./game/display.js";
+import { buildView } from "./game/view.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
 import { ensureAnonymousSession, readAnonymousSession } from "./auth/session.js";
@@ -28,7 +33,17 @@ const clientDistCandidates = [
 ];
 const clientDist = clientDistCandidates.find((candidate) => existsSync(candidate)) ?? clientDistCandidates[0]!;
 
-interface UpgradeContext { uid: string; origin: string; ip: string; lease: CapacityLease }
+type ConnectionKind = "participant" | "display";
+interface UpgradeContext {
+  uid: string;
+  origin: string;
+  ip: string;
+  lease: CapacityLease;
+  kind: ConnectionKind;
+  displayCode?: string;
+  displayCreatedAt?: number;
+  displayHostUid?: string;
+}
 
 interface GameServerOptions {
   suggestions?: SuggestionService;
@@ -109,6 +124,30 @@ export function createGameServer(options: GameServerOptions = {}) {
     res.json({ ok: true });
   });
 
+  app.get("/api/rooms/:code/display-link", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const session = readAnonymousSession(req, config.sessionSecret);
+    if (!session) {
+      res.status(401).json({ ok: false, code: "UNAUTHORIZED" });
+      return;
+    }
+    const code = normalizeCode(req.params.code);
+    if (code.length !== ROOM_CODE_LENGTH) {
+      res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
+      return;
+    }
+    const room = manager.roomForTests(code);
+    if (!room || room.closed || room.hostUid !== session.uid) {
+      // Do not reveal whether a valid room code belongs to someone else.
+      res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
+      return;
+    }
+    const token = createDisplayToken(room, config.sessionSecret);
+    // Fragments are not transmitted in HTTP requests or Referer headers. The
+    // display client captures this capability locally and clears it immediately.
+    res.json({ ok: true, path: `/display/${room.code}#token=${encodeURIComponent(token)}` });
+  });
+
   app.post("/api/telemetry", express.json({ limit: "8kb", strict: true }), (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     const session = readAnonymousSession(req, config.sessionSecret);
@@ -161,30 +200,54 @@ export function createGameServer(options: GameServerOptions = {}) {
   });
 
   server.on("upgrade", (req, socket, head) => {
-    let pathname = "";
-    try { pathname = new URL(req.url ?? "", "http://localhost").pathname; }
+    let requestUrl: URL;
+    try { requestUrl = new URL(req.url ?? "", "http://localhost"); }
     catch { return rejectUpgrade(socket, 400, "Bad Request"); }
-    if (pathname !== "/ws") return rejectUpgrade(socket, 404, "Not Found");
+    if (requestUrl.pathname !== "/ws") return rejectUpgrade(socket, 404, "Not Found");
     if (draining) return rejectUpgrade(socket, 503, "Service Restarting");
 
     const ip = clientIp(req, config.clientIpMode);
     const rawOrigin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin;
     if (!isAllowedWebSocketOrigin(rawOrigin, config.allowedOrigins, config.production)) return rejectUpgrade(socket, 403, "Forbidden");
-    const session = readAnonymousSession(req, config.sessionSecret);
-    if (!session) return rejectUpgrade(socket, 401, "Unauthorized");
-    if (!abuse.allowConnection(ip, session.uid)) return rejectUpgrade(socket, 429, "Too Many Requests");
+    const origin = config.publicOrigin ?? (rawOrigin ? canonicalOrigin(rawOrigin) : `http://localhost:${config.port}`);
+    if (!origin) return rejectUpgrade(socket, 403, "Forbidden");
+
+    const requestedMode = requestUrl.searchParams.get("mode");
+    if (requestedMode !== null && requestedMode !== "display") return rejectUpgrade(socket, 400, "Bad Request");
+
+    let contextUid: string;
+    let kind: ConnectionKind = "participant";
+    let displayCode: string | undefined;
+
+    if (requestedMode === "display") {
+      const code = normalizeCode(requestUrl.searchParams.get("code"));
+      // The room code itself is public. Do not probe room existence during the
+      // HTTP upgrade; possession is proven by the first validated HELLO frame.
+      if (code.length !== ROOM_CODE_LENGTH) return rejectUpgrade(socket, 400, "Bad Request");
+      kind = "display";
+      displayCode = code;
+      contextUid = `display:${randomUUID()}`;
+    } else {
+      const session = readAnonymousSession(req, config.sessionSecret);
+      if (!session) return rejectUpgrade(socket, 401, "Unauthorized");
+      contextUid = session.uid;
+    }
+
+    if (!abuse.allowConnection(ip, contextUid)) return rejectUpgrade(socket, 429, "Too Many Requests");
     const lease = capacity.acquire(ip);
     if (!lease) return rejectUpgrade(socket, 503, "Capacity Reached");
     socket.once("close", () => lease.release());
-    const origin = config.publicOrigin ?? (rawOrigin ? canonicalOrigin(rawOrigin) : `http://localhost:${config.port}`);
-    if (!origin) {
-      lease.release();
-      return rejectUpgrade(socket, 403, "Forbidden");
-    }
 
     try {
       wss.handleUpgrade(req, socket, head, (ws) => {
-        contexts.set(ws, { uid: session.uid, origin, ip, lease });
+        contexts.set(ws, {
+          uid: contextUid,
+          origin,
+          ip,
+          lease,
+          kind,
+          ...(displayCode ? { displayCode } : {}),
+        });
         wss.emit("connection", ws, req);
       });
     } catch (error) {
@@ -199,6 +262,30 @@ export function createGameServer(options: GameServerOptions = {}) {
     const conn = new Connection(ws, context.origin, context.ip, config.maxBufferedBytes);
     connections.set(ws, conn);
     conn.startAuthenticationTimeout(config.authTimeoutMs);
+    let displayTimer: NodeJS.Timeout | undefined;
+    let lastDisplayFingerprint = "";
+
+    const pushDisplayState = () => {
+      if (context.kind !== "display" || !context.displayCode || !conn.uid) return;
+      const room = manager.roomForTests(context.displayCode);
+      if (
+        !room
+        || room.closed
+        || room.createdAt !== context.displayCreatedAt
+        || room.hostUid !== context.displayHostUid
+      ) {
+        conn.send({ t: "ROOM_CLOSED", reason: "display_room_closed" });
+        conn.closePolicy("room closed");
+        return;
+      }
+      // A synthetic non-member identity forces the existing projection through
+      // the spectator/public path. No owner/player secret is ever constructed.
+      const view = buildView(room, `display:${conn.id}`, `${context.origin}/join/${room.code}`);
+      const fingerprint = JSON.stringify(view);
+      if (fingerprint === lastDisplayFingerprint) return;
+      lastDisplayFingerprint = fingerprint;
+      conn.send({ t: "STATE", view });
+    };
 
     const violate = (code: "BAD_REQUEST" | "RATE_LIMITED", rid?: string) => {
       const strikes = (violations.get(conn) ?? 0) + 1;
@@ -232,6 +319,29 @@ export function createGameServer(options: GameServerOptions = {}) {
           conn.closePolicy("duplicate authentication");
           return;
         }
+        if (context.kind === "display") {
+          const room = context.displayCode ? manager.roomForTests(context.displayCode) : undefined;
+          if (!room || room.closed || !verifyDisplayToken(room, config.sessionSecret, msg.displayToken)) {
+            conn.send({ t: "ERROR", code: "UNAUTHORIZED", message: "invalid display capability", ...(msg.rid ? { rid: msg.rid } : {}) });
+            conn.closePolicy("invalid display capability");
+            return;
+          }
+          // Bind this authenticated connection to this exact room incarnation.
+          // Reuse of the short room code later can never revive the display.
+          context.displayCreatedAt = room.createdAt;
+          context.displayHostUid = room.hostUid;
+          conn.authenticate(context.uid);
+          conn.roomCode = context.displayCode ?? null;
+          pushDisplayState();
+          displayTimer = setInterval(pushDisplayState, 250);
+          displayTimer.unref?.();
+          return;
+        }
+        if (msg.displayToken !== undefined) {
+          conn.send({ t: "ERROR", code: "BAD_REQUEST", ...(msg.rid ? { rid: msg.rid } : {}) });
+          conn.closePolicy("display capability on participant connection");
+          return;
+        }
         if (!abuse.allowSession(conn.ip, context.uid)) return violate("RATE_LIMITED", msg.rid);
         conn.authenticate(context.uid);
         try { manager.register(conn); }
@@ -251,6 +361,15 @@ export function createGameServer(options: GameServerOptions = {}) {
       if (!abuse.allowMessage(conn.uid, msg.t)) {
         return violate("RATE_LIMITED", "rid" in msg ? msg.rid : undefined);
       }
+      if (context.kind === "display") {
+        if (msg.t === "PING") {
+          conn.send({ t: "PONG", ...(msg.sampleId ? { sampleId: msg.sampleId } : {}), serverMs: Date.now() });
+        } else {
+          const rid = "rid" in msg ? msg.rid : undefined;
+          conn.send({ t: "ERROR", code: "UNAUTHORIZED", message: "display connection is read-only", ...(rid ? { rid } : {}) });
+        }
+        return;
+      }
       if (msg.t === "CREATE_ROOM" && !abuse.allowRoomCreation(conn.ip, conn.uid)) {
         violate("RATE_LIMITED", msg.rid);
         return;
@@ -263,7 +382,9 @@ export function createGameServer(options: GameServerOptions = {}) {
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
-      manager.disconnect(conn);
+      if (displayTimer) clearInterval(displayTimer);
+      if (context.kind === "display") conn.markDisconnected();
+      else manager.disconnect(conn);
       context.lease.release();
     };
     ws.on("close", cleanup);
