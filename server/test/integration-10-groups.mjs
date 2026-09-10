@@ -7,7 +7,9 @@
  * reconnect, voting abstention, Host reconnect, admission/room capacity,
  * kick, rematch, telemetry ingestion and wire secrecy.
  *
- * Runs in two waves to stay comfortably below the production 64-sockets/IP cap.
+ * G1 runs alone as a baseline, then the remaining groups run in small concurrent
+ * batches. This keeps real multi-room coverage without turning the release test
+ * into an artificial 30-socket burst on one CI-loopback IP.
  */
 import { WebSocket } from "ws";
 
@@ -135,16 +137,25 @@ async function expectError(client, code, label) {
   check(true, `${client.label}: ${code}`);
 }
 
-function currentRoles(players) {
+function currentRoles(players, context = "role check") {
   const impostors = players.filter((player) => player.view?.isImpostor === true);
   const normals = players.filter((player) => player.view?.isImpostor === false);
-  check(impostors.length === 1, "exactly one impostor");
-  check(normals.length === players.length - 1, "all other participants normal");
+  if (impostors.length !== 1 || normals.length !== players.length - 1) {
+    const snapshot = players.map((player) => ({
+      label: player.label,
+      uid: player.uid,
+      phase: player.phase(),
+      isImpostor: player.view?.isImpostor,
+      challenge: player.view?.challenge,
+    }));
+    throw new Error(`${context}: invalid private role projection ${JSON.stringify(snapshot)}`);
+  }
+  assertions += 2;
   return { impostor: impostors[0], normals };
 }
 
 function assertWireSecrecy(host, players, prompt) {
-  const { impostor, normals } = currentRoles(players);
+  const { impostor, normals } = currentRoles(players, "wire secrecy role check");
   check(typeof prompt === "string" && prompt.length > 0, "normal prompt exists");
   check(normals.every((normal) => normal.view?.myPrompt?.text === prompt), "all normals share prompt");
   check(impostor.view?.myPrompt === undefined, "impostor has no prompt");
@@ -180,8 +191,17 @@ async function castVotes(group, roles, outcome, skippedUid = null) {
 }
 
 async function runPhysical(group, challengeNo) {
-  await waitForAll([group.host, ...group.players], (client) => client.phase() === "QUESTION", `${group.id} C${challengeNo} QUESTION`);
-  const roles = currentRoles(group.players);
+  await waitForAll(
+    [group.host, ...group.players],
+    (client) => client.phase() === "QUESTION",
+    `${group.id} C${challengeNo} QUESTION`,
+  );
+  await waitForAll(
+    group.players,
+    (client) => typeof client.view?.isImpostor === "boolean",
+    `${group.id} C${challengeNo} private role projection`,
+  );
+  const roles = currentRoles(group.players, `${group.id} C${challengeNo}`);
   const prompt = roles.normals[0]?.view?.myPrompt?.text;
   assertWireSecrecy(group.host, group.players, prompt);
   check(group.host.view?.challenge?.max === 3, `${group.id}: stint max is always 3`);
@@ -215,7 +235,7 @@ async function runPhysical(group, challengeNo) {
   await waitFor(group.host, (client) => client.phase() === "PROMPT_REVEAL", `${group.id} C${challengeNo} PROMPT_REVEAL`, PHASE_TIMEOUT_MS);
   check(group.host.view?.publicPrompt?.text === prompt, `${group.id}: public prompt revealed after HOLD`);
   await waitForAll([group.host, ...group.players], (client) => client.phase() === "DISCUSSION", `${group.id} C${challengeNo} DISCUSSION`, PHASE_TIMEOUT_MS);
-  return currentRoles(group.players);
+  return currentRoles(group.players, `${group.id} C${challengeNo} post-physical`);
 }
 
 async function runVoting(group, roles, outcome, challengeNo) {
@@ -293,6 +313,7 @@ async function configureAndStart(group, target = group.config.target) {
   check(group.host.view?.room?.playStyle === "INDIVIDUAL", `${group.id}: competitive scoring ruleset`);
   group.host.send({ t: "START_GAME" });
   await waitForAll([group.host, ...group.players], (client) => client.phase() === "QUESTION", `${group.id} game start`);
+  await waitForAll(group.players, (client) => typeof client.view?.isImpostor === "boolean", `${group.id} initial private roles`);
 }
 
 async function playMatch(group, target, pattern) {
@@ -330,6 +351,7 @@ async function playMatch(group, target, pattern) {
       await waitForAll([group.host, ...group.players], (client) => client.phase() === "GAME_OVER", `${group.id} GAME_OVER`);
     } else {
       await waitForAll([group.host, ...group.players], (client) => client.phase() === "QUESTION", `${group.id} next QUESTION`);
+      await waitForAll(group.players, (client) => typeof client.view?.isImpostor === "boolean", `${group.id} next private roles`);
     }
   }
 
@@ -394,7 +416,7 @@ const GROUPS = [
   { id: "G2", players: 4, target: 6, modes: ["POINT"], pattern: ["survive", "catch"] },
   { id: "G3", players: 5, target: 9, modes: ["NUMBER"], pattern: ["survive", "survive", "survive", "catch"], expectMaxStint: true },
   { id: "G4", players: 6, target: 12, modes: ["HANDS", "POINT", "NUMBER"], pattern: ["survive", "catch", "survive", "survive", "survive"], expectMaxStint: true },
-  { id: "G5", players: 7, target: 3, modes: ["HANDS", "POINT"], pattern: ["survive"], playerReconnect: true, expectMaxStint: true },
+  { id: "G5", players: 7, target: 3, modes: ["HANDS", "POINT"], pattern: ["survive"], playerReconnect: true, expectMatchEnd: true },
   { id: "G6", players: 8, target: 6, modes: ["POINT", "NUMBER"], pattern: ["survive", "catch"], votingAbstention: true },
   { id: "G7", players: 9, target: 9, modes: ["HANDS", "NUMBER"], pattern: ["catch", "survive"], hostReconnect: true },
   { id: "G8", players: 10, target: 12, modes: ["HANDS", "POINT", "NUMBER"], pattern: ["survive", "survive", "catch"], capacityChecks: true },
@@ -402,21 +424,24 @@ const GROUPS = [
   { id: "G10", players: 4, target: 3, modes: ["POINT", "NUMBER"], pattern: ["catch", "survive", "survive"], kickAfterFirst: true, expectMatchEnd: true },
 ];
 
-async function runWave(configs) {
+async function runBatch(configs, label) {
+  console.log(label);
   const results = await Promise.allSettled(configs.map((config) => runGroup(config)));
   const rejected = results.filter((result) => result.status === "rejected");
   for (const result of rejected) console.error("GROUP FAILURE:", result.reason);
-  if (rejected.length) throw new Error(`${rejected.length} group(s) failed`);
+  if (rejected.length) throw new Error(`${rejected.length} group(s) failed in ${label}`);
+  await sleep(200);
 }
 
 async function main() {
   console.log(`10-GROUP COMPREHENSIVE RELEASE TEST against ${ORIGIN}`);
   await smokeHttpTelemetry();
-  console.log("Wave 1: G1-G5");
-  await runWave(GROUPS.slice(0, 5));
-  await sleep(250);
-  console.log("Wave 2: G6-G10");
-  await runWave(GROUPS.slice(5));
+  await runBatch(GROUPS.slice(0, 1), "Baseline: G1 isolated");
+  await runBatch(GROUPS.slice(1, 3), "Concurrent batch: G2-G3");
+  await runBatch(GROUPS.slice(3, 5), "Concurrent batch: G4-G5");
+  await runBatch(GROUPS.slice(5, 7), "Concurrent batch: G6-G7");
+  await runBatch(GROUPS.slice(7, 9), "Concurrent batch: G8-G9");
+  await runBatch(GROUPS.slice(9), "Final: G10 isolated");
   console.log(`10-GROUP COMPREHENSIVE PASS ✅ — ${assertions} assertions, ${failures} failures`);
 }
 
