@@ -140,11 +140,15 @@ export class RoomManager {
       player.disconnectedAt = undefined;
       player.connected = true;
       player.lastSeen = this.deps.now();
-    } else if (uid === room.hostUid) {
+    }
+    // A named room owner is both a player and the liveness owner. Keep these
+    // transitions independent rather than using `else if`, otherwise reconnect
+    // would restore the player while leaving hostConnected false forever.
+    if (uid === room.hostUid) {
       room.hostConnected = true;
       room.hostCloseDeadline = undefined;
       this.cancelTimer(room.code, HOST_DISCONNECT_TIMER);
-      this.resumeAfterHostReconnect(room);
+      if (hostWasDisconnected) this.resumeAfterHostReconnect(room);
     }
     room.updatedAt = this.deps.now();
     if (playerWasDisconnected) this.emitAnalytics("player_reconnected", this.connectionAnalyticsProps(room));
@@ -166,6 +170,16 @@ export class RoomManager {
     const room = this.rooms.get(roomCode);
     if (!room || this.uidToRoomCode.get(uid) !== roomCode) return;
     room.updatedAt = this.deps.now();
+
+    const player = room.players.get(uid);
+    if (player) {
+      player.connected = false;
+      player.lastSeen = this.deps.now();
+      player.disconnectedAt = player.lastSeen;
+      player.disconnectGeneration += 1;
+      this.emitAnalytics("player_disconnected", this.connectionAnalyticsProps(room));
+    }
+
     if (uid === room.hostUid) {
       room.hostConnected = false;
       room.hostCloseDeadline = this.deps.now() + this.deps.hostDisconnectGraceMs;
@@ -180,13 +194,7 @@ export class RoomManager {
       return;
     }
 
-    const player = room.players.get(uid);
     if (!player) return;
-    player.connected = false;
-    player.lastSeen = this.deps.now();
-    player.disconnectedAt = player.lastSeen;
-    player.disconnectGeneration += 1;
-    this.emitAnalytics("player_disconnected", this.connectionAnalyticsProps(room));
     this.broadcast(room);
   }
 
@@ -266,7 +274,7 @@ export class RoomManager {
     switch (message.t) {
       case "HELLO": throw new GameError("BAD_REQUEST", "connection already authenticated");
       case "PING": return;
-      case "CREATE_ROOM": return this.createRoom(uid);
+      case "CREATE_ROOM": return this.createRoom(uid, message.name);
       case "JOIN_ROOM": return this.joinRoom(uid, message.code, message.name);
       case "LEAVE_ROOM": return this.leaveRoom(uid);
       case "SET_SETTINGS": return this.withRoom(uid, (room) => {
@@ -318,12 +326,33 @@ export class RoomManager {
     }
   }
 
-  private createRoom(uid: string): void {
+  private createRoom(uid: string, rawName?: string): void {
     if (this.uidToRoomCode.has(uid)) throw new GameError("ALREADY_IN_ROOM");
     this.reclaimExpiredRooms();
     if (this.rooms.size >= this.deps.maxRooms) throw new GameError("RATE_LIMITED");
     const code = this.freshCode();
-    const room = createRoomState(code, uid, this.deps.now());
+    const now = this.deps.now();
+    const room = createRoomState(code, uid, now);
+
+    // Named CREATE_ROOM is the production path: the owner immediately occupies
+    // one of the 3–10 player slots. Name-less creation is retained temporarily
+    // for old automated/dev clients while the protocol migration rolls out.
+    if (rawName !== undefined) {
+      const name = cleanName(rawName);
+      const owner: InternalPlayer = {
+        uid,
+        name,
+        normalizedName: normalizeArabic(name),
+        score: 0,
+        connected: true,
+        joinedAt: now,
+        lastSeen: now,
+        disconnectGeneration: 0,
+        isHost: true,
+      };
+      room.players.set(uid, owner);
+    }
+
     this.rooms.set(code, room);
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
@@ -731,6 +760,7 @@ export class RoomManager {
   private kick(hostUid: string, targetUid: string): void {
     this.withRoom(hostUid, (room) => {
       if (room.hostUid !== hostUid) throw new GameError("NOT_HOST");
+      if (targetUid === room.hostUid) throw new GameError("BAD_REQUEST", "room owner cannot kick themselves");
       const target = room.players.get(targetUid);
       if (!target) throw new GameError("NOT_PLAYER");
       const analytics = this.analyticsState(room);
@@ -874,7 +904,7 @@ export class RoomManager {
   }
 
   private prunePendingPlayers(room: RoomState): void {
-    for (const player of [...room.players.values()]) if (player.pendingRemoval) this.removePlayer(room, player.uid);
+    for (const player of [...room.players.values()]) if (player.pendingRemoval && player.uid !== room.hostUid) this.removePlayer(room, player.uid);
   }
 
   private doClose(room: RoomState, reason: string): void {
@@ -893,7 +923,7 @@ export class RoomManager {
     room.hostCloseDeadline = undefined;
     room.closed = true;
     room.phase = "CLOSED";
-    const memberUids = [room.hostUid, ...room.players.keys()];
+    const memberUids = new Set([room.hostUid, ...room.players.keys()]);
     for (const uid of memberUids) {
       for (const conn of this.connsByUid.get(uid) ?? []) {
         if (conn.roomCode === room.code) {
@@ -908,7 +938,9 @@ export class RoomManager {
   }
 
   private broadcast(room: RoomState): void {
-    for (const uid of [room.hostUid, ...room.players.keys()]) {
+    // The owner can also be in players; de-duplicate identities so one physical
+    // connection never receives two STATE frames for the same authoritative mutation.
+    for (const uid of new Set([room.hostUid, ...room.players.keys()])) {
       for (const conn of this.connsByUid.get(uid) ?? []) {
         if (conn.roomCode === room.code && conn.uid) conn.send({ t: "STATE", view: buildView(room, conn.uid, `${conn.origin}/join/${room.code}`) });
       }
@@ -1102,8 +1134,8 @@ export class RoomManager {
     this.reclaimExpiredRooms();
     const now = this.deps.now();
     for (const room of [...this.rooms.values()]) {
-      const memberUids = [room.hostUid, ...room.players.keys()];
-      const hasConnection = memberUids.some((uid) => this.hasRoomConnection(uid, room.code));
+      const memberUids = new Set([room.hostUid, ...room.players.keys()]);
+      const hasConnection = [...memberUids].some((uid) => this.hasRoomConnection(uid, room.code));
       if (!hasConnection && now - room.updatedAt > IDLE_ROOM_MS) {
         const analytics = this.analyticsState(room);
         if (this.matchInProgress(room, analytics)) {
