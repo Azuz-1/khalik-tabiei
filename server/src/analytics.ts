@@ -22,7 +22,8 @@ export interface AnalyticsRecord {
 }
 export type AnalyticsSink = (records: readonly AnalyticsRecord[]) => void | Promise<void>;
 
-export const ANALYTICS_RULES_VERSION = "competitive-exact-challenges-v2";
+/** Catch threshold changed to a strict majority of ballots actually cast. */
+export const ANALYTICS_RULES_VERSION = "competitive-cast-vote-majority-v3";
 export const ANALYTICS_CONTENT_VERSION = "imitation-330-quality-v1";
 
 const ENABLED = process.env.ANALYTICS !== "off";
@@ -56,14 +57,21 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "targetChallenges",
     "challengeOrdinal",
     "challengeWithinStint",
+    "challengeIndex",
     "stintOrdinal",
     "stintMaxChallenges",
     "participantCount",
+    "votesCast",
+    "abstentionCount",
+    "timedOut",
+    "maxVotesOnOneTarget",
     "mode",
     "promptId",
     "caught",
     "stintComplete",
     "impostorVotes",
+    "impostorVoted",
+    "singleVoteCatch",
     "requiredVotes",
     "topNormalVotes",
     "distinctTargets",
