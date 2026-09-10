@@ -518,7 +518,7 @@ export class RoomManager {
         targetChallenges: room.targetChallenges,
         challengeOrdinal: room.completedChallenges,
         challengeWithinStint: round.challengeIndex,
-        stintOrdinal: room.currentRound,
+        stintOrdinal: round.index,
         stintMaxChallenges: round.maxChallenges ?? 3,
         participantCount: participants.length || round.participantUids.length,
         mode: round.mode,
@@ -530,7 +530,7 @@ export class RoomManager {
         topNormalVotes,
         distinctTargets,
         voteMargin: impostorVotes - requiredVotes,
-        unanimousForImpostor: votes.size > 0 && impostorVotes === votes.size,
+        allNormalsVotedImpostor: participants.length > 1 && impostorVotes === participants.length - 1,
         readySeconds: this.elapsedSeconds(analytics.challengeStartedAt, analytics.allReadyAt),
         discussionSeconds: this.elapsedSeconds(analytics.discussionStartedAt, analytics.votingStartedAt),
         votingSeconds: this.elapsedSeconds(analytics.votingStartedAt, now),
@@ -600,7 +600,7 @@ export class RoomManager {
         }
       }
       engine.nextRound(room, uid, this.deps);
-      if (room.phase === "QUESTION") this.beginChallengeAnalytics(room);
+      if ((room.phase as GamePhase) === "QUESTION") this.beginChallengeAnalytics(room);
       this.markMeaningful(room);
       this.broadcast(room);
     });
@@ -611,16 +611,18 @@ export class RoomManager {
       if (room.hostUid !== hostUid) throw new GameError("NOT_HOST");
       const target = room.players.get(targetUid);
       if (!target) throw new GameError("NOT_PLAYER");
+      const analytics = this.analyticsState(room);
+      const phaseBefore = room.phase;
+      const wasDuringMatch = this.matchInProgress(room, analytics);
       room.kickedIdentities.set(targetUid, target.name);
       this.removePlayerByChoice(room, targetUid);
       this.markMeaningful(room);
-      const analytics = this.analyticsState(room);
       this.emitAnalytics("player_kicked", {
         roomSessionId: analytics.roomSessionId,
         matchId: analytics.matchId,
         matchOrdinal: analytics.matchOrdinal,
-        phase: room.phase,
-        duringMatch: this.matchInProgress(room, analytics),
+        phase: phaseBefore,
+        duringMatch: wasDuringMatch,
         playerCountAfter: room.players.size,
       });
       for (const conn of this.connsByUid.get(targetUid) ?? []) conn.send({ t: "KICKED" });
@@ -732,13 +734,14 @@ export class RoomManager {
 
   private doClose(room: RoomState, reason: string): void {
     const analytics = this.analyticsState(room);
-    if (this.matchInProgress(room, analytics)) this.emitGameAbandoned(room, reason);
+    const wasDuringMatch = this.matchInProgress(room, analytics);
+    if (wasDuringMatch) this.emitGameAbandoned(room, reason);
     this.emitAnalytics("room_closed", {
       roomSessionId: analytics.roomSessionId,
       matchId: analytics.matchId,
       reason,
       matchOrdinal: analytics.matchOrdinal,
-      duringMatch: this.matchInProgress(room, analytics),
+      duringMatch: wasDuringMatch,
     });
     room.timerGeneration += 1;
     room.pause = undefined;
