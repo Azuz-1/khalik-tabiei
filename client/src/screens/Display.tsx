@@ -167,7 +167,7 @@ function modeInfo(view: ClientView): GameModeInfo | undefined {
 
 function countdownInstruction(mode?: GameModeInfo): string {
   switch (mode?.id) {
-    case "HANDS": return "إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!».");
+    case "HANDS": return "إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!».";
     case "POINT": return "عند «أشروا!»، أشر على شخص واحد.";
     case "NUMBER": return "عند «ارفعوا أصابعكم!»، ارفع من 0 إلى 5 أصابع.";
     default: return "عند انتهاء العد، نفّذ الحركة.";
