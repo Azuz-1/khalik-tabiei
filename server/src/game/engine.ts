@@ -6,7 +6,6 @@ import {
   MAX_CHALLENGES_PER_ROUND,
   MAX_CHALLENGES_THREE_PLAYERS,
   ROUND_OPTIONS,
-  SCORING,
 } from "../../../shared/constants.js";
 import { GameError } from "./errors.js";
 import {
@@ -16,12 +15,11 @@ import {
   roundParticipants,
   type RoomState,
   type RoundState,
-  type SealedParticipant,
 } from "./state.js";
 import { IMITATION_PROMPTS, type ImitationPrompt } from "./imitationPrompts.data.js";
 import { promptQualityWeight, type PromptFamily } from "./promptMetadata.js";
 import { pickPair } from "./questions.js";
-import { aggregateVoteTally } from "./votes.js";
+import * as voting from "./voting.js";
 
 export interface EngineDeps {
   rng: () => number;
@@ -482,9 +480,8 @@ export function startVoting(room: RoomState, uid: string, deps: EngineDeps = def
   touch(room, deps);
 }
 
-export function requiredVotesFor(participantCount: number): number {
-  return Math.floor(participantCount / 2) + 1;
-}
+/** Compatibility exports now share the exact production settlement implementation. */
+export const requiredVotesFor = voting.requiredVotesFor;
 
 export function submitVote(
   room: RoomState,
@@ -492,152 +489,19 @@ export function submitVote(
   targetUid: unknown,
   deps: EngineDeps = defaultDeps,
 ): { allVoted: boolean } {
-  assertPhase(room, "VOTING");
-  const round = room.round;
-  if (!round) throw new GameError("INVALID_PHASE");
-  if (round.resolutionSealed) throw new GameError("VOTE_ALREADY_SUBMITTED");
-
-  const voter = room.players.get(uid);
-  if (!voter || !voter.connected || !round.participantUids.includes(uid)) {
-    throw new GameError("NOT_PLAYER");
-  }
-  if (typeof targetUid !== "string" || targetUid === uid || !round.participantUids.includes(targetUid)) {
-    throw new GameError("INVALID_VOTE");
-  }
-  if (round.votes.has(uid)) throw new GameError("VOTE_ALREADY_SUBMITTED");
-
-  round.abstainedUids?.delete(uid);
-  round.votes.set(uid, targetUid);
-  touch(room, deps);
-  return { allVoted: allVoted(room) };
+  return voting.submitVote(room, uid, targetUid, deps);
 }
 
 export function allVoted(room: RoomState): boolean {
-  const round = room.round;
-  if (!round) return false;
-  if (round.resolutionSealed) return true;
-  const participants = roundParticipants(room);
-  return participants.length > 0 && participants.every(
-    (player) => round.votes.has(player.uid) || Boolean(round.abstainedUids?.has(player.uid)),
-  );
+  return voting.allVoted(room);
 }
 
 export function sealVoteResolution(room: RoomState, deps: EngineDeps = defaultDeps): void {
-  assertPhase(room, "VOTING");
-  const round = room.round;
-  if (!round) throw new GameError("INVALID_PHASE");
-  if (round.resolutionSealed) return;
-  if (!allVoted(room)) throw new GameError("INVALID_PHASE", "ballot is incomplete");
-
-  const participants: SealedParticipant[] = roundParticipants(room).map((player) => ({ uid: player.uid, name: player.name }));
-  const participantSet = new Set(participants.map((player) => player.uid));
-  round.sealedParticipants = participants;
-  round.sealedVotes = new Map([...round.votes].filter(([voterUid]) => participantSet.has(voterUid)));
-  round.resolutionSealed = true;
-  touch(room, deps);
-}
-
-function addPendingScore(room: RoomState, uid: string, points: number): void {
-  room.pendingRoundScores.set(uid, (room.pendingRoundScores.get(uid) ?? 0) + points);
-}
-
-function updateCorrectVoteStreaks(
-  room: RoomState,
-  round: RoundState,
-  participants: SealedParticipant[],
-  votes: Map<string, string>,
-): void {
-  const participantSet = new Set(participants.map((participant) => participant.uid));
-  for (const uid of [...room.correctVoteStreakStart.keys()]) {
-    if (!participantSet.has(uid) || uid === round.impostorUid) room.correctVoteStreakStart.delete(uid);
-  }
-
-  for (const participant of participants) {
-    if (participant.uid === round.impostorUid) continue;
-    const votedForImpostor = votes.get(participant.uid) === round.impostorUid;
-    if (votedForImpostor) {
-      if (!room.correctVoteStreakStart.has(participant.uid)) room.correctVoteStreakStart.set(participant.uid, round.challengeIndex);
-    } else {
-      room.correctVoteStreakStart.delete(participant.uid);
-    }
-  }
-}
-
-function awardContinuousDiscoveryScores(room: RoomState, round: RoundState): void {
-  for (const [uid, startChallenge] of room.correctVoteStreakStart) {
-    const points = Math.max(0, round.challengeIndex - startChallenge + 1);
-    if (points > 0) addPendingScore(room, uid, points);
-  }
+  voting.sealVoteResolution(room, deps);
 }
 
 export function computeResult(room: RoomState, deps: EngineDeps = defaultDeps): void {
-  assertPhase(room, "VOTING");
-  const round = room.round;
-  if (!round) throw new GameError("INVALID_PHASE");
-  if (round.resultComputed) return;
-  if (!round.resolutionSealed) sealVoteResolution(room, deps);
-
-  const participants = round.sealedParticipants ?? [];
-  const votes = round.sealedVotes ?? new Map<string, string>();
-  const tally = new Map(participants.map((player) => [player.uid, 0]));
-  for (const targetUid of votes.values()) {
-    if (tally.has(targetUid)) tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
-  }
-
-  const requiredVotes = requiredVotesFor(participants.length);
-  const found = (tally.get(round.impostorUid) ?? 0) >= requiredVotes;
-  const matchTargetReached =
-    round.kind === "IMITATION" && room.completedChallenges + 1 >= room.targetChallenges;
-
-  round.groupFound = found;
-  round.roundComplete =
-    round.kind === "TEXT_PAIR" ||
-    found ||
-    round.challengeIndex >= resolvedMaxChallenges(round) ||
-    matchTargetReached;
-  round.roundScores = new Map();
-  round.resultRequiredVotes = requiredVotes;
-
-  if (round.kind === "IMITATION") {
-    room.completedChallenges += 1;
-    updateCorrectVoteStreaks(room, round, participants, votes);
-    if (!found) addPendingScore(room, round.impostorUid, SCORING.POINT_IMPOSTOR_SURVIVES_CHALLENGE);
-
-    if (round.roundComplete) {
-      awardContinuousDiscoveryScores(room, round);
-      for (const [playerUid, delta] of room.pendingRoundScores) {
-        const player = room.players.get(playerUid);
-        if (!player) continue;
-        player.score += delta;
-        round.roundScores.set(playerUid, delta);
-      }
-      room.pendingRoundScores.clear();
-      room.correctVoteStreakStart.clear();
-      if (room.completedChallenges >= room.targetChallenges) {
-        // Make the existing RoomManager final-RESULT guard agree with the challenge-based match boundary.
-        room.currentRound = room.totalRounds;
-      }
-    }
-  }
-
-  if (round.roundComplete) {
-    round.resultImpostorName = participants.find((player) => player.uid === round.impostorUid)?.name ?? "—";
-    round.resultVoteTally = aggregateVoteTally(participants, votes);
-  }
-
-  round.resultComputed = true;
-
-  if (
-    round.kind === "IMITATION" &&
-    round.roundComplete &&
-    !room.roundOutcomes.some((outcome) => outcome.roundIndex === round.index)
-  ) {
-    room.roundOutcomes.push({ roundIndex: round.index, caught: found, challengeIndex: round.challengeIndex });
-  }
-
-  room.phase = "RESULT";
-  room.phaseEndsAt = undefined;
-  touch(room, deps);
+  voting.computeResult(room, deps);
 }
 
 export function nextRound(room: RoomState, uid: string, deps: EngineDeps = defaultDeps): void {
