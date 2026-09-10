@@ -518,8 +518,11 @@ export class RoomManager {
   private beginVoting(room: RoomState, hostUid: string): void {
     const round = room.round;
     if (!round || round.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
-    this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+    // Authorize and validate the phase before touching the authoritative stage
+    // timer. A rejected legacy/dev START_VOTING request must not cancel the
+    // automatic DISCUSSION deadline and strand the room.
     engine.startVoting(room, hostUid, this.deps);
+    this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
     const analytics = this.analyticsState(room);
     if (analytics.votingStartedAt === undefined) analytics.votingStartedAt = this.deps.now();
     this.scheduleVotingEnd(room, round, this.deps.votingMs);
