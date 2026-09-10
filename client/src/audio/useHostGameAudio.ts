@@ -8,6 +8,7 @@ import {
   playCaught,
   playChallengeSurvived,
   playCountdownTick,
+  playDiscussionWarning,
   playEscaped,
   playGameOver,
   playHold,
@@ -59,6 +60,9 @@ function playEvents(events: HostAudioEvent[]): void {
         break;
       case "promptReveal":
         playPromptReveal();
+        break;
+      case "discussionWarning":
+        playDiscussionWarning();
         break;
       case "votingStart":
         playVotingStart();
@@ -112,9 +116,21 @@ export function useHostGameAudio(view: ClientView): {
   }, [view.room.code, view.room.phase, view.room.phaseEndsAt]);
 
   useEffect(() => {
-    // Keep trying on real Host gestures. Calling unlockAudio() while already
-    // running is cheap, and unlike a one-shot flag this also recovers after
-    // BFCache/pagehide disposal or browser audio interruptions.
+    if (view.room.phase !== "DISCUSSION") return;
+    const observe = () => {
+      playEvents(
+        controllerRef.current!.observeDiscussionWarning(
+          view.room.phaseEndsAt,
+          estimatedServerNow(),
+        ),
+      );
+    };
+    observe();
+    const timer = window.setInterval(observe, 100);
+    return () => window.clearInterval(timer);
+  }, [view.room.code, view.room.phase, view.room.phaseEndsAt]);
+
+  useEffect(() => {
     const tryUnlock = () => {
       void unlockAudio();
     };
