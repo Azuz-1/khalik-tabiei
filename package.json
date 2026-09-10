@@ -14,7 +14,8 @@
     "start": "npm run start --workspace server",
     "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev --workspace server\" \"npm:dev --workspace client\"",
     "test": "npm run test --workspace server",
-    "test:integration": "node server/test/integration.mjs && node server/test/integration-individual.mjs && node server/test/integration-transport.mjs && node server/test/integration-drain.mjs && node server/test/integration-10-groups.mjs",
+    "test:integration": "node server/test/integration.mjs && node server/test/integration-individual.mjs && node server/test/integration-transport.mjs && node server/test/integration-drain.mjs",
+    "test:release-groups": "node server/test/integration-10-groups.mjs",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client"
   },
   "devDependencies": {
