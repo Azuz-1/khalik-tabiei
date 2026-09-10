@@ -77,6 +77,7 @@ const IMITATION_STAGE_TIMER = "imitation-stage";
 const HOST_DISCONNECT_TIMER = "host-disconnect";
 const SAFE_REMOVAL_PHASES = new Set<GamePhase>(["LOBBY", "GAME_OVER"]);
 const RESTART_PHYSICAL_PHASES = new Set<GamePhase>(["COUNTDOWN", "ACTION", "HOLD"]);
+const PAUSABLE_TIMED_PHASES = new Set<GamePhase>(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
 
 export class RoomManager {
   private readonly rooms = new Map<string, RoomState>();
@@ -493,12 +494,23 @@ export class RoomManager {
     const round = room.round;
     if (!round || round.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
     engine.toDiscussion(room, this.deps);
-    const deadline = this.deps.now() + this.deps.discussionMs;
-    room.phaseEndsAt = deadline;
     this.markDiscussionStarted(room);
+    this.scheduleDiscussionEnd(room, round, this.deps.discussionMs);
+  }
+
+  private scheduleDiscussionEnd(room: RoomState, round: RoundState, durationMs: number): void {
+    const duration = Math.max(0, durationMs);
+    const deadline = this.deps.now() + duration;
+    room.phaseEndsAt = deadline;
     this.broadcast(room);
-    this.schedule(room, IMITATION_STAGE_TIMER, this.deps.discussionMs, () => {
-      if (room.phase !== "DISCUSSION" || room.round !== round || room.phaseEndsAt !== deadline) return;
+    this.schedule(room, IMITATION_STAGE_TIMER, duration, () => {
+      if (
+        room.phase !== "DISCUSSION" ||
+        room.round !== round ||
+        room.phaseEndsAt !== deadline ||
+        !room.hostConnected ||
+        room.pause
+      ) return;
       this.beginVoting(room, room.hostUid);
     });
   }
@@ -508,32 +520,44 @@ export class RoomManager {
     if (!round || round.kind !== "IMITATION") throw new GameError("INVALID_PHASE");
     this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
     engine.startVoting(room, hostUid, this.deps);
-    const deadline = this.deps.now() + this.deps.votingMs;
-    room.phaseEndsAt = deadline;
     const analytics = this.analyticsState(room);
     if (analytics.votingStartedAt === undefined) analytics.votingStartedAt = this.deps.now();
+    this.scheduleVotingEnd(room, round, this.deps.votingMs);
+  }
+
+  private scheduleVotingEnd(room: RoomState, round: RoundState, durationMs: number): void {
+    const duration = Math.max(0, durationMs);
+    const deadline = this.deps.now() + duration;
+    room.phaseEndsAt = deadline;
     this.broadcast(room);
-    this.schedule(room, IMITATION_STAGE_TIMER, this.deps.votingMs, () => {
+    this.schedule(room, IMITATION_STAGE_TIMER, duration, () => {
       if (
         room.phase !== "VOTING" ||
         room.round !== round ||
         room.phaseEndsAt !== deadline ||
         round.resolutionSealed ||
-        round.resultComputed
+        round.resultComputed ||
+        !room.hostConnected ||
+        room.pause
       ) return;
-      if (!round.abstainedUids) round.abstainedUids = new Set();
-      for (const participant of roundParticipants(room)) {
-        if (!round.votes.has(participant.uid)) round.abstainedUids.add(participant.uid);
-      }
-      room.updatedAt = this.deps.now();
-      this.resolveVotingIfReady(room);
-      this.broadcast(room);
+      this.timeoutVoting(room, round);
     });
+  }
+
+  private timeoutVoting(room: RoomState, round: RoundState): void {
+    if (room.phase !== "VOTING" || room.round !== round || round.resolutionSealed || round.resultComputed) return;
+    if (!round.abstainedUids) round.abstainedUids = new Set();
+    for (const participant of roundParticipants(room)) {
+      if (!round.votes.has(participant.uid)) round.abstainedUids.add(participant.uid);
+    }
+    room.updatedAt = this.deps.now();
+    this.resolveVotingIfReady(room);
+    this.broadcast(room);
   }
 
   private submitVote(uid: string, targetUid: string): void {
     this.withRoom(uid, (room) => {
-      engine.submitVote(room, uid, targetUid, this.deps);
+      voting.submitVote(room, uid, targetUid, this.deps);
       this.markMeaningful(room);
       this.resolveVotingIfReady(room);
       this.broadcast(room);
@@ -545,7 +569,7 @@ export class RoomManager {
     if (room.phase !== "VOTING" || !round || round.resolutionSealed || !voting.allVoted(room)) return false;
     voting.sealVoteResolution(room, this.deps);
     this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
-    this.computeResultAndTrack(room);
+    if (room.hostConnected && !room.pause) this.computeResultAndTrack(room);
     return true;
   }
 
@@ -642,16 +666,19 @@ export class RoomManager {
     this.scheduleResultAdvance(room, round);
   }
 
-  private scheduleResultAdvance(room: RoomState, round: RoundState): void {
-    const duration = round.roundComplete ? this.deps.fullResultMs : this.deps.survivedTransitionMs;
+  private scheduleResultAdvance(room: RoomState, round: RoundState, durationMs?: number): void {
+    const duration = Math.max(0, durationMs ?? (round.roundComplete ? this.deps.fullResultMs : this.deps.survivedTransitionMs));
     const deadline = this.deps.now() + duration;
     room.phaseEndsAt = deadline;
+    this.broadcast(room);
     this.schedule(room, IMITATION_STAGE_TIMER, duration, () => {
       if (
         room.phase !== "RESULT" ||
         room.round !== round ||
         room.phaseEndsAt !== deadline ||
-        !round.resultComputed
+        !round.resultComputed ||
+        !room.hostConnected ||
+        room.pause
       ) return;
       this.advanceResult(room, room.hostUid);
     });
@@ -768,10 +795,13 @@ export class RoomManager {
 
   private pauseForHostDisconnect(room: RoomState): void {
     if (room.phase === "CLOSED") return;
-    const remainingMs = room.phase === "PROMPT_REVEAL" && room.phaseEndsAt !== undefined ? Math.max(0, room.phaseEndsAt - this.deps.now()) : undefined;
+    const shouldPreserveRemaining = PAUSABLE_TIMED_PHASES.has(room.phase) && room.phaseEndsAt !== undefined;
+    const remainingMs = shouldPreserveRemaining
+      ? Math.max(0, room.phaseEndsAt! - this.deps.now())
+      : undefined;
     const generation = ++room.timerGeneration;
     room.pause = { reason: "HOST_DISCONNECTED", originalPhase: room.phase, ...(remainingMs !== undefined ? { remainingMs } : {}), generation };
-    if (RESTART_PHYSICAL_PHASES.has(room.phase) || room.phase === "PROMPT_REVEAL") {
+    if (RESTART_PHYSICAL_PHASES.has(room.phase) || PAUSABLE_TIMED_PHASES.has(room.phase)) {
       this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
       room.phaseEndsAt = undefined;
     }
@@ -806,8 +836,33 @@ export class RoomManager {
       }, generation);
       return;
     }
-    if (pause.originalPhase === "VOTING" && room.phase === "VOTING" && room.round?.resolutionSealed && !room.round.resultComputed) {
-      this.computeResultAndTrack(room);
+    if (pause.originalPhase === "DISCUSSION" && room.phase === "DISCUSSION") {
+      const round = room.round;
+      if (!round) return;
+      const remainingMs = Math.max(0, pause.remainingMs ?? 0);
+      if (remainingMs === 0) this.beginVoting(room, room.hostUid);
+      else this.scheduleDiscussionEnd(room, round, remainingMs);
+      return;
+    }
+    if (pause.originalPhase === "VOTING" && room.phase === "VOTING") {
+      const round = room.round;
+      if (!round) return;
+      if (round.resolutionSealed && !round.resultComputed) {
+        this.computeResultAndTrack(room);
+        return;
+      }
+      if (round.resultComputed) return;
+      const remainingMs = Math.max(0, pause.remainingMs ?? 0);
+      if (remainingMs === 0) this.timeoutVoting(room, round);
+      else this.scheduleVotingEnd(room, round, remainingMs);
+      return;
+    }
+    if (pause.originalPhase === "RESULT" && room.phase === "RESULT") {
+      const round = room.round;
+      if (!round?.resultComputed) return;
+      const remainingMs = Math.max(0, pause.remainingMs ?? 0);
+      if (remainingMs === 0) this.advanceResult(room, room.hostUid);
+      else this.scheduleResultAdvance(room, round, remainingMs);
     }
   }
 
