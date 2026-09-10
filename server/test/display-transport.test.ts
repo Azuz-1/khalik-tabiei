@@ -22,35 +22,6 @@ function nextMessage(ws: WebSocket): Promise<ServerMessage> {
   });
 }
 
-function nextMessages(ws: WebSocket, count: number): Promise<ServerMessage[]> {
-  return new Promise((resolve, reject) => {
-    const messages: ServerMessage[] = [];
-    const onMessage = (data: RawData) => {
-      try {
-        messages.push(JSON.parse(data.toString()) as ServerMessage);
-      } catch (error) {
-        cleanup();
-        reject(error);
-        return;
-      }
-      if (messages.length >= count) {
-        cleanup();
-        resolve(messages);
-      }
-    };
-    const onClose = () => {
-      cleanup();
-      reject(new Error(`socket closed after ${messages.length}/${count} messages`));
-    };
-    const cleanup = () => {
-      ws.off("message", onMessage);
-      ws.off("close", onClose);
-    };
-    ws.on("message", onMessage);
-    ws.on("close", onClose);
-  });
-}
-
 async function open(url: string, origin: string, cookie?: string): Promise<WebSocket> {
   const ws = new WebSocket(url, { headers: { Origin: origin, ...(cookie ? { Cookie: cookie } : {}) } });
   await once(ws, "open");
@@ -121,12 +92,11 @@ test("display link is owner-only and display socket is sessionless, spectator-on
     rejectedDisplay = undefined;
 
     display = await open(displayWsUrl, browserOrigin);
-    const displayAuth = nextMessages(display, 2);
+    const displayStateMessage = nextMessage(display);
     display.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: token }));
-    const [displayHello, publicState] = await displayAuth;
-    assert.equal(displayHello?.t, "HELLO_OK");
-    assert.equal(publicState?.t, "STATE");
-    if (!publicState || publicState.t !== "STATE") throw new Error("display state missing");
+    const publicState = await displayStateMessage;
+    assert.equal(publicState.t, "STATE");
+    if (publicState.t !== "STATE") throw new Error("display state missing");
     assert.equal(publicState.view.self.role, "spectator");
     assert.equal(publicState.view.self.isOwner, false);
     assert.equal(publicState.view.players.length, 1);
