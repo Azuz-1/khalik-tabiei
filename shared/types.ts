@@ -119,11 +119,11 @@ export interface RoundResult {
   challengeIndex: number;
   maxChallenges: number;
   mode: GameMode;
-  /** Majority threshold among ballots actually cast; zero when nobody voted. */
-  requiredVotes: number;
-  /** Aggregate turnout only. Individual abstainers are never serialized. */
-  votesCast: number;
-  participantCount: number;
+  /** Full-reveal only: majority threshold among ballots actually cast. */
+  requiredVotes?: number;
+  /** Full-reveal aggregate turnout only. Individual abstainers are never serialized. */
+  votesCast?: number;
+  participantCount?: number;
   completionReason?: RoundCompletionReason;
   normalQuestion?: string;
   impostorQuestion?: string;
