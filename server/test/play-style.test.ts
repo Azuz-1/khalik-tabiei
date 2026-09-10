@@ -260,9 +260,15 @@ test("competitive UI uses challenge-based progress, hidden live tally, and phone
 
   assert.ok(host.includes("completedChallenges"));
   assert.ok(host.includes("targetChallenges"));
-  assert.ok(host.includes("progress.requiredVotes > 0"));
+  assert.ok(host.includes("view.votesProgress"));
+  assert.ok(host.includes("progress.submitted"));
+  assert.ok(host.includes("progress.total"));
+  assert.equal(host.includes("requiredVotes"), false, "Host must not expose a live quorum target");
   assert.equal(host.includes("liveVoteTally.map"), false);
-  assert.ok(player.includes("progress.requiredVotes > 0"));
+  assert.ok(player.includes("view.votesProgress"));
+  assert.ok(player.includes("progress.submitted"));
+  assert.ok(player.includes("progress.total"));
+  assert.equal(player.includes("requiredVotes"), false, "Player must not expose a live quorum target");
   assert.ok(player.includes("PlayerCountdown"));
   assert.ok(player.includes("PlayerAction"));
   assert.ok(player.includes("طالع الشاشة"));
