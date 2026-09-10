@@ -38,14 +38,19 @@ test("a real full-game browser journey exists and drives the competitive product
     "إخراج",
     "ابدأ اللعبة",
     "identifyRoles",
-    "ابدأ التصويت",
-    "الأصوات مخفية للحين",
+    "استعدوا للتصويت",
+    ".vote-board",
     "النقاط بعد دور المتخفي",
     "خلصت اللعبة",
   ]) {
     assert.ok(journey.source.includes(marker), `the journey spec must still cover ${marker}`);
   }
 
+  assert.equal(
+    journey.source.includes("ابدأ التصويت"),
+    false,
+    "production browser journey must rely on automatic DISCUSSION -> VOTING transition",
+  );
   assert.ok(
     /for \(let challenge = 1; challenge <= 9; challenge \+= 1\)/.test(journey.source),
     "the journey must loop over nine real base Challenges",

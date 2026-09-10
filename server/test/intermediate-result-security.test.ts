@@ -55,7 +55,7 @@ test("survived challenge result reveals no impostor identity, tally, turnout agg
   assert.equal(view.result?.requiredVotes, undefined);
   assert.equal(view.result?.votesCast, undefined);
   assert.equal(view.result?.participantCount, undefined);
-  assert.deepEqual(view.result?.voteTally, []);
+  assert.equal(view.result?.voteTally, undefined);
   assert.equal(view.publicPrompt?.text, prompt, "already-revealed challenge prompt stays public");
   assert.ok(!json.includes(promptId));
   assert.ok(!json.includes("\"impostorUid\""));
@@ -63,6 +63,7 @@ test("survived challenge result reveals no impostor identity, tally, turnout agg
   assert.ok(!json.includes("\"requiredVotes\""));
   assert.ok(!json.includes("\"votesCast\""));
   assert.ok(!json.includes("\"participantCount\""));
+  assert.ok(!json.includes("\"voteTally\""));
   assert.ok(!json.includes("voteBreakdown"));
   assert.ok(!json.includes("voterUid"));
   assert.ok(!json.includes("targetUid"));

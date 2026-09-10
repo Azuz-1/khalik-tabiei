@@ -7,6 +7,7 @@ import {
   joinPlayer,
   lastMessage,
   testUid,
+  wait,
 } from "./helpers.js";
 
 function createPlayerOwner(manager: RoomManager, name = "المالك") {
@@ -16,6 +17,12 @@ function createPlayerOwner(manager: RoomManager, name = "المالك") {
   const state = lastMessage(owner.socket, "STATE");
   assert.ok(state, "owner must receive room state");
   return { ...owner, uid, code: state.view.room.code, name };
+}
+
+async function waitForPhase(room: { phase: string }, phase: string, timeoutMs = 600): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (room.phase !== phase && Date.now() < deadline) await wait(2);
+  assert.equal(room.phase, phase);
 }
 
 const directDeps = { rng: () => 0, now: () => 1_000 };
@@ -135,22 +142,50 @@ test("owner remains authorized for room controls while player role cannot kick t
   manager.dispose();
 });
 
-test("owner disconnect and reconnect restore both participant and room-owner liveness", () => {
-  const manager = new RoomManager({ rng: () => 0, hostDisconnectGraceMs: 5_000 });
+test("player-owner disconnect never pauses or closes the authoritative game clock", async () => {
+  const manager = new RoomManager({
+    rng: () => 0,
+    countdownMs: 2,
+    actionMs: 2,
+    holdMs: 2,
+    promptRevealMs: 2,
+    discussionMs: 25,
+    votingMs: 25,
+    survivedTransitionMs: 200,
+    hostDisconnectGraceMs: 5,
+  });
   const owner = createPlayerOwner(manager);
-  joinPlayer(manager, owner.code, 2);
-  joinPlayer(manager, owner.code, 3);
+  const p2 = joinPlayer(manager, owner.code, 2);
+  const p3 = joinPlayer(manager, owner.code, 3);
+
+  assert.equal(manager.handle(owner.conn, { t: "START_GAME" }), true);
+  for (const participant of [owner, p2, p3]) {
+    assert.equal(manager.handle(participant.conn, { t: "MARK_READY" }), true);
+  }
+
+  const room = manager.roomForTests(owner.code)!;
+  await waitForPhase(room, "DISCUSSION");
+  const discussionDeadline = room.phaseEndsAt;
+  assert.ok(discussionDeadline && discussionDeadline > Date.now());
 
   manager.disconnect(owner.conn);
-  const room = manager.roomForTests(owner.code)!;
-  assert.equal(room.hostConnected, false);
   assert.equal(room.players.get(owner.uid)?.connected, false);
-  assert.ok(room.hostCloseDeadline);
+  assert.equal(room.hostConnected, true, "legacy Host liveness must not follow the player-owner socket");
+  assert.equal(room.hostCloseDeadline, undefined);
+  assert.equal(room.pause, undefined);
+  assert.equal(room.phaseEndsAt, discussionDeadline, "disconnect must not rewrite the authoritative deadline");
+
+  await waitForPhase(room, "VOTING");
+  assert.equal(manager.roomForTests(owner.code), room, "room survives beyond the old Host disconnect grace");
+  await waitForPhase(room, "RESULT");
+  assert.equal(room.round?.resultComputed, true);
+  assert.equal(room.round?.abstainedUids?.size, 3, "missing owner ballot is handled by the global voting deadline");
+  assert.equal(room.pause, undefined);
 
   const reconnected = authenticatedConnection(manager, owner.uid);
-  assert.equal(room.hostConnected, true);
   assert.equal(room.players.get(owner.uid)?.connected, true);
   assert.equal(room.hostCloseDeadline, undefined);
+  assert.equal(room.pause, undefined);
   const view = lastMessage(reconnected.socket, "STATE")!.view;
   assert.equal(view.self.role, "player");
   assert.equal(view.self.isOwner, true);

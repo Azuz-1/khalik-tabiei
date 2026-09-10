@@ -3,7 +3,7 @@ import { WebSocket } from "ws";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
 const ORIGIN = process.env.ORIGIN ?? URL.replace(/^ws/, "http").replace(/\/ws$/, "");
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 70_000;
 let failures = 0;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -126,9 +126,10 @@ async function physical(host, players, label) {
 
 async function vote(host, players, current, correctNormalCount, label) {
   for (const client of [host, ...players]) client.clearMessages();
-  host.send({ t: "START_VOTING" });
-  await waitForAll([host, ...players], (client) => client.phase() === "VOTING", `${label} voting`);
-  ok(host.view?.votesProgress?.requiredVotes === 3, `${label}: four players require three votes to catch`);
+  await waitForAll([host, ...players], (client) => client.phase() === "VOTING", `${label} automatic voting`, 55_000);
+  ok(host.view?.votesProgress?.submitted === 0, `${label}: voting starts with zero submitted ballots`);
+  ok(host.view?.votesProgress?.total === players.length, `${label}: voting progress reports all participants`);
+  ok(host.view?.votesProgress?.requiredVotes === undefined, `${label}: live progress exposes no quorum target`);
   ok(host.view?.liveVoteTally === undefined, `${label}: Host sees no live target totals`);
 
   for (let index = 0; index < current.normals.length; index += 1) {
@@ -146,11 +147,11 @@ async function vote(host, players, current, correctNormalCount, label) {
 }
 
 async function nextChallenge(host, players, expectedIndex) {
-  host.send({ t: "NEXT_ROUND" });
   await waitForAll(
     [host, ...players],
     (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === expectedIndex,
-    `Challenge ${expectedIndex} QUESTION`,
+    `Challenge ${expectedIndex} automatic QUESTION`,
+    10_000,
   );
 }
 
@@ -180,7 +181,7 @@ async function main() {
   ok(host.view?.result?.groupFound === false, "one correct vote is below majority in C1");
   ok(host.view?.result?.roundComplete === false, "stint continues after C1");
   ok(host.view?.scoreboard === undefined, "C1 keeps all scoring hidden");
-  ok(host.view?.result?.voteTally?.length === 0, "C1 keeps aggregate distribution hidden");
+  ok(host.view?.result?.voteTally === undefined, "C1 keeps aggregate distribution hidden");
 
   await nextChallenge(host, players, 2);
   current = await physical(host, players, "C2");

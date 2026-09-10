@@ -93,7 +93,7 @@ export function ResultBody({ result }: { result: RoundResult }) {
       <div className="stack result-vote-section" style={{ gap: 12 }}>
         <div className="eyebrow center">الأصوات في آخر تحدّي</div>
         <div className="subtitle center">صوّت {result.votesCast} من {result.participantCount}</div>
-        <VoteBoard rows={result.voteTally} />
+        <VoteBoard rows={result.voteTally ?? []} />
       </div>
     </div>
   );
