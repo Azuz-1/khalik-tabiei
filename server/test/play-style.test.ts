@@ -249,7 +249,7 @@ test("kicking a missing normal preserves committed ballots and never creates a g
   const view = lastMessage(host.socket, "STATE")!.view;
   assert.ok(view.scoreboard);
   assert.equal(view.scoreboard.some((row) => row.uid === missing.uid), false);
-  assert.equal(view.result?.voteTally.some((row) => row.uid === missing.uid), false);
+  assert.equal(view.result?.voteTally?.some((row) => row.uid === missing.uid), false);
   assertNoVoteMapping(view);
   manager.dispose();
 });
