@@ -42,6 +42,7 @@ const ACTION_LIMITS: Partial<Record<ClientMessage["t"], [number, number]>> = {
   SET_SETTINGS: [30, 60_000],
   SET_ADMISSION: [20, 60_000],
   UNBLOCK_PLAYER: [20, 60_000],
+  MARK_READY: [12, 60_000],
   SUBMIT_ANSWER: [10, 60_000],
   SUBMIT_VOTE: [40, 60_000],
   NEXT_ROUND: [30, 60_000],
