@@ -1,5 +1,5 @@
 /** Authoritative room, connection, timer, membership, and action orchestration. */
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type { AnalyticsEvent, ClientMessage, ErrorCode, GamePhase } from "../../../shared/types.js";
 import { MAX_ACTIVE_ROOMS, MAX_CONNECTIONS_PER_UID, MAX_PLAYERS, TIMERS } from "../../../shared/constants.js";
 import {
@@ -49,11 +49,18 @@ interface CachedRequest {
 }
 
 interface RoomAnalyticsState {
+  roomSessionId: string;
+  matchId?: string;
   matchOrdinal: number;
   completedMatchOrdinal: number;
+  abandonedMatchOrdinal: number;
   rematchRequestedOrdinal: number;
   matchStartedAt?: number;
   startingPlayerCount?: number;
+  challengeStartedAt?: number;
+  allReadyAt?: number;
+  discussionStartedAt?: number;
+  votingStartedAt?: number;
   challengeKeys: Set<string>;
 }
 
@@ -114,6 +121,7 @@ export class RoomManager {
     const player = room.players.get(uid);
     if (player?.pendingRemoval) return this.sendState(conn);
     const playerWasDisconnected = Boolean(player && !player.connected);
+    const hostWasDisconnected = uid === room.hostUid && !room.hostConnected;
 
     conn.roomCode = room.code;
     if (player) {
@@ -128,9 +136,8 @@ export class RoomManager {
       this.resumeAfterHostReconnect(room);
     }
     room.updatedAt = this.deps.now();
-    if (playerWasDisconnected) {
-      this.emitAnalytics("player_reconnected", this.connectionAnalyticsProps(room));
-    }
+    if (playerWasDisconnected) this.emitAnalytics("player_reconnected", this.connectionAnalyticsProps(room));
+    if (hostWasDisconnected) this.emitAnalytics("host_reconnected", this.connectionAnalyticsProps(room));
     this.broadcast(room);
   }
 
@@ -151,6 +158,7 @@ export class RoomManager {
     if (uid === room.hostUid) {
       room.hostConnected = false;
       room.hostCloseDeadline = this.deps.now() + this.deps.hostDisconnectGraceMs;
+      this.emitAnalytics("host_disconnected", this.connectionAnalyticsProps(room));
       this.pauseForHostDisconnect(room);
       this.broadcast(room);
       this.schedule(room, HOST_DISCONNECT_TIMER, this.deps.hostDisconnectGraceMs, () => {
@@ -218,6 +226,7 @@ export class RoomManager {
       if (!isGameError(error)) console.error("unexpected error handling", message.t, error);
       const room = this.roomOf(uid);
       this.emitAnalytics("game_error", {
+        ...(room ? this.connectionAnalyticsProps(room) : {}),
         code: result.code,
         action: message.t,
         phase: room?.phase ?? "NONE",
@@ -251,6 +260,13 @@ export class RoomManager {
       case "LEAVE_ROOM": return this.leaveRoom(uid);
       case "SET_SETTINGS": return this.withRoom(uid, (room) => {
         engine.setSettings(room, uid, message, this.deps);
+        const analytics = this.analyticsState(room);
+        this.emitAnalytics("settings_changed", {
+          roomSessionId: analytics.roomSessionId,
+          targetChallenges: room.targetChallenges,
+          modeCount: room.selectedModes.length,
+          modeSet: this.modeSet(room),
+        });
         this.broadcast(room);
       });
       case "SET_ADMISSION": return this.setAdmission(uid, message.locked);
@@ -260,6 +276,8 @@ export class RoomManager {
       case "SUBMIT_ANSWER": throw new GameError("INVALID_PHASE");
       case "START_VOTING": return this.withRoom(uid, (room) => {
         engine.startVoting(room, uid, this.deps);
+        const analytics = this.analyticsState(room);
+        if (analytics.votingStartedAt === undefined) analytics.votingStartedAt = this.deps.now();
         this.markMeaningful(room);
         this.broadcast(room);
       });
@@ -275,6 +293,8 @@ export class RoomManager {
         if (analytics.matchOrdinal > 0 && analytics.rematchRequestedOrdinal !== analytics.matchOrdinal) {
           analytics.rematchRequestedOrdinal = analytics.matchOrdinal;
           this.emitAnalytics("rematch_requested", {
+            roomSessionId: analytics.roomSessionId,
+            matchId: analytics.matchId,
             matchOrdinal: analytics.matchOrdinal,
             targetChallenges: room.targetChallenges,
             startingPlayerCount: analytics.startingPlayerCount ?? room.players.size,
@@ -296,7 +316,8 @@ export class RoomManager {
     this.rooms.set(code, room);
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
-    this.emitAnalytics("room_created", {});
+    const analytics = this.analyticsState(room);
+    this.emitAnalytics("room_created", { roomSessionId: analytics.roomSessionId });
     this.broadcast(room);
   }
 
@@ -337,6 +358,8 @@ export class RoomManager {
     room.meaningfulAt = now;
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
+    const analytics = this.analyticsState(room);
+    this.emitAnalytics("player_joined", { roomSessionId: analytics.roomSessionId, playerCount: room.players.size });
     this.broadcast(room);
   }
 
@@ -375,28 +398,38 @@ export class RoomManager {
     this.withRoom(uid, (room) => {
       const analytics = this.analyticsState(room);
       const previousMatchOrdinal = analytics.matchOrdinal;
+      const previousMatchId = analytics.matchId;
       const startsAfterCompletedMatch = previousMatchOrdinal > 0 && analytics.completedMatchOrdinal === previousMatchOrdinal;
 
       engine.startGame(room, uid, this.deps);
       room.matchGeneration += 1;
       analytics.matchOrdinal += 1;
+      analytics.matchId = randomUUID();
+      analytics.abandonedMatchOrdinal = 0;
       analytics.matchStartedAt = this.deps.now();
       analytics.startingPlayerCount = activePlayers(room).length;
       analytics.challengeKeys.clear();
       analytics.rematchRequestedOrdinal = 0;
+      this.beginChallengeAnalytics(room);
       this.markMeaningful(room);
 
       this.emitAnalytics("game_started", {
+        roomSessionId: analytics.roomSessionId,
+        matchId: analytics.matchId,
         matchOrdinal: analytics.matchOrdinal,
         isFirstMatch: analytics.matchOrdinal === 1,
         targetChallenges: room.targetChallenges,
         startingPlayerCount: analytics.startingPlayerCount,
         modeCount: room.selectedModes.length,
+        modeSet: this.modeSet(room),
         rulesVersion: ANALYTICS_RULES_VERSION,
         contentVersion: ANALYTICS_CONTENT_VERSION,
       });
       if (startsAfterCompletedMatch) {
         this.emitAnalytics("rematch_started", {
+          roomSessionId: analytics.roomSessionId,
+          previousMatchId,
+          matchId: analytics.matchId,
           previousMatchOrdinal,
           matchOrdinal: analytics.matchOrdinal,
           targetChallenges: room.targetChallenges,
@@ -410,6 +443,8 @@ export class RoomManager {
   private markReady(uid: string): void {
     this.withRoom(uid, (room) => {
       const { allReady } = engine.markReady(room, uid, this.deps);
+      const analytics = this.analyticsState(room);
+      if (allReady && analytics.allReadyAt === undefined) analytics.allReadyAt = this.deps.now();
       this.markMeaningful(room);
       if (allReady && room.hostConnected && !room.pause) this.beginPhysicalSequence(room);
       this.broadcast(room);
@@ -436,6 +471,7 @@ export class RoomManager {
           this.schedule(room, IMITATION_STAGE_TIMER, this.deps.promptRevealMs, () => {
             if (room.phase !== "PROMPT_REVEAL" || !room.hostConnected || room.pause) return;
             engine.toDiscussion(room, this.deps);
+            this.markDiscussionStarted(room);
             this.broadcast(room);
           }, generation);
         }, generation);
@@ -466,17 +502,39 @@ export class RoomManager {
     const challengeKey = `${analytics.matchOrdinal}:${room.completedChallenges}`;
     if (!analytics.challengeKeys.has(challengeKey)) {
       analytics.challengeKeys.add(challengeKey);
+      const now = this.deps.now();
+      const participants = round.sealedParticipants ?? [];
+      const votes = round.sealedVotes ?? new Map<string, string>();
+      const tally = new Map(participants.map((participant) => [participant.uid, 0]));
+      for (const targetUid of votes.values()) if (tally.has(targetUid)) tally.set(targetUid, (tally.get(targetUid) ?? 0) + 1);
+      const impostorVotes = tally.get(round.impostorUid) ?? 0;
+      const topNormalVotes = Math.max(0, ...[...tally].filter(([targetUid]) => targetUid !== round.impostorUid).map(([, count]) => count));
+      const distinctTargets = [...tally.values()].filter((count) => count > 0).length;
+      const requiredVotes = round.resultRequiredVotes ?? engine.requiredVotesFor(participants.length);
       this.emitAnalytics("challenge_completed", {
+        roomSessionId: analytics.roomSessionId,
+        matchId: analytics.matchId,
         matchOrdinal: analytics.matchOrdinal,
         targetChallenges: room.targetChallenges,
         challengeOrdinal: room.completedChallenges,
         challengeWithinStint: round.challengeIndex,
+        stintOrdinal: room.currentRound,
         stintMaxChallenges: round.maxChallenges ?? 3,
-        participantCount: round.sealedParticipants?.length ?? round.participantUids.length,
+        participantCount: participants.length || round.participantUids.length,
         mode: round.mode,
         promptId: round.promptId,
         caught: round.groupFound ?? false,
         stintComplete: round.roundComplete,
+        impostorVotes,
+        requiredVotes,
+        topNormalVotes,
+        distinctTargets,
+        voteMargin: impostorVotes - requiredVotes,
+        unanimousForImpostor: votes.size > 0 && impostorVotes === votes.size,
+        readySeconds: this.elapsedSeconds(analytics.challengeStartedAt, analytics.allReadyAt),
+        discussionSeconds: this.elapsedSeconds(analytics.discussionStartedAt, analytics.votingStartedAt),
+        votingSeconds: this.elapsedSeconds(analytics.votingStartedAt, now),
+        challengeSeconds: this.elapsedSeconds(analytics.challengeStartedAt, now),
         rulesVersion: ANALYTICS_RULES_VERSION,
         contentVersion: ANALYTICS_CONTENT_VERSION,
       });
@@ -488,17 +546,26 @@ export class RoomManager {
       analytics.completedMatchOrdinal !== analytics.matchOrdinal
     ) {
       analytics.completedMatchOrdinal = analytics.matchOrdinal;
-      const durationMs = analytics.matchStartedAt === undefined ? 0 : Math.max(0, this.deps.now() - analytics.matchStartedAt);
-      const roundedDurationSeconds = Math.min(7_200, Math.round(durationMs / 30_000) * 30);
+      const durationSeconds = this.elapsedSeconds(analytics.matchStartedAt, this.deps.now()) ?? 0;
+      const scores = [...room.players.values()].map((player) => player.score);
+      const topScore = scores.length ? Math.max(...scores) : 0;
+      const lowScore = scores.length ? Math.min(...scores) : 0;
+      const averageScore = scores.length ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100) / 100 : 0;
       this.emitAnalytics("game_completed", {
+        roomSessionId: analytics.roomSessionId,
+        matchId: analytics.matchId,
         matchOrdinal: analytics.matchOrdinal,
         isFirstMatch: analytics.matchOrdinal === 1,
         targetChallenges: room.targetChallenges,
         completedChallenges: room.completedChallenges,
         startingPlayerCount: analytics.startingPlayerCount ?? round.participantUids.length,
-        durationSeconds: roundedDurationSeconds,
+        endingPlayerCount: room.players.size,
+        durationSeconds,
         impostorStints: room.roundOutcomes.length,
         caughtStints: room.roundOutcomes.filter((outcome) => outcome.caught).length,
+        topScore,
+        averageScore,
+        scoreSpread: topScore - lowScore,
         rulesVersion: ANALYTICS_RULES_VERSION,
         contentVersion: ANALYTICS_CONTENT_VERSION,
       });
@@ -515,6 +582,7 @@ export class RoomManager {
       const wasFinal = wasComplete && room.currentRound >= room.totalRounds;
       if (!wasComplete) {
         if (!room.players.has(round.impostorUid) || roundParticipants(room).length < room.minPlayers) {
+          this.emitGameAbandoned(room, "stint_roster_invalid");
           engine.abortToLobby(room, this.deps);
           this.markMeaningful(room);
           this.broadcast(room);
@@ -524,6 +592,7 @@ export class RoomManager {
       if (wasComplete && !wasFinal) {
         this.prunePendingPlayers(room);
         if (activePlayers(room).length < room.minPlayers) {
+          this.emitGameAbandoned(room, "below_min_players");
           engine.abortToLobby(room, this.deps);
           this.markMeaningful(room);
           this.broadcast(room);
@@ -531,6 +600,7 @@ export class RoomManager {
         }
       }
       engine.nextRound(room, uid, this.deps);
+      if (room.phase === "QUESTION") this.beginChallengeAnalytics(room);
       this.markMeaningful(room);
       this.broadcast(room);
     });
@@ -544,6 +614,15 @@ export class RoomManager {
       room.kickedIdentities.set(targetUid, target.name);
       this.removePlayerByChoice(room, targetUid);
       this.markMeaningful(room);
+      const analytics = this.analyticsState(room);
+      this.emitAnalytics("player_kicked", {
+        roomSessionId: analytics.roomSessionId,
+        matchId: analytics.matchId,
+        matchOrdinal: analytics.matchOrdinal,
+        phase: room.phase,
+        duringMatch: this.matchInProgress(room, analytics),
+        playerCountAfter: room.players.size,
+      });
       for (const conn of this.connsByUid.get(targetUid) ?? []) conn.send({ t: "KICKED" });
       this.broadcast(room);
     });
@@ -568,13 +647,17 @@ export class RoomManager {
     if (phase === "RESULT") {
       if (round.roundComplete) return;
       round.participantUids = round.participantUids.filter((participantUid) => participantUid !== uid);
-      if (wasImpostor || roundParticipants(room).length < room.minPlayers) engine.abortToLobby(room, this.deps);
+      if (wasImpostor || roundParticipants(room).length < room.minPlayers) {
+        this.emitGameAbandoned(room, wasImpostor ? "impostor_left" : "below_min_players");
+        engine.abortToLobby(room, this.deps);
+      }
       return;
     }
     if (sealedVoting) return;
     const participants = roundParticipants(room);
     if (currentImpostorStillRequired || participants.length < room.minPlayers) {
       this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+      this.emitGameAbandoned(room, currentImpostorStillRequired ? "impostor_left" : "below_min_players");
       engine.abortToLobby(room, this.deps);
       return;
     }
@@ -616,12 +699,17 @@ export class RoomManager {
     }
     if (pause.originalPhase === "PROMPT_REVEAL" && room.phase === "PROMPT_REVEAL") {
       const remainingMs = Math.max(0, pause.remainingMs ?? 0);
-      if (remainingMs === 0) return engine.toDiscussion(room, this.deps);
+      if (remainingMs === 0) {
+        engine.toDiscussion(room, this.deps);
+        this.markDiscussionStarted(room);
+        return;
+      }
       const generation = ++room.timerGeneration;
       engine.resumePromptReveal(room, this.deps.now() + remainingMs, this.deps);
       this.schedule(room, IMITATION_STAGE_TIMER, remainingMs, () => {
         if (room.phase !== "PROMPT_REVEAL" || !room.hostConnected || room.pause) return;
         engine.toDiscussion(room, this.deps);
+        this.markDiscussionStarted(room);
         this.broadcast(room);
       }, generation);
       return;
@@ -644,7 +732,10 @@ export class RoomManager {
 
   private doClose(room: RoomState, reason: string): void {
     const analytics = this.analyticsState(room);
+    if (this.matchInProgress(room, analytics)) this.emitGameAbandoned(room, reason);
     this.emitAnalytics("room_closed", {
+      roomSessionId: analytics.roomSessionId,
+      matchId: analytics.matchId,
       reason,
       matchOrdinal: analytics.matchOrdinal,
       duringMatch: this.matchInProgress(room, analytics),
@@ -721,8 +812,10 @@ export class RoomManager {
     let state = this.analyticsByRoom.get(room);
     if (!state) {
       state = {
+        roomSessionId: randomUUID(),
         matchOrdinal: 0,
         completedMatchOrdinal: 0,
+        abandonedMatchOrdinal: 0,
         rematchRequestedOrdinal: 0,
         challengeKeys: new Set(),
       };
@@ -731,13 +824,53 @@ export class RoomManager {
     return state;
   }
 
+  private modeSet(room: RoomState): string {
+    return [...room.selectedModes].sort().join("+");
+  }
+
+  private beginChallengeAnalytics(room: RoomState): void {
+    const analytics = this.analyticsState(room);
+    analytics.challengeStartedAt = this.deps.now();
+    analytics.allReadyAt = undefined;
+    analytics.discussionStartedAt = undefined;
+    analytics.votingStartedAt = undefined;
+  }
+
+  private markDiscussionStarted(room: RoomState): void {
+    const analytics = this.analyticsState(room);
+    if (analytics.discussionStartedAt === undefined) analytics.discussionStartedAt = this.deps.now();
+  }
+
+  private elapsedSeconds(start: number | undefined, end: number | undefined): number | undefined {
+    if (start === undefined || end === undefined || end < start) return undefined;
+    return Math.min(7_200, Math.round(((end - start) / 1_000) * 10) / 10);
+  }
+
+  private emitGameAbandoned(room: RoomState, reason: string): void {
+    const analytics = this.analyticsState(room);
+    if (analytics.matchOrdinal <= 0 || analytics.completedMatchOrdinal === analytics.matchOrdinal || analytics.abandonedMatchOrdinal === analytics.matchOrdinal) return;
+    analytics.abandonedMatchOrdinal = analytics.matchOrdinal;
+    this.emitAnalytics("game_abandoned", {
+      roomSessionId: analytics.roomSessionId,
+      matchId: analytics.matchId,
+      matchOrdinal: analytics.matchOrdinal,
+      targetChallenges: room.targetChallenges,
+      completedChallenges: room.completedChallenges,
+      startingPlayerCount: analytics.startingPlayerCount ?? room.players.size,
+      reason,
+      phase: room.phase,
+    });
+  }
+
   private matchInProgress(room: RoomState, analytics = this.analyticsState(room)): boolean {
-    return analytics.matchOrdinal > analytics.completedMatchOrdinal && room.phase !== "LOBBY" && room.phase !== "CLOSED";
+    return analytics.matchOrdinal > analytics.completedMatchOrdinal && analytics.abandonedMatchOrdinal !== analytics.matchOrdinal && room.phase !== "LOBBY" && room.phase !== "CLOSED";
   }
 
   private connectionAnalyticsProps(room: RoomState): AnalyticsProps {
     const analytics = this.analyticsState(room);
     return {
+      roomSessionId: analytics.roomSessionId,
+      matchId: analytics.matchId,
       matchOrdinal: analytics.matchOrdinal,
       phase: room.phase,
       duringMatch: this.matchInProgress(room, analytics),
@@ -826,7 +959,10 @@ export class RoomManager {
       if (!hasConnection && now - room.updatedAt > IDLE_ROOM_MS) {
         const analytics = this.analyticsState(room);
         if (this.matchInProgress(room, analytics)) {
+          this.emitGameAbandoned(room, "idle_gc");
           this.emitAnalytics("room_ended_unknown", {
+            roomSessionId: analytics.roomSessionId,
+            matchId: analytics.matchId,
             reason: "idle_gc",
             matchOrdinal: analytics.matchOrdinal,
             phase: room.phase,
