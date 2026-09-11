@@ -110,6 +110,8 @@ export interface RoomState {
   modeBag: GameMode[];
   lastMode?: GameMode;
   players: Map<string, InternalPlayer>;
+  /** Room-scoped copies of browser novelty filters; never serialized or persisted to analytics. */
+  promptNoveltyByUid: Map<string, Uint8Array>;
   round: RoundState | null;
   /** Server-only score deltas accumulated during the active impostor stint. */
   pendingRoundScores: Map<string, number>;
@@ -147,6 +149,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     selectedModes: [...DEFAULT_GAME_MODES],
     modeBag: [],
     players: new Map(),
+    promptNoveltyByUid: new Map(),
     round: null,
     pendingRoundScores: new Map(),
     correctVoteStreakStart: new Map(),
