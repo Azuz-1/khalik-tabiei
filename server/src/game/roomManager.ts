@@ -80,7 +80,7 @@ const HOST_DISCONNECT_TIMER = "host-disconnect";
 const OWNER_TRANSFER_TIMER = "owner-transfer";
 const SAFE_REMOVAL_PHASES = new Set<GamePhase>(["LOBBY", "GAME_OVER"]);
 const RESTART_PHYSICAL_PHASES = new Set<GamePhase>(["COUNTDOWN", "ACTION", "HOLD"]);
-const PAUSABLE_TIMED_PHASES = new Set<GamePhase>(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
+const PAUSABLE_TIMED_PHASES = new Set<GamePhase>(["PROMPT_REVEAL", "DISCUSSION", "VOTING"]);
 
 export class RoomManager {
   private readonly rooms = new Map<string, RoomState>();
@@ -726,34 +726,15 @@ export class RoomManager {
       });
     }
 
-    this.scheduleResultAdvance(room, round);
-  }
-
-  private scheduleResultAdvance(room: RoomState, round: RoundState, durationMs?: number): void {
-    const duration = Math.max(0, durationMs ?? (round.roundComplete ? this.deps.fullResultMs : this.deps.survivedTransitionMs));
-    const deadline = this.deps.now() + duration;
-    room.phaseEndsAt = deadline;
-    this.broadcast(room);
-    this.schedule(room, IMITATION_STAGE_TIMER, duration, () => {
-      if (
-        room.phase !== "RESULT" ||
-        room.round !== round ||
-        room.phaseEndsAt !== deadline ||
-        !round.resultComputed ||
-        !room.hostConnected ||
-        room.pause
-      ) return;
-      this.advanceResult(room, room.hostUid);
-    });
+    // RESULT is deliberately untimed. Everyone gets time to absorb the reveal,
+    // and only the current room owner advances the shared game state.
+    room.phaseEndsAt = undefined;
   }
 
   private nextRound(uid: string): void {
     this.withRoom(uid, (room) => {
       if (room.hostUid !== uid) throw new GameError("NOT_HOST");
       if (room.phase !== "RESULT") throw new GameError("INVALID_PHASE");
-      if (!room.round?.roundComplete && process.env.NODE_ENV === "production") {
-        throw new GameError("INVALID_PHASE", "next Challenge starts automatically");
-      }
       this.advanceResult(room, uid);
     });
   }
@@ -1037,11 +1018,10 @@ export class RoomManager {
       return;
     }
     if (pause.originalPhase === "RESULT" && room.phase === "RESULT") {
-      const round = room.round;
-      if (!round?.resultComputed) return;
-      const remainingMs = Math.max(0, pause.remainingMs ?? 0);
-      if (remainingMs === 0) this.advanceResult(room, room.hostUid);
-      else this.scheduleResultAdvance(room, round, remainingMs);
+      // Results are untimed. A reconnect restores the same reveal and waits for
+      // the room owner to advance explicitly.
+      room.phaseEndsAt = undefined;
+      return;
     }
   }
 
