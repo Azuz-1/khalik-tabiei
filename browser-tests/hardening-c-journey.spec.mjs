@@ -144,8 +144,6 @@ function assertNoVoterMapping(frames, label) {
 }
 
 async function playCaughtChallenge(owner, players, globalChallenge) {
-  // Owner is intentionally in this list: during private/gameplay phases their
-  // device renders the Player surface rather than the management/TV surface.
   const { impostor, normals } = await identifyRoles(players);
   expect(normals).toHaveLength(2);
 
@@ -154,8 +152,6 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
     await player.page.getByRole("button", { name: "جاهز" }).click();
   }
 
-  // These phases are intentionally brief. Start all observations together so
-  // every phone gets the full visibility window instead of serially consuming it.
   await Promise.all(players.map((player) =>
     expect(player.page.locator(".player-countdown-number")).toBeVisible({ timeout: PHASE_TIMEOUT }),
   ));
@@ -165,6 +161,9 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
     ));
   }
 
+  await Promise.all(players.map((player) =>
+    expect(player.page.getByText("طالعوا بعض")).toBeVisible({ timeout: PHASE_TIMEOUT }),
+  ));
   await Promise.all(players.map((player) =>
     expect(player.page.getByText("المطلوب كان…")).toBeVisible({ timeout: PHASE_TIMEOUT }),
   ));
@@ -176,8 +175,6 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
   }));
 
   if (globalChallenge === 1) {
-    // Exercise the new PR2 liveness contract in a real browser: the room owner
-    // may lose their phone connection without pausing the authoritative clock.
     const peer = players.find((player) => player !== owner);
     expect(peer, "owner journey needs another connected player").toBeTruthy();
     const peerCountdown = peer.page.getByTestId("phase-countdown");
@@ -211,15 +208,14 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
   await castVote(normals[0], impostor.name);
   await castVote(normals[1], impostor.name);
 
-  // RESULT is a safe owner-control surface: the owner device returns to the
-  // management result screen while the other two remain on PlayerResult.
   await expect(owner.page.locator(".host-result-stage")).toBeVisible({ timeout: PHASE_TIMEOUT });
-  await expect(owner.page.getByText("مسكتوا المتخفي")).toBeVisible();
-  await expect(owner.page.locator(".impostor-name")).toHaveText(impostor.name);
+  await expect(owner.page.getByText("مسكتوا المتخفي!")).toBeVisible();
+  await expect(owner.page.locator(".result-impostor-name")).toHaveText(impostor.name);
   await expect(owner.page.getByText("النقاط بعد دور المتخفي")).toBeVisible();
   await expect(owner.page.locator(".score-reason")).toHaveCount(3);
   await expect(owner.page.getByText("انمسك قبل ما ينجو من أي تحدّي · 0")).toBeVisible();
   await expect(owner.page.getByText("صح في آخر تصويت · +1")).toHaveCount(2);
+  await expect(owner.page.getByRole("button", { name: "التالي", exact: true })).toBeVisible();
 
   return { impostor, normals };
 }
@@ -227,15 +223,12 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
 test("three-person full game: owner plays, reconnect survives, kick preserves minimum roster, and match completes", async ({
   browser,
 }) => {
-  // Nine production-timed Challenges include 45-second automatic discussions.
   test.setTimeout(720_000);
   const startedAt = Date.now();
 
   const owner = await createOwner(browser);
   const joined = [];
   try {
-    // Start with four total people so reconnect + kick can be tested while the
-    // eventual match itself still runs at the critical minimum of three.
     for (let index = 1; index <= 3; index += 1) {
       joined.push(await joinPlayer(browser, owner.code, `لاعب${index}`));
     }
@@ -244,16 +237,12 @@ test("three-person full game: owner plays, reconnect survives, kick preserves mi
     const flaky = joined[2];
     const seatBefore = await ownerSeatFor(owner.page, flaky.name);
     await flaky.context.setOffline(true);
-    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeVisible({
-      timeout: PHASE_TIMEOUT,
-    });
+    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeVisible({ timeout: PHASE_TIMEOUT });
     await expect(flaky.page.locator("[data-game-surface]")).toHaveAttribute("disabled", "");
     await expect(flaky.page.getByRole("button", { name: "الخروج من الغرفة" })).toBeEnabled();
 
     await flaky.context.setOffline(false);
-    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeHidden({
-      timeout: PHASE_TIMEOUT,
-    });
+    await expect(flaky.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeHidden({ timeout: PHASE_TIMEOUT });
     await expect(flaky.page.locator("[data-game-surface]")).not.toHaveAttribute("disabled", "");
     await expect(flaky.page.locator(".chip", { hasText: `${flaky.name} (أنت)` })).toBeVisible();
     expect(await ownerSeatFor(owner.page, flaky.name)).toBe(seatBefore);
@@ -276,7 +265,7 @@ test("three-person full game: owner plays, reconnect survives, kick preserves mi
     for (let challenge = 1; challenge <= 9; challenge += 1) {
       await playCaughtChallenge(owner, players, challenge);
       const primary = owner.page.locator(".host-result-stage .btn-primary");
-      await expect(primary).toHaveText("التالي الآن");
+      await expect(primary).toHaveText("التالي");
       await primary.click();
     }
 

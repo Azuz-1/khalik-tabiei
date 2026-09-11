@@ -27,7 +27,7 @@ export function Host({ view, confirmAction }: { view: ClientView; confirmAction:
     case "QUESTION": return <HostReady view={view} />;
     case "COUNTDOWN": return <HostCountdown view={view} />;
     case "ACTION": return <HostAction view={view} />;
-    case "HOLD": return <HostHold />;
+    case "HOLD": return <HostHold view={view} />;
     case "PROMPT_REVEAL": return <HostPromptReveal view={view} />;
     case "DISCUSSION": return <HostDiscussion view={view} confirmAction={confirmAction} />;
     case "VOTING": return <HostVoting view={view} />;
@@ -317,8 +317,15 @@ function HostAction({ view }: { view: ClientView }) {
   return <HostStage className="host-action-stage"><h1 className="host-action-title">{modeInfo(view)?.actionLabel ?? "الحين!"}</h1></HostStage>;
 }
 
-function HostHold() {
-  return <HostStage className="host-hold-stage"><h1 className="host-hold-title">ثبّتوا…</h1><p className="subtitle host-hold-subtitle">طالعوا بعض</p></HostStage>;
+function HostHold({ view }: { view: ClientView }) {
+  return (
+    <HostStage className="host-hold-stage">
+      <div className="eyebrow">خذوا نظرة 👀</div>
+      <h1 className="host-hold-title">طالعوا بعض</h1>
+      <p className="subtitle host-hold-subtitle">خلكم على وضعكم لين يطلع المطلوب.</p>
+      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
+    </HostStage>
+  );
 }
 
 function HostPromptReveal({ view }: { view: ClientView }) {
@@ -398,8 +405,8 @@ function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: 
     <HostStage className="host-result-stage">
       <div className="card host-result-panel">{result ? <ResultBody result={result} /> : null}</div>
       {fullReveal && view.scoreboard ? <Scoreboard rows={view.scoreboard} round /> : null}
-      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-      {fullReveal ? <button className="btn btn-primary" onClick={advance}>التالي الآن</button> : <p className="subtitle">نكمل تلقائيًا بالتحدّي الجاي.</p>}
+      <button className="btn btn-primary" onClick={advance}>{fullReveal ? "التالي" : "التحدّي التالي"}</button>
+      <p className="helper center" style={{ margin: 0 }}>النتيجة تبقى قدامكم لين تضغط التالي.</p>
     </HostStage>
   );
 }

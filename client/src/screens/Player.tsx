@@ -13,7 +13,7 @@ export function Player({ view }: { view: ClientView }) {
     case "QUESTION": return <PlayerPrompt view={view} />;
     case "COUNTDOWN": return <PlayerCountdown view={view} />;
     case "ACTION": return <PlayerAction view={view} />;
-    case "HOLD": return <PlayerHold />;
+    case "HOLD": return <PlayerHold view={view} />;
     case "PROMPT_REVEAL": return <PlayerPromptReveal view={view} />;
     case "DISCUSSION": return <PlayerDiscussion view={view} />;
     case "VOTING": return <PlayerVote view={view} />;
@@ -154,11 +154,13 @@ function PlayerAction({ view }: { view: ClientView }) {
   );
 }
 
-function PlayerHold() {
+function PlayerHold({ view }: { view: ClientView }) {
   return (
     <div className="screen center stack player-cue-screen">
-      <h1 className="title player-action-title">ثبّتوا…</h1>
-      <p className="subtitle">طالعوا بعض</p>
+      <div className="eyebrow">خذوا نظرة 👀</div>
+      <h1 className="title player-action-title">طالعوا بعض</h1>
+      <p className="subtitle">خلكم على وضعكم لين يطلع المطلوب.</p>
+      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
     </div>
   );
 }
@@ -240,21 +242,16 @@ function PlayerVote({ view }: { view: ClientView }) {
 }
 
 function PlayerResult({ view }: { view: ClientView }) {
-  const matchFinished = view.room.completedChallenges >= view.room.targetChallenges;
   const fullReveal = view.result?.roundComplete === true;
   return (
     <div className="screen">
       <div className="spacer" />
       {view.result ? <div className="card"><ResultBody result={view.result} /></div> : null}
       {fullReveal && view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} round /> : null}
-      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-      <p className="subtitle center">
-        {matchFinished
-          ? "بعد الكشف نروح تلقائيًا للترتيب النهائي."
-          : fullReveal
-            ? "بعد الكشف يبدأ دور المتخفي الجاي تلقائيًا."
-            : "المتخفي نجا 👀 نكمل تلقائيًا بالتحدّي الجاي."}
-      </p>
+      <div className="center stack" style={{ gap: 8 }}>
+        <div className="pill-note">بانتظار المضيف…</div>
+        <p className="subtitle center" style={{ margin: 0 }}>خذوا وقتكم مع النتيجة. المضيف ينقلكم للمرحلة الجاية.</p>
+      </div>
       <div className="spacer" />
     </div>
   );
