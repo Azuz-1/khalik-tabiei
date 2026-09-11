@@ -221,7 +221,7 @@ async function main() {
   for (const client of [host, ...players]) client.close();
 
   console.log(`\n${failures === 0 ? "4P SCORING E2E ALL PASSED ✅" : `${failures} 4P SCORING E2E FAILED ❌`}`);
-  process.exit(failures === 0 ? 0 : 1;
+  process.exit(failures === 0 ? 0 : 1);
 }
 
 main().catch((error) => {
