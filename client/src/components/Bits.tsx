@@ -44,9 +44,9 @@ export function PhaseCountdown({
 
 export function VoteBoard({ rows, live = false }: { rows: VoteTallyEntry[]; live?: boolean }) {
   return (
-    <div className="vote-board" data-count={rows.length} aria-live={live ? "polite" : undefined}>
+    <div className="vote-board result-vote-board" data-count={rows.length} aria-live={live ? "polite" : undefined}>
       {rows.map((row) => (
-        <div className="vote-card" key={row.uid} data-player-uid={row.uid}>
+        <div className="vote-card result-vote-row" key={row.uid} data-player-uid={row.uid}>
           <div className="vote-card-name">{row.name}</div>
           <div className="vote-card-count">
             <span className={`vote-count-value${live ? " live" : ""}`}>{voteCountText(row.votes)}</span>
@@ -60,41 +60,51 @@ export function VoteBoard({ rows, live = false }: { rows: VoteTallyEntry[]; live
 export function ResultBody({ result }: { result: RoundResult }) {
   if (!result.roundComplete) {
     return (
-      <div className="stack" style={{ gap: 18 }}>
-        <div className="verdict stack">
-          <div className="big escaped">المتخفي نجا 👀</div>
-        </div>
+      <div className="result-stage result-stage-survived center stack">
+        <div className="result-icon" aria-hidden="true">👀</div>
+        <div className="result-kicker">نتيجة التحدّي</div>
+        <div className="result-title escaped">المتخفي نجا</div>
+        <p className="result-subtitle">ما انكشف للحين… ركّزوا أكثر في التحدّي الجاي.</p>
       </div>
     );
   }
 
   const verdict = result.groupFound
-    ? "مسكتوا المتخفي"
+    ? "مسكتوا المتخفي!"
     : result.completionReason === "MATCH_END"
-      ? "خلصت المباراة وما انمسك المتخفي"
+      ? "خلصت المباراة وما انمسك"
       : "المتخفي نجا من دوره";
   const detail = result.completionReason === "MATCH_END"
     ? `انتهت المباراة في تحدّيه ${result.challengeIndex} من ${result.maxChallenges}`
     : `انتهى دوره في التحدّي ${result.challengeIndex} من ${result.maxChallenges}`;
+  const turnout = result.votesCast !== undefined && result.participantCount !== undefined
+    ? `صوّت ${result.votesCast} من ${result.participantCount}`
+    : undefined;
 
   return (
-    <div className="stack result-body" style={{ gap: 22 }}>
-      <div className="verdict stack">
-        <div className={`big ${result.groupFound ? "caught" : "escaped"}`}>
-          {verdict}
-        </div>
-        <div className="subtitle center">المتخفي كان</div>
-        <div className="impostor-name center">{result.impostorName}</div>
-        <div className="pill-note" style={{ marginInline: "auto" }}>
-          {detail}
+    <div className={`result-stage stack${result.groupFound ? " is-caught" : " is-escaped"}`}>
+      <div className="result-hero center stack">
+        <div className="result-icon" aria-hidden="true">{result.groupFound ? "🎭" : "👀"}</div>
+        <div className="result-kicker">نتيجة دور المتخفي</div>
+        <div className={`result-title ${result.groupFound ? "caught" : "escaped"}`}>{verdict}</div>
+        <div className="result-impostor-label">المتخفي كان</div>
+        <div className="result-impostor-name">{result.impostorName}</div>
+        <div className="result-meta" aria-label={detail}>
+          <span>{detail}</span>
+          {turnout ? <span className="result-meta-dot" aria-hidden="true">•</span> : null}
+          {turnout ? <span>{turnout}</span> : null}
         </div>
       </div>
 
-      <div className="stack result-vote-section" style={{ gap: 12 }}>
-        <div className="eyebrow center">الأصوات في آخر تحدّي</div>
-        <div className="subtitle center">صوّت {result.votesCast} من {result.participantCount}</div>
-        <VoteBoard rows={result.voteTally ?? []} />
-      </div>
+      {(result.voteTally?.length ?? 0) > 0 ? (
+        <div className="result-vote-section stack">
+          <div className="result-section-head row between">
+            <span className="eyebrow">الأصوات</span>
+            {turnout ? <span className="result-turnout">{turnout}</span> : null}
+          </div>
+          <VoteBoard rows={result.voteTally ?? []} />
+        </div>
+      ) : null}
     </div>
   );
 }
