@@ -8,6 +8,8 @@ export function GameChrome() {
   const [showRestored, setShowRestored] = useState(false);
   const hadConnection = useRef(false);
   const wasDisconnected = useRef(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
 
   const activeRoom = view != null && !["LOBBY", "GAME_OVER", "CLOSED"].includes(view.room.phase);
   const canManageRoom = view?.self.isOwner === true || view?.self.role === "host";
@@ -17,6 +19,19 @@ export function GameChrome() {
     if (!activeRoom) setMenuOpen(false);
     return () => document.documentElement.classList.remove("game-hud-active");
   }, [activeRoom]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    sheetRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMenuOpen(false);
+      window.requestAnimationFrame(() => menuButtonRef.current?.focus());
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (status === "online") {
@@ -41,10 +56,20 @@ export function GameChrome() {
 
   if (!view || !activeRoom) return null;
 
-  const challengeNumber = Math.min(view.room.targetChallenges, view.room.completedChallenges + 1);
+  // Settlement increments completedChallenges before RESULT is rendered, so RESULT
+  // must keep showing the challenge that just finished instead of jumping ahead.
+  const activeChallengeOrdinal = view.room.phase === "RESULT"
+    ? Math.max(1, view.room.completedChallenges)
+    : view.room.completedChallenges + 1;
+  const challengeNumber = Math.min(view.room.targetChallenges, activeChallengeOrdinal);
   const stintNumber = view.challenge?.index ?? 1;
   const stintMax = view.challenge?.max ?? 3;
   const offlineCount = orderedPlayers.filter((player) => !player.connected).length;
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+    window.requestAnimationFrame(() => menuButtonRef.current?.focus());
+  };
 
   const clickLegacyControl = (selector: string) => {
     setMenuOpen(false);
@@ -81,10 +106,12 @@ export function GameChrome() {
             {offlineCount > 0 ? <span className="game-hud-offline" aria-label={`${offlineCount} غير متصل`}>◌ {offlineCount}</span> : null}
           </div>
           <button
+            ref={menuButtonRef}
             type="button"
             className="game-hud-menu"
             aria-label="المزيد"
             aria-expanded={menuOpen}
+            aria-controls="game-options-sheet"
             onClick={() => { setSheetMessage(null); setMenuOpen(true); }}
           >
             ⋯
@@ -94,15 +121,23 @@ export function GameChrome() {
       </div>
 
       {menuOpen ? (
-        <div className="game-sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setMenuOpen(false); }}>
-          <section className="game-sheet" role="dialog" aria-modal="true" aria-label="خيارات اللعبة">
+        <div className="game-sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeMenu(); }}>
+          <section
+            ref={sheetRef}
+            id="game-options-sheet"
+            className="game-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="خيارات اللعبة"
+            tabIndex={-1}
+          >
             <div className="game-sheet-handle" aria-hidden="true" />
             <div className="row between game-sheet-heading">
               <div>
                 <strong>خيارات اللعبة</strong>
                 <div className="helper">غرفة <span dir="ltr">{view.room.code}</span></div>
               </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMenuOpen(false)}>إغلاق</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={closeMenu}>إغلاق</button>
             </div>
 
             <div className="game-sheet-players" aria-label="اللاعبين">
