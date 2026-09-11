@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ClientView } from "../../../shared/types.js";
+import { OwnerDisplayControl } from "../components/OwnerDisplayControl.js";
 import { useHostGameAudio } from "./useHostGameAudio.js";
 import "./hostAudio.css";
 
@@ -23,6 +24,7 @@ export function HostAudioLayer({
       >
         <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span>
       </button>
+      {view.self.isOwner === true && view.room.phase !== "LOBBY" ? <OwnerDisplayControl view={view} /> : null}
       {children}
     </>
   );
