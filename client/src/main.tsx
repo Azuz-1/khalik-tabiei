@@ -9,6 +9,7 @@ import "./telemetry.js";
 import "./styles.css";
 import "./c-ux.css";
 import "./game-hud.css";
+import "./game-stage.css";
 import "./home-suggestion-dialog.css";
 
 async function loadRoot(): Promise<ComponentType> {
