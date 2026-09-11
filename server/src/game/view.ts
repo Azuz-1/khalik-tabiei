@@ -2,6 +2,7 @@ import type { ClientView, PublicPlayer, RevealedAnswer, Role, ScoreReason } from
 import { CATEGORIES, GAME_MODES, MAX_CHALLENGES_PER_ROUND } from "../../../shared/constants.js";
 import { activePlayers, roundParticipants, type RoomState, type RoundState } from "./state.js";
 import { questionFor, ranking } from "./engine.js";
+import { promptNoveltyToken } from "./promptNovelty.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
 const PUBLIC_PROMPT_PHASES = new Set(["PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT"]);
@@ -137,7 +138,14 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   }
 
   if (round?.kind === "IMITATION" && PUBLIC_PROMPT_PHASES.has(room.phase)) {
-    view.publicPrompt = { mode: round.mode, text: round.prompt };
+    view.publicPrompt = {
+      mode: round.mode,
+      text: round.prompt,
+      // This stable token is intentionally withheld from Host/Spectator display
+      // projections and from every pre-reveal phase. It lets a participant
+      // browser remember this already-public prompt without exposing promptId.
+      ...(role === "player" ? { noveltyToken: promptNoveltyToken(round.promptId) } : {}),
+    };
   }
 
   if (room.phase === "VOTING" && round) {
