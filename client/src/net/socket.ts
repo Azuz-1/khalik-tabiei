@@ -9,6 +9,7 @@ import type {
   ServerMessage,
 } from "../../../shared/types.js";
 import { serverClock } from "./clock.js";
+import { currentPromptNoveltyFilter, recordPublicPromptNovelty } from "./promptNovelty.js";
 
 export interface GameState {
   status: "connecting" | "online" | "offline";
@@ -20,7 +21,7 @@ export interface GameState {
   pendingActions: readonly string[];
 }
 
-type ActionMessage = Exclude<ClientMessage, { t: "HELLO" } | { t: "PING" }>;
+type ActionMessage = Exclude<ClientMessage, { t: "HELLO" } | { t: "PING" } | { t: "SYNC_NOVELTY" }>;
 interface PendingAction {
   type: ActionMessage["t"];
   message: ActionMessage;
@@ -51,6 +52,8 @@ let heartbeatTimer: number | undefined;
 let connectGeneration = 0;
 let bootstrapAbort: AbortController | null = null;
 let lastInboundMono = 0;
+let noveltySyncedSocket: WebSocket | null = null;
+let noveltySyncedBits = "";
 
 const BOOTSTRAP_TIMEOUT_MS = 5_000;
 const CONNECT_TIMEOUT_MS = 7_000;
@@ -180,6 +183,15 @@ function sendClockSample(socket: WebSocket): void {
   socket.send(JSON.stringify({ t: "PING", sampleId, clientMonoMs } satisfies ClientMessage));
 }
 
+function syncPromptNovelty(socket: WebSocket, view: ClientView): void {
+  if (socket !== ws || socket.readyState !== WebSocket.OPEN || view.self.role !== "player") return;
+  const novelty = currentPromptNoveltyFilter();
+  if (noveltySyncedSocket === socket && noveltySyncedBits === novelty.bits) return;
+  socket.send(JSON.stringify({ t: "SYNC_NOVELTY", novelty } satisfies ClientMessage));
+  noveltySyncedSocket = socket;
+  noveltySyncedBits = novelty.bits;
+}
+
 function startHeartbeat(socket: WebSocket): void {
   window.clearInterval(heartbeatTimer);
   sendClockSample(socket);
@@ -212,6 +224,10 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
       authenticated(socket, message);
       set({ view: message.view, uid: message.view.self.uid });
       clearAuthoritativePending(socket, message.view, previous);
+      if (message.view.self.role === "player" && message.view.publicPrompt?.noveltyToken) {
+        recordPublicPromptNovelty(message.view.publicPrompt.noveltyToken);
+      }
+      syncPromptNovelty(socket, message.view);
       break;
     }
     case "ACK":
@@ -328,6 +344,10 @@ async function connectNow(): Promise<void> {
     if (socket !== ws || generation !== connectGeneration) return;
     failPendingForSocket(socket);
     window.clearInterval(heartbeatTimer);
+    if (noveltySyncedSocket === socket) {
+      noveltySyncedSocket = null;
+      noveltySyncedBits = "";
+    }
     ws = null;
     set({ status: "offline" });
     scheduleReconnect();
@@ -443,8 +463,8 @@ export function resetToHome(): void {
 }
 
 export const actions = {
-  createRoom: (name: string) => sendAction({ t: "CREATE_ROOM", name }),
-  joinRoom: (code: string, name: string) => sendAction({ t: "JOIN_ROOM", code, name }),
+  createRoom: (name: string) => sendAction({ t: "CREATE_ROOM", name, novelty: currentPromptNoveltyFilter() }),
+  joinRoom: (code: string, name: string) => sendAction({ t: "JOIN_ROOM", code, name, novelty: currentPromptNoveltyFilter() }),
   leaveRoom: () => sendAction({ t: "LEAVE_ROOM" }),
   setSettings: (patch: { totalRounds?: number; categories?: CategoryId[]; selectedModes?: GameMode[]; playStyle?: PlayStyle }) => sendAction({ t: "SET_SETTINGS", ...patch }),
   setAdmission: (locked: boolean) => sendAction({ t: "SET_ADMISSION", locked }),
