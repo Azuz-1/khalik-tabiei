@@ -1,5 +1,6 @@
 html.game-hud-active .floating-players,
 html.game-hud-active .floating-exit,
+html.game-hud-active [data-testid="owner-display-control"],
 html.game-hud-active .offline-player-banner:not([role="status"]) {
   display: none !important;
 }
