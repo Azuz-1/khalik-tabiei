@@ -18,6 +18,7 @@ import {
 } from "./state.js";
 import { IMITATION_PROMPTS, type ImitationPrompt } from "./imitationPrompts.data.js";
 import { promptQualityWeight, type PromptFamily } from "./promptMetadata.js";
+import { promptProbablySeen } from "./promptNovelty.js";
 import { pickPair } from "./questions.js";
 import * as voting from "./voting.js";
 
@@ -199,7 +200,7 @@ export function choosePromptCandidate(
 function pickPrompt(
   room: RoomState,
   mode: GameMode,
-  participantCount: number,
+  participantUids: string[],
   deps: EngineDeps,
 ): ImitationPrompt {
   const pool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === mode);
@@ -212,10 +213,21 @@ function pickPrompt(
 
   if (!candidates.length) throw new GameError("INTERNAL", `no prompts for ${mode}`);
 
+  const noveltyFilters = participantUids
+    .map((uid) => room.promptNoveltyByUid.get(uid))
+    .filter((filter): filter is Uint8Array => filter !== undefined);
+  if (noveltyFilters.length) {
+    const unseen = candidates.filter((prompt) => !promptProbablySeen(noveltyFilters, prompt.id));
+    // Browser history is an untrusted UX hint. A saturated/malicious filter can
+    // only make us fall back to the normal authoritative pool; it can never
+    // block the game or mutate scoring/roles/timers.
+    if (unseen.length) candidates = unseen;
+  }
+
   const previousFamily = room.round?.promptId
     ? IMITATION_PROMPTS.find((prompt) => prompt.id === room.round?.promptId)?.family
     : undefined;
-  const prompt = choosePromptCandidate(candidates, previousFamily, deps.rng, participantCount);
+  const prompt = choosePromptCandidate(candidates, previousFamily, deps.rng, participantUids.length);
   room.usedPromptIds.add(prompt.id);
   return prompt;
 }
@@ -237,7 +249,7 @@ function prepareChallenge(
   mode: GameMode,
   deps: EngineDeps,
 ): void {
-  const prompt = pickPrompt(room, mode, participantUids.length, deps);
+  const prompt = pickPrompt(room, mode, participantUids, deps);
   room.timerGeneration += 1;
   room.pause = undefined;
   room.round = {
