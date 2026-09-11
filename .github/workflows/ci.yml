@@ -81,6 +81,55 @@ jobs:
           curl --fail --silent http://localhost:18080/readyz >/dev/null
           docker logs "$CID"
 
+  release-groups:
+    if: github.event_name == 'pull_request' && github.head_ref == 'test/comprehensive-10-groups'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Correct temporary G5 MATCH_END scenario
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+          const path = "server/test/integration-10-groups.mjs";
+          const source = fs.readFileSync(path, "utf8");
+          const before = '{ id: "G5", players: 7, target: 3, modes: ["HANDS", "POINT"], pattern: ["survive"], playerReconnect: true, expectMatchEnd: true }';
+          const after = '{ id: "G5", players: 7, target: 3, modes: ["HANDS", "POINT"], pattern: ["catch", "survive", "survive"], playerReconnect: true, expectMatchEnd: true }';
+          if (!source.includes(before)) throw new Error("expected temporary G5 scenario not found");
+          fs.writeFileSync(path, source.replace(before, after));
+          NODE
+      - name: Run isolated 10-group release simulation
+        run: |
+          npm start > /tmp/khalik-release-server.log 2>&1 &
+          SERVER_PID=$!
+          cleanup() {
+            kill "$SERVER_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in {1..40}; do
+            if curl --fail --silent http://localhost:8080/readyz >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              cat /tmp/khalik-release-server.log
+              exit 1
+            fi
+            sleep 0.25
+          done
+
+          curl --fail --silent http://localhost:8080/readyz >/dev/null
+          npm run test:release-groups
+        env:
+          PUBLIC_ORIGIN: http://localhost:8080
+          SESSION_SECRET: release-groups-test-secret-0123456789-abcdef
+
   browser:
     needs: validate
     runs-on: ubuntu-latest
