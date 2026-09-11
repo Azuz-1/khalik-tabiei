@@ -258,8 +258,8 @@ function PlayerVote({ view }: { view: ClientView }) {
         <div className="stage-vote-selection">
           {pickedName ? <>اختيارك: <strong dir="auto">{pickedName}</strong></> : "اختر لاعب أول"}
         </div>
-        <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>تأكيد التصويت</button>
-        <p className="stage-vote-note">بعد التأكيد ما تقدر تغيّر صوتك.</p>
+        <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{pickedName ? `أكّد التصويت على ${pickedName}` : "تأكيد التصويت"}</button>
+        <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
       </div>
     </div>
   );
