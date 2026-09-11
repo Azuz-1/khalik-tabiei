@@ -1,0 +1,257 @@
+html.game-hud-active .floating-players,
+html.game-hud-active .floating-exit,
+html.game-hud-active [data-testid="owner-display-control"],
+html.game-hud-active .offline-player-banner:not([role="status"]) {
+  display: none !important;
+}
+
+html.game-hud-active .screen {
+  padding-top: calc(72px + env(safe-area-inset-top));
+}
+
+.game-hud-wrap {
+  position: fixed;
+  z-index: 70;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(calc(100% - 24px), 560px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.game-hud {
+  min-width: 0;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px 7px 14px;
+  border: 1px solid rgba(196, 181, 253, 0.16);
+  border-radius: 18px;
+  background: rgba(16, 10, 31, 0.84);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28), 0 0 30px rgba(124, 58, 237, 0.10);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+
+.game-hud-status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: clamp(12px, 3.2vw, 14px);
+  font-weight: 800;
+}
+
+.game-hud-status > span:not(.game-hud-separator) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.game-hud-separator {
+  flex: 0 0 auto;
+  opacity: 0.38;
+}
+
+.game-hud-offline {
+  flex: 0 0 auto;
+  color: #fbbf24;
+}
+
+.game-hud-menu {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 34px;
+  border: 0;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.game-hud-menu:focus-visible {
+  outline: 2px solid rgba(196, 181, 253, 0.9);
+  outline-offset: 2px;
+}
+
+html.game-hud-active .conn {
+  position: fixed;
+  z-index: 72;
+  top: calc(max(8px, env(safe-area-inset-top)) + 54px);
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
+  padding: 8px 13px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 999px;
+  background: rgba(50, 31, 5, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  color: transparent;
+  font-size: 0;
+  line-height: 1;
+}
+
+html.game-hud-active .conn::after {
+  content: "جاري إعادة الاتصال…";
+  color: #fde68a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.connection-restored-toast {
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 7px auto 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(134, 239, 172, 0.2);
+  border-radius: 999px;
+  background: rgba(8, 39, 24, 0.92);
+  color: #bbf7d0;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.game-sheet-backdrop {
+  position: fixed;
+  z-index: 110;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: rgba(4, 2, 10, 0.62);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.game-sheet {
+  direction: rtl;
+  width: min(100%, 560px);
+  max-height: min(72dvh, 660px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 14px 16px;
+  border: 1px solid rgba(196, 181, 253, 0.16);
+  border-radius: 26px 26px 20px 20px;
+  background: rgba(18, 11, 34, 0.98);
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.38), 0 0 36px rgba(124, 58, 237, 0.09);
+}
+
+.game-sheet-handle {
+  width: 42px;
+  height: 4px;
+  margin: 1px auto 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.game-sheet-heading {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.game-sheet-heading strong {
+  font-size: 20px;
+}
+
+.game-sheet-players {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 14px;
+  border-block: 1px solid rgba(255, 255, 255, 0.07);
+  padding-block: 5px;
+}
+
+.game-sheet-player {
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 2px;
+}
+
+.game-sheet-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.game-sheet-presence {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.game-sheet-presence.online {
+  color: #86efac;
+}
+
+.game-sheet-presence.offline {
+  color: #fbbf24;
+}
+
+.game-sheet-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.game-sheet-actions .btn {
+  min-width: 0;
+  min-height: 48px;
+  padding-inline: 10px;
+  white-space: normal;
+}
+
+.game-sheet-message {
+  margin-top: 10px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.game-sheet-danger {
+  width: 100%;
+  margin-top: 14px;
+  border-color: rgba(248, 113, 113, 0.18) !important;
+  color: #fecaca !important;
+}
+
+@media (max-width: 380px) {
+  .game-hud-wrap {
+    width: calc(100% - 16px);
+  }
+
+  .game-hud {
+    gap: 6px;
+    padding-inline-start: 10px;
+  }
+
+  .game-hud-status {
+    gap: 5px;
+    font-size: 11px;
+  }
+
+  .game-sheet-actions {
+    grid-template-columns: 1fr;
+  }
+}

@@ -47,12 +47,13 @@ test("owner can attach, refresh, and revoke a public Display after the game star
     await expect(start).toBeEnabled();
     await start.click();
 
-    // The owner remains a real player during private gameplay, but still has a
-    // separate Display management control layered over their player surface.
+    // The owner remains a real player during private gameplay. Display
+    // management is now a secondary action inside the compact gameplay HUD.
     await expect(owner.page.getByRole("button", { name: "جاهز", exact: true })).toBeVisible();
-    const displayControl = owner.page.getByTestId("owner-display-control");
-    await expect(displayControl).toBeVisible();
-    await displayControl.click();
+    await owner.page.getByRole("button", { name: "المزيد", exact: true }).click();
+    const gameOptions = owner.page.getByRole("dialog", { name: "خيارات اللعبة" });
+    await expect(gameOptions).toBeVisible();
+    await gameOptions.getByRole("button", { name: "📺 شاشة العرض", exact: true }).click();
     await expect(owner.page.getByRole("dialog", { name: "إدارة شاشة العرض" })).toBeVisible();
 
     await owner.page.getByRole("button", { name: "جهّز رابط شاشة العرض", exact: true }).click();
