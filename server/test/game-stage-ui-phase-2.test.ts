@@ -31,6 +31,12 @@ test("gameplay chrome exposes compact HUD, player details and secondary actions"
     assert.ok(chrome.includes(marker), `GameChrome must keep ${marker}`);
   }
   assert.ok(chrome.includes('dir="auto"'), "mixed Arabic/LTR player names must keep automatic bidi isolation");
+  assert.ok(
+    chrome.includes('view.room.phase === "RESULT"') && chrome.includes("Math.max(1, view.room.completedChallenges)"),
+    "RESULT HUD must keep showing the challenge that just settled instead of jumping ahead",
+  );
+  assert.ok(chrome.includes('aria-controls="game-options-sheet"'));
+  assert.ok(chrome.includes('event.key !== "Escape"'), "game options sheet must support Escape dismissal");
 });
 
 test("phase 2 CSS replaces floating controls and the large reconnect banner during gameplay", () => {
