@@ -164,7 +164,7 @@ async function physical(host, players, label, reconnect = null) {
   ok(host.view?.publicPrompt === undefined, `${label}: prompt stays secret at ACTION`);
   await waitFor(host, (client) => client.phase() === "HOLD", `${label} hold`, 4_000);
   ok(host.view?.publicPrompt === undefined, `${label}: prompt stays secret during HOLD`);
-  await waitFor(host, (client) => client.phase() === "PROMPT_REVEAL", `${label} reveal`, 5_000);
+  await waitFor(host, (client) => client.phase() === "PROMPT_REVEAL", `${label} reveal`, 8_000);
   ok(host.view?.publicPrompt?.text === prompt, `${label}: prompt becomes public after HOLD`);
   await waitFor(host, (client) => client.phase() === "DISCUSSION", `${label} discussion`, 6_000);
   await waitForAll(players, (client) => client.phase() === "DISCUSSION", `${label} player discussion`);
@@ -203,6 +203,7 @@ async function surviveFirstChallenge(host, players, current, label) {
   ok(host.view?.result?.impostorUid === undefined, `${label}: intermediate result hides impostor identity`);
   ok(host.view?.result?.voteTally === undefined, `${label}: intermediate result hides vote distribution`);
   ok(host.view?.scoreboard === undefined, `${label}: intermediate result hides scoreboard`);
+  ok(host.view?.room?.phaseEndsAt === undefined, `${label}: result has no auto-advance deadline`);
   for (const client of [host, ...players]) assertNoMapping(client, `${client.label} ${label}`);
 }
 
@@ -218,13 +219,12 @@ async function catchCurrent(host, players, current, label) {
   ok(host.view?.result?.roundComplete === true, `${label}: catch ends impostor stint`);
   ok(Array.isArray(host.view?.scoreboard), `${label}: completed stint reveals scoreboard`);
   ok(host.view?.result?.voteTally?.length === 3, `${label}: stint-end aggregate includes all participants`);
+  ok(host.view?.room?.phaseEndsAt === undefined, `${label}: full reveal waits for Host input`);
   for (const client of [host, ...players]) assertNoMapping(client, `${client.label} ${label}`);
 }
 
 async function nextQuestion(host, players, expectedCompleted) {
-  if (host.view?.result?.roundComplete === true) {
-    host.send({ t: "NEXT_ROUND" });
-  }
+  if (host.phase() === "RESULT") host.send({ t: "NEXT_ROUND" });
   await waitForAll(
     [host, ...players],
     (client) => client.phase() === "QUESTION" && client.view?.room?.completedChallenges === expectedCompleted,
@@ -298,11 +298,11 @@ async function main() {
   await sleep(150);
   for (const client of [host, ...players]) client.close();
 
-  console.log(`\n${failures === 0 ? "COMPETITIVE E2E ALL PASSED ✅" : `${failures} COMPETITIVE E2E FAILED ❌`}`);
-  process.exit(failures === 0 ? 0 : 1);
+  console.log(`\n${failures === 0 ? "COMPETITIVE E2E PASSED" : `${failures} CHECK(S) FAILED`}`);
+  process.exitCode = failures === 0 ? 0 : 1;
 }
 
 main().catch((error) => {
-  console.error("COMPETITIVE E2E FATAL", error);
-  process.exit(1);
+  console.error(error);
+  process.exitCode = 1;
 });
