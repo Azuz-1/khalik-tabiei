@@ -4,7 +4,6 @@ import { useGame } from "../net/socket.js";
 export function GameChrome() {
   const { view, status } = useGame();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [sheetMessage, setSheetMessage] = useState<string | null>(null);
   const [showRestored, setShowRestored] = useState(false);
   const hadConnection = useRef(false);
   const wasDisconnected = useRef(false);
@@ -76,25 +75,6 @@ export function GameChrome() {
     window.setTimeout(() => document.querySelector<HTMLButtonElement>(selector)?.click(), 0);
   };
 
-  const copyDisplayLink = async () => {
-    setSheetMessage(null);
-    try {
-      const response = await fetch(`/api/rooms/${encodeURIComponent(view.room.code)}/display-link`, {
-        method: "GET",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      });
-      const body = await response.json() as { path?: string };
-      if (!response.ok || !body.path) throw new Error("display link unavailable");
-      const url = new URL(body.path, location.origin).href;
-      await navigator.clipboard.writeText(url);
-      setSheetMessage("تم نسخ رابط شاشة العرض ✓");
-    } catch {
-      setSheetMessage("ما قدرنا ننسخ رابط العرض. جرّب مرة ثانية.");
-    }
-  };
-
   return (
     <>
       <div className="game-hud-wrap">
@@ -112,7 +92,7 @@ export function GameChrome() {
             aria-label="المزيد"
             aria-expanded={menuOpen}
             aria-controls="game-options-sheet"
-            onClick={() => { setSheetMessage(null); setMenuOpen(true); }}
+            onClick={() => setMenuOpen(true)}
           >
             ⋯
           </button>
@@ -154,11 +134,16 @@ export function GameChrome() {
             {canManageRoom ? (
               <div className="game-sheet-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => clickLegacyControl(".floating-players")}>إدارة اللاعبين</button>
-                <button type="button" className="btn btn-ghost" disabled={status !== "online"} onClick={copyDisplayLink}>📺 نسخ رابط شاشة العرض</button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={status !== "online"}
+                  onClick={() => clickLegacyControl('[data-testid="owner-display-control"]')}
+                >
+                  📺 شاشة العرض
+                </button>
               </div>
             ) : null}
-
-            {sheetMessage ? <div className="game-sheet-message" role="status">{sheetMessage}</div> : null}
 
             <button
               type="button"
