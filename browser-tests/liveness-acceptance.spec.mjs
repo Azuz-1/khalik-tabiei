@@ -53,7 +53,7 @@ async function joinPlayer(browser, code, name) {
 async function identifyRoles(players) {
   const rows = [];
   for (const player of players) {
-    await expect(player.page.locator(".q-card")).toBeVisible({ timeout: PHASE_TIMEOUT });
+    await expect(player.page.locator(".player-stage-main")).toBeVisible({ timeout: PHASE_TIMEOUT });
     rows.push({ player, isImpostor: await player.page.getByText("أنت المتخفي").isVisible() });
   }
   const impostors = rows.filter((row) => row.isImpostor);
