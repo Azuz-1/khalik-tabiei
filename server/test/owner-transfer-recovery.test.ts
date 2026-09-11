@@ -19,6 +19,14 @@ function createNamedRoom(manager: RoomManager, name = "المالك") {
   return { ...owner, uid, code: state.view.room.code };
 }
 
+async function waitForCondition(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error("condition was not reached before timeout");
+    await wait(10);
+  }
+}
+
 test("named owner disconnect transfers authority after grace without closing the room or reclaiming it on reconnect", async () => {
   const manager = new RoomManager({ ownerTransferGraceMs: 20 });
   const owner = createNamedRoom(manager);
@@ -33,7 +41,7 @@ test("named owner disconnect transfers authority after grace without closing the
     assert.equal(room.hostConnected, true, "named owner disconnect never enters legacy host pause semantics");
     assert.ok(room.ownerTransferDeadline);
 
-    await wait(45);
+    await waitForCondition(() => room.hostUid === second.uid);
     assert.equal(room.hostUid, second.uid, "oldest connected eligible player receives authority");
     assert.equal(room.players.get(second.uid)?.isHost, true);
     assert.equal(room.players.get(owner.uid)?.isHost, false);
