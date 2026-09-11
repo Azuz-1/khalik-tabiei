@@ -243,6 +243,23 @@ button:disabled {
 }
 .vote-confirm-bar .helper { margin: 0; }
 
+/* Phase 1 game-stage direction: choices stay touch-friendly but stop turning
+   every player into a full-width card. */
+.vote-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.vote-opt {
+  min-height: 56px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  justify-content: space-between;
+  text-align: start;
+}
+
 .score-explain-board { gap: 0; }
 .score-explain-row {
   padding: 12px 0;
@@ -261,6 +278,130 @@ button:disabled {
   font-size: 14px;
   font-weight: 700;
   line-height: 1.5;
+}
+
+/* Results are a game moment first and a data table second. */
+.result-stage {
+  width: min(100%, 760px);
+  margin-inline: auto;
+  gap: 18px;
+}
+
+.result-hero,
+.result-stage-survived {
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.result-icon {
+  font-size: clamp(38px, 10vw, 56px);
+  line-height: 1;
+  filter: drop-shadow(0 8px 24px rgba(164, 93, 255, 0.28));
+}
+
+.result-kicker,
+.result-impostor-label,
+.result-turnout {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.result-title {
+  font-size: clamp(34px, 9vw, 58px);
+  font-weight: 1000;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.result-title.caught { color: var(--good); }
+.result-title.escaped { color: #f0b4ff; }
+
+.result-subtitle {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.result-impostor-name {
+  font-size: clamp(28px, 7vw, 42px);
+  font-weight: 1000;
+  color: #d8b4fe;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.result-meta-dot { opacity: 0.55; }
+
+.result-vote-section {
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.result-section-head { align-items: center; }
+
+.result-vote-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.result-vote-row {
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.045);
+}
+
+.result-vote-row .vote-card-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.result-vote-row .vote-card-count {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.host-result-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The scoreboard should read as one compact table, not a card containing cards. */
+.score-explain-board {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .vote-count-value { line-height: 1.15 !important; }
@@ -297,6 +438,13 @@ button:disabled {
   .home-tab { font-size: 0.9rem; padding-inline: 6px; }
   .home-tab-panel { min-height: 230px; }
   .score-explain-row .row { align-items: flex-start; gap: 8px; }
+  .result-vote-board { grid-template-columns: 1fr 1fr; }
+  .result-meta { font-size: 13px; }
+}
+
+@media (max-width: 360px) {
+  .vote-list,
+  .result-vote-board { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
