@@ -81,50 +81,51 @@ function PlayerPrompt({ view }: { view: ClientView }) {
   const mode = modeInfo(view);
   if (ready) return <PlayerReadyWaiting />;
   return (
-    <div className="screen">
-      <div className="center"><div className="eyebrow">{roundLabel(view)}</div></div>
-      <div className="spacer" />
-      <div className="q-card stack">
-        <span className="eyebrow">{modeTitle(view)}</span>
+    <div className="screen player-stage-screen">
+      <main className="player-stage-main">
+        <div className="player-stage-round">{roundLabel(view)}</div>
+        <div className="player-stage-mode">{modeTitle(view)}</div>
         {view.isImpostor ? (
           <>
-            <div className="q-text">أنت المتخفي</div>
-            <p className="subtitle center" style={{ marginBottom: 0 }}>ما تعرف المطلوب.</p>
-            <p className="subtitle center" style={{ marginTop: 0 }}>{mode?.impostorInstruction ?? "راقب الباقين وخلك طبيعي."}</p>
+            <div className="player-stage-kicker">دورك</div>
+            <h1 className="player-stage-prompt player-stage-impostor">أنت المتخفي</h1>
+            <p className="player-stage-copy">ما تعرف المطلوب.</p>
+            <p className="player-stage-copy player-stage-copy-strong">{mode?.impostorInstruction ?? "راقب الباقين وخلك طبيعي."}</p>
           </>
         ) : (
           <>
-            <span className="eyebrow">المطلوب</span>
-            <div className="q-text">{view.myPrompt?.text ?? "…"}</div>
-            <p className="subtitle center" style={{ marginBottom: 0 }}>{mode?.normalInstruction}</p>
+            <div className="player-stage-kicker">المطلوب</div>
+            <h1 className="player-stage-prompt">{view.myPrompt?.text ?? "…"}</h1>
+            {mode?.normalInstruction ? <p className="player-stage-copy">{mode.normalInstruction}</p> : null}
           </>
         )}
+      </main>
+      <div className="player-stage-dock">
+        <button className="btn btn-primary" onClick={() => actions.markReady()}>جاهز</button>
       </div>
-      <button className="btn btn-primary" onClick={() => actions.markReady()}>جاهز</button>
-      <div className="spacer" />
     </div>
   );
 }
 
 function PlayerReadyWaiting() {
   return (
-    <div className="screen center stack">
-      <div className="spacer" />
-      <div className="ok-badge">جاهز ✓</div>
-      <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>ننتظر الباقين</h1>
-      <p className="subtitle">إذا بدأ العد، بيظهر هنا مباشرة.</p>
-      <div className="spacer" />
+    <div className="screen center stack player-stage-screen player-stage-waiting">
+      <main className="player-stage-main">
+        <div className="ok-badge">جاهز ✓</div>
+        <h1 className="player-stage-prompt player-stage-prompt-small">ننتظر الباقين</h1>
+        <p className="player-stage-copy">إذا بدأ العد، بيظهر هنا مباشرة.</p>
+      </main>
     </div>
   );
 }
 
 function PlayerWaitNext() {
   return (
-    <div className="screen center stack">
-      <div className="spacer" />
-      <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>انتظر الدور الجاي</h1>
-      <p className="subtitle">أنت مو مشارك في دور المتخفي الحالي. مكانك محفوظ وبتدخل مع الدور الجاي.</p>
-      <div className="spacer" />
+    <div className="screen center stack player-stage-screen player-stage-waiting">
+      <main className="player-stage-main">
+        <h1 className="player-stage-prompt player-stage-prompt-small">انتظر الدور الجاي</h1>
+        <p className="player-stage-copy">أنت مو مشارك في دور المتخفي الحالي. مكانك محفوظ وبتدخل مع الدور الجاي.</p>
+      </main>
     </div>
   );
 }
@@ -166,23 +167,38 @@ function PlayerHold({ view }: { view: ClientView }) {
 }
 
 function PlayerWatchScreen() {
-  return <div className="screen center stack"><div className="spacer" /><h1 className="title" style={{ fontSize: "clamp(38px,11vw,58px)" }}>انتظر شوي…</h1><p className="subtitle">بتتحدث حالتك هنا تلقائيًا.</p><div className="spacer" /></div>;
+  return (
+    <div className="screen center stack player-stage-screen player-stage-waiting">
+      <main className="player-stage-main">
+        <h1 className="player-stage-prompt player-stage-prompt-small">انتظر شوي…</h1>
+        <p className="player-stage-copy">بتتحدث حالتك هنا تلقائيًا.</p>
+      </main>
+    </div>
+  );
 }
 
 function PlayerPromptReveal({ view }: { view: ClientView }) {
-  return <div className="screen center stack"><div className="spacer" /><div className="eyebrow">المطلوب كان…</div><div className="q-text">{view.publicPrompt?.text ?? "…"}</div><div className="spacer" /></div>;
+  return (
+    <div className="screen player-stage-screen">
+      <main className="player-stage-main">
+        <div className="player-stage-kicker">المطلوب كان…</div>
+        <h1 className="player-stage-prompt">{view.publicPrompt?.text ?? "…"}</h1>
+      </main>
+    </div>
+  );
 }
 
 function PlayerDiscussion({ view }: { view: ClientView }) {
   return (
-    <div className="screen">
-      <div className="center"><div className="eyebrow">{roundLabel(view)}</div></div>
-      <div className="spacer" />
-      <div className="q-card stack"><span className="eyebrow">المطلوب كان</span><div className="q-text" style={{ fontSize: "clamp(22px,6vw,30px)" }}>{view.publicPrompt?.text ?? "…"}</div></div>
-      <h2 className="title center" style={{ fontSize: "clamp(28px,8vw,42px)" }}>مين تصرفه مو طبيعي؟</h2>
-      <PhaseCountdown endsAt={view.room.phaseEndsAt} warningAtSeconds={10} warningText="استعدوا للتصويت" />
-      <p className="subtitle center">تناقشوا، والتصويت يفتح تلقائيًا بعد انتهاء الوقت.</p>
-      <div className="spacer" />
+    <div className="screen player-stage-screen player-discussion-screen">
+      <main className="player-stage-main">
+        <div className="player-stage-round">{roundLabel(view)}</div>
+        <div className="player-stage-kicker">المطلوب كان</div>
+        <div className="player-stage-prompt player-stage-prompt-compact">{view.publicPrompt?.text ?? "…"}</div>
+        <h1 className="player-discussion-question">مين تصرفه مو طبيعي؟</h1>
+        <PhaseCountdown endsAt={view.room.phaseEndsAt} warningAtSeconds={10} warningText="استعدوا للتصويت" />
+        <p className="player-stage-copy">تناقشوا، والتصويت يفتح تلقائيًا بعد انتهاء الوقت.</p>
+      </main>
     </div>
   );
 }
@@ -201,42 +217,50 @@ function PlayerVote({ view }: { view: ClientView }) {
 
   if (view.myVoteSubmitted) {
     return (
-      <div className="screen">
-        <div className="spacer" />
-        <div className="center stack">
-          <div className="ok-badge">تم تسجيل صوتك</div>
+      <div className="screen player-stage-screen player-vote-waiting">
+        <main className="player-stage-main">
+          <div className="vote-waiting-check" aria-hidden="true">✓</div>
+          <h1 className="player-stage-prompt player-stage-prompt-small">تم تسجيل صوتك</h1>
+          <div className="vote-waiting-progress"><span className="num-ltr">{progress.submitted} من {progress.total}</span> صوّتوا</div>
           <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-          <p className="subtitle">ننتظر الباقين… <span className="num-ltr">{progress.submitted}/{progress.total}</span></p>
-          <p className="helper center">نقاطك وتوزيع الأصوات ما تنكشف إلا بعد نهاية دور المتخفي.</p>
-        </div>
-        <div className="spacer" />
+          <p className="player-stage-copy">بانتظار الباقين…</p>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="screen player-vote-screen">
-      <div className="center stack">
-        <div className="eyebrow">{roundLabel(view)}</div>
-        <h1 className="title">مين تحس إنه المتخفي؟</h1>
+    <div className="screen player-vote-screen player-stage-screen">
+      <main className="player-vote-main">
+        <div className="player-stage-round">{roundLabel(view)}</div>
+        <h1 className="player-vote-title">مين تحس إنه المتخفي؟</h1>
         <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-        <p className="helper">أغلبية الأصوات اللي تنرسل خلال الوقت تمسك المتخفي. عدم التصويت ما يدخل في مقام الأغلبية، لكنه يقطع سلسلة تصويتك الصحيحة.</p>
-      </div>
-      <div className="vote-list" role="radiogroup" aria-label="اختر الشخص اللي تحس إنه المتخفي">
-        {targets.map((target) => {
-          const selected = picked === target.uid;
-          return (
-            <button key={target.uid} type="button" role="radio" aria-checked={selected} className={`vote-opt${selected ? " picked" : ""}`} onClick={() => setPicked(target.uid)}>
-              <span>{target.name}</span>{selected ? <span aria-hidden="true">✓</span> : null}
-            </button>
-          );
-        })}
-      </div>
-      <div className="vote-confirm-bar">
-        <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{pickedName ? `أكّد التصويت على ${pickedName}` : "اختر شخص"}</button>
+        <div className="vote-list stage-vote-grid" role="radiogroup" aria-label="اختر الشخص اللي تحس إنه المتخفي">
+          {targets.map((target) => {
+            const selected = picked === target.uid;
+            return (
+              <button
+                key={target.uid}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`vote-opt stage-vote-option${selected ? " picked" : ""}`}
+                onClick={() => setPicked(target.uid)}
+              >
+                <span className="stage-vote-name" dir="auto">{target.name}</span>
+                {selected ? <span className="stage-vote-check" aria-hidden="true">✓</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </main>
+      <div className="vote-confirm-bar stage-vote-dock">
+        <div className="stage-vote-selection">
+          {pickedName ? <>اختيارك: <strong dir="auto">{pickedName}</strong></> : "اختر لاعب أول"}
+        </div>
+        <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{pickedName ? `أكّد التصويت على ${pickedName}` : "تأكيد التصويت"}</button>
         <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
       </div>
-      <div className="spacer" />
     </div>
   );
 }

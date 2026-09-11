@@ -77,7 +77,7 @@ async function ownerSeatFor(ownerPage, name) {
 async function identifyRoles(players) {
   const seen = [];
   for (const player of players) {
-    await expect(player.page.locator(".q-card")).toBeVisible({ timeout: PHASE_TIMEOUT });
+    await expect(player.page.locator(".player-stage-main")).toBeVisible({ timeout: PHASE_TIMEOUT });
     const isImpostor = await player.page.getByText("أنت المتخفي").isVisible();
     seen.push({ ...player, isImpostor });
   }

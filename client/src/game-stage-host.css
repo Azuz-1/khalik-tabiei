@@ -1,0 +1,77 @@
+/* Phase 3 — host Game Stage polish
+   Match the participant stage: one dominant moment, lighter supporting status,
+   and no dashboard-style card around secondary voting information. */
+
+.host-prompt-reveal,
+.host-prompt-discussion {
+  max-width: 18ch;
+  text-wrap: balance;
+  text-shadow: 0 10px 38px rgba(139, 92, 246, 0.16);
+}
+
+.host-discussion-stage .host-stage-content,
+.host-voting-stage .host-stage-content {
+  width: min(100%, 980px);
+  gap: clamp(10px, 1.8vh, 18px);
+}
+
+.host-discussion-stage .host-prompt-eyebrow,
+.host-voting-stage > .host-stage-content > .eyebrow {
+  color: rgba(201, 189, 234, 0.74);
+}
+
+.host-discussion-question {
+  max-width: 18ch;
+  text-wrap: balance;
+}
+
+.host-voting-title {
+  margin: 0;
+  font-size: clamp(46px, 7vw, 78px) !important;
+  line-height: 1.05;
+}
+
+.host-voting-stage .vote-progress-summary {
+  width: min(100%, 620px);
+}
+
+/* Keep the existing privacy copy and semantics, but make it supporting text
+   instead of a large nested card competing with the voting moment. */
+.host-voting-stage .card {
+  width: min(100%, 620px) !important;
+  gap: 5px;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  animation: none;
+}
+
+.host-voting-stage .card strong {
+  color: #ddd3f4;
+  font-size: clamp(17px, 2vw, 22px);
+}
+
+.host-voting-stage .card .subtitle {
+  color: var(--muted-2);
+  font-size: clamp(14px, 1.7vw, 18px);
+}
+
+@media (max-height: 720px) {
+  .host-discussion-stage .host-stage-content,
+  .host-voting-stage .host-stage-content {
+    gap: 8px;
+  }
+
+  .host-prompt-discussion {
+    font-size: clamp(28px, 5vw, 52px);
+  }
+
+  .host-discussion-question {
+    font-size: clamp(30px, 5vw, 56px) !important;
+  }
+}
