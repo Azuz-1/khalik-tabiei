@@ -92,10 +92,14 @@ export const TIMERS = {
   ACTION: 1_000,
   HOLD: 2_000,
   PROMPT_REVEAL: 2_500,
-  // A disconnected voter keeps their ballot for a short reconnect window.
-  // After this grace, the missing ballot is an abstention; the original
-  // participant count still determines the majority needed to catch the impostor.
-  VOTING_DISCONNECT_GRACE: 20_000,
+  /** Public discussion window before voting begins automatically. */
+  DISCUSSION: 45_000,
+  /** Global ballot window. Missing ballots become abstentions at this deadline. */
+  VOTING: 15_000,
+  /** Hidden-result transition between survived Challenges in the same impostor stint. */
+  SURVIVED_TRANSITION: 4_000,
+  /** Full reveal window before the next stint/Challenge begins automatically. */
+  FULL_RESULT: 20_000,
   // Only the Host has a disconnect expiry. Player seats have no transport
   // expiry timer: they remain until reconnect, LEAVE_ROOM, KICK_PLAYER, or room close.
   HOST_DISCONNECT_GRACE: 5 * 60 * 1_000,

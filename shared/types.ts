@@ -119,12 +119,17 @@ export interface RoundResult {
   challengeIndex: number;
   maxChallenges: number;
   mode: GameMode;
-  requiredVotes: number;
+  /** Full-reveal only: majority threshold among ballots actually cast. */
+  requiredVotes?: number;
+  /** Full-reveal aggregate turnout only. Individual abstainers are never serialized. */
+  votesCast?: number;
+  participantCount?: number;
   completionReason?: RoundCompletionReason;
   normalQuestion?: string;
   impostorQuestion?: string;
   category?: CategoryId;
-  voteTally: VoteTallyEntry[];
+  /** Full-reveal aggregate only; omitted entirely from intermediate survival results. */
+  voteTally?: VoteTallyEntry[];
 }
 
 export interface GameOverInfo {
@@ -192,7 +197,8 @@ export interface ClientView {
   answersProgress?: { submitted: number; total: number };
   reveal?: RevealedAnswer[];
   myVoteSubmitted?: boolean;
-  votesProgress?: { submitted: number; total: number; requiredVotes: number };
+  /** Live voting reveals turnout progress only, never a quorum or target totals. */
+  votesProgress?: { submitted: number; total: number };
   /** Deprecated live aggregate tally. New product UI intentionally withholds target totals until stint end. */
   liveVoteTally?: VoteTallyEntry[];
   voteTargets?: Array<{ uid: string; name: string }>;
@@ -220,6 +226,7 @@ export type ClientMessage =
   | ({ t: "START_GAME" } & RequestMeta)
   | ({ t: "MARK_READY" } & RequestMeta)
   | ({ t: "SUBMIT_ANSWER"; answer: string } & RequestMeta)
+  /** @deprecated Voting starts automatically after the authoritative discussion deadline. */
   | ({ t: "START_VOTING" } & RequestMeta)
   | ({ t: "SUBMIT_VOTE"; targetUid: string } & RequestMeta)
   | ({ t: "NEXT_ROUND" } & RequestMeta)

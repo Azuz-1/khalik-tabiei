@@ -54,12 +54,20 @@ test("ACTION plays once on a real phase transition", () => {
   assert.deepEqual(eventTypes(controller, snapshot({ phase: "ACTION" })), []);
 });
 
-test("PROMPT_REVEAL plays once and DISCUSSION is silent", () => {
+test("PROMPT_REVEAL plays once and DISCUSSION entry is silent", () => {
   const controller = new HostAudioEventController();
   controller.update(snapshot({ phase: "HOLD" }));
   assert.deepEqual(eventTypes(controller, snapshot({ phase: "PROMPT_REVEAL" })), ["promptReveal"]);
   assert.deepEqual(eventTypes(controller, snapshot({ phase: "PROMPT_REVEAL" })), []);
-  assert.deepEqual(eventTypes(controller, snapshot({ phase: "DISCUSSION" })), []);
+  assert.deepEqual(eventTypes(controller, snapshot({ phase: "DISCUSSION", phaseEndsAt: 46_000 })), []);
+});
+
+test("DISCUSSION warning cue fires once when the authoritative deadline enters its last ten seconds", () => {
+  const controller = new HostAudioEventController();
+  controller.update(snapshot({ phase: "DISCUSSION", phaseEndsAt: 46_000 }));
+  assert.deepEqual(controller.observeDiscussionWarning(46_000, 35_999), []);
+  assert.deepEqual(controller.observeDiscussionWarning(46_000, 36_001), [{ type: "discussionWarning" }]);
+  assert.deepEqual(controller.observeDiscussionWarning(46_000, 40_000), []);
 });
 
 test("HOLD gets one soft entry cue only", () => {
@@ -253,6 +261,7 @@ test("muted runtime suppresses every synthesized effect after unlock", async () 
   runtime.setMuted(true);
   runtime.playAction();
   runtime.playCountdownTick(5);
+  runtime.playDiscussionWarning();
   runtime.playCaught();
   assert.equal(metrics.starts, 2);
 
@@ -295,6 +304,7 @@ test("unsupported AudioContext fails gracefully and gameplay-facing calls remain
     runtime.playAction();
     runtime.playHold();
     runtime.playPromptReveal();
+    runtime.playDiscussionWarning();
     runtime.playVotingStart();
     runtime.playVoteReceived(3);
     runtime.playCaught();

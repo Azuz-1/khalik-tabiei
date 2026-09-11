@@ -55,7 +55,7 @@ export interface RoundState {
   impostorQuestion: string;
   answers: Map<string, string>;
   votes: Map<string, string>;
-  /** Server-only missing ballots that became abstentions after disconnect grace. */
+  /** Server-only missing ballots that became abstentions at the global voting deadline. */
   abstainedUids?: Set<string>;
   resolutionSealed?: boolean;
   sealedParticipants?: SealedParticipant[];
@@ -170,11 +170,7 @@ export function allPlayers(room: RoomState): InternalPlayer[] {
   return [...room.players.values()];
 }
 
-/**
- * Comparison-only Arabic key. Display text is never replaced by this value.
- * Default-ignorable code points are removed here so visually identical names
- * such as سالم and سالم\u200b collide. This is not a complete confusable-spoofing system.
- */
+/** Comparison-only Arabic key used for duplicate-name protection. */
 export function normalizeArabic(input: string): string {
   return input
     .normalize("NFKC")
@@ -215,8 +211,6 @@ function hasVisibleContent(input: string): boolean {
 /** Name length is measured in Unicode grapheme clusters after display cleaning. */
 export function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("INVALID_NAME");
-  // NFC preserves legitimate Arabic diacritics and emoji ZWJ sequences while
-  // normalizing canonically equivalent display spellings.
   const name = stripUnsafeTextControls(raw.normalize("NFC")).replace(/\s+/g, " ").trim();
   if (!hasVisibleContent(name)) throw new GameError("INVALID_NAME");
   const length = graphemeLength(name);

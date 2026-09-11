@@ -45,7 +45,15 @@ If Supabase is unavailable or misconfigured, gameplay remains available. Structu
 
 Server-authored gameplay telemetry covers room creation, game start/completion, every resolved Challenge, prompt ID, mode, participant count, Challenge/stint position, caught/not-caught result, selected Challenge total, match duration, rematch intent/start, disconnect/reconnect, room closure, and typed game errors.
 
+For `challenge_completed`, voting telemetry is aggregate-only: `votesCast`, `abstentionCount`, whether the voting deadline timed out, maximum votes on any one target, aggregate impostor-vote count, whether the impostor cast a ballot, whether a one-ballot catch occurred, and the final majority threshold. It never includes voter identity, abstainer identity, or voter → target mappings.
+
 Anonymous client telemetry adds device/browser compatibility and UX health without storing an identity: device class; coarse viewport; browser/OS family; browser vs standalone display mode; Arabic/English/other language bucket; touch support; coarse network type and Save-Data; reduced-motion preference; coarse CPU/memory/pixel-ratio buckets; orientation; support for audio/vibration/share/Intl.Segmenter/VisualViewport/Network Information APIs; navigation type; TTFB/FCP/load/DOMContentLoaded timings; resource count and transferred KB; LCP/CLS/coarse interaction delay; foreground/background duration; online/offline transitions; resize/orientation changes; and only the **kind** of client error (`runtime`, `resource`, `promise`) without message, stack, filename or URL.
+
+## Voting rules-version boundary
+
+`competitive-cast-vote-majority-v3` is the first rules version where capture uses a strict majority of **ballots actually cast**. Non-voters are excluded from the denominator; zero ballots cannot catch the impostor; ties let the impostor survive. Earlier rules versions used participant-count majority semantics.
+
+Catch rate, vote margin, required-vote threshold, turnout and abstention metrics from older rules versions are therefore **not directly comparable** with v3. Product analysis spanning this boundary must group/filter by `properties->>'rulesVersion'` before comparing outcomes.
 
 ## Product queries
 

@@ -7,6 +7,7 @@ export type HostAudioEvent =
   | { type: "action" }
   | { type: "hold" }
   | { type: "promptReveal" }
+  | { type: "discussionWarning" }
   | { type: "votingStart" }
   | { type: "voteReceived"; count: number }
   | { type: "caught" }
@@ -78,6 +79,7 @@ export class HostAudioEventController {
   private lastCountdownStep: CountdownStep | null = null;
   private countdownDeadline: number | null = null;
   private countdownPaused = false;
+  private discussionWarningPlayed = false;
 
   update(snapshot: HostAudioSnapshot): HostAudioEvent[] {
     if (!this.initialized || snapshot.roomCode !== this.roomCode) {
@@ -90,17 +92,11 @@ export class HostAudioEventController {
     const previousRound = this.currentRound;
     const previousChallengeIndex = this.challengeIndex;
 
-    // A rematch keeps the same room code and players but starts a fresh game.
-    // Reset only per-game event dedupe; keep seen player UIDs so returning to
-    // the Lobby does not create fake join sounds for existing participants.
     const newGameLifecycle =
       (snapshot.phase === "LOBBY" && previousPhase !== "LOBBY") ||
       snapshot.currentRound < previousRound;
     if (newGameLifecycle) this.resetPerGameDedupe();
 
-    // If an explicit retry/redeal path ever restarts this Round at QUESTION,
-    // allow the new physical attempt to make its own result sound even when
-    // room/round/challenge identifiers collide with a result already heard.
     const redealtCurrentRound =
       !newGameLifecycle &&
       snapshot.phase === "QUESTION" &&
@@ -121,15 +117,6 @@ export class HostAudioEventController {
       events.push({ type: "join", count: newPlayers });
     }
 
-    // A Host reconnect restarts the same physical Challenge from COUNTDOWN, so
-    // the phase-transition reset below never fires (COUNTDOWN -> COUNTDOWN) and
-    // the restarted attempt's first tick would be swallowed as a duplicate
-    // step. Identify the attempt from authoritative public state instead: a
-    // paused countdown publishes no deadline, and a resumed one publishes a
-    // fresh deadline, so either a pause gap or a changed deadline marks a new
-    // attempt while repeated snapshots of one attempt stay de-duplicated.
-    // This resets the countdown-step dedupe ONLY: result, join and voting
-    // dedupe must survive a reconnect so historical sounds are never replayed.
     const countdownDeadline =
       snapshot.phase === "COUNTDOWN" ? snapshot.phaseEndsAt ?? null : null;
     const countdownPaused = snapshot.phase === "COUNTDOWN" && countdownDeadline === null;
@@ -148,6 +135,8 @@ export class HostAudioEventController {
       if (snapshot.phase === "COUNTDOWN" || previousPhase === "COUNTDOWN") {
         this.lastCountdownStep = null;
       }
+      if (snapshot.phase === "DISCUSSION") this.discussionWarningPlayed = false;
+      else if (previousPhase === "DISCUSSION") this.discussionWarningPlayed = false;
 
       switch (snapshot.phase) {
         case "ACTION":
@@ -180,11 +169,6 @@ export class HostAudioEventController {
       this.totalVotes = total;
       this.votingPlayerUids = new Set(snapshot.playerUids);
     } else if (snapshot.phase === "RESULT" && previousPhase === "VOTING") {
-      // The server computes RESULT before broadcasting the final real vote, so
-      // the Host may never receive a VOTING snapshot with submitted === total.
-      // Recover that one aggregate increment only when the participant set did
-      // not shrink. A KICK/LEAVE can also turn 3/4 into RESULT with no new vote;
-      // that transition must not synthesize a fake fourth vote sound.
       const participantShrank = [...this.votingPlayerUids].some(
         (uid) => !snapshot.playerUids.includes(uid),
       );
@@ -230,6 +214,19 @@ export class HostAudioEventController {
     return [{ type: "countdownTick", step }];
   }
 
+  observeDiscussionWarning(phaseEndsAt: number | undefined, now: number): HostAudioEvent[] {
+    if (
+      this.phase !== "DISCUSSION" ||
+      this.discussionWarningPlayed ||
+      phaseEndsAt == null ||
+      !Number.isFinite(phaseEndsAt)
+    ) return [];
+    const remaining = phaseEndsAt - now;
+    if (remaining <= 0 || remaining > 10_000) return [];
+    this.discussionWarningPlayed = true;
+    return [{ type: "discussionWarning" }];
+  }
+
   private resetPerGameDedupe(): void {
     this.playedResultKeys.clear();
     this.submittedVotes = 0;
@@ -238,6 +235,7 @@ export class HostAudioEventController {
     this.lastCountdownStep = null;
     this.countdownDeadline = null;
     this.countdownPaused = false;
+    this.discussionWarningPlayed = false;
   }
 
   private resetCurrentRoundDedupe(round: number): void {
@@ -251,6 +249,7 @@ export class HostAudioEventController {
     this.lastCountdownStep = null;
     this.countdownDeadline = null;
     this.countdownPaused = false;
+    this.discussionWarningPlayed = false;
   }
 
   private prime(snapshot: HostAudioSnapshot): void {
@@ -270,6 +269,7 @@ export class HostAudioEventController {
     this.countdownDeadline =
       snapshot.phase === "COUNTDOWN" ? snapshot.phaseEndsAt ?? null : null;
     this.countdownPaused = snapshot.phase === "COUNTDOWN" && this.countdownDeadline === null;
+    this.discussionWarningPlayed = false;
 
     if (snapshot.phase === "RESULT") {
       const key = resultKey(snapshot);

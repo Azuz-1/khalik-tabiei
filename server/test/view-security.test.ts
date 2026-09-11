@@ -187,8 +187,8 @@ test("votes remain private through RESULT and no voter-to-target mapping is seri
 
   const resultView = buildView(room, room.hostUid, "https://good.example/join/ABCDE");
   assert.equal(resultView.result?.roundComplete, true);
-  assert.equal(resultView.result?.voteTally.length, 3);
-  assert.deepEqual(resultView.result?.voteTally.map((row) => row.uid), round.participantUids);
+  assert.equal(resultView.result?.voteTally?.length, 3);
+  assert.deepEqual(resultView.result?.voteTally?.map((row) => row.uid), round.participantUids);
   assert.equal(resultView.liveVoteTally, undefined);
   assertNoVoterMapping(resultView);
   const json = JSON.stringify(resultView);
@@ -217,10 +217,11 @@ test("survived challenge 1/2 result hides identity and tally but keeps already-p
     assert.equal(view.result?.roundComplete, false);
     assert.equal(view.result?.impostorUid, undefined);
     assert.equal(view.result?.impostorName, undefined);
-    assert.deepEqual(view.result?.voteTally, []);
+    assert.equal(view.result?.voteTally, undefined);
     assert.equal(view.liveVoteTally, undefined);
     assert.equal(view.publicPrompt?.text, prompt);
     assert.ok(!json.includes(promptId));
+    assert.ok(!json.includes("\"voteTally\""));
     assertNoVoterMapping(view);
     assert.ok(!json.includes("scoreboard"));
   }

@@ -9,7 +9,7 @@ import { WebSocket } from "ws";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
 const ORIGIN = process.env.ORIGIN ?? URL.replace(/^ws/, "http").replace(/\/ws$/, "");
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 70_000;
 let failures = 0;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -172,9 +172,10 @@ async function physical(host, players, label, reconnect = null) {
 }
 
 async function startVoting(host, players, label) {
-  host.send({ t: "START_VOTING" });
-  await waitForAll([host, ...players], (client) => client.phase() === "VOTING", `${label} voting`);
-  ok(host.view?.votesProgress?.requiredVotes === 2, `${label}: three players require two votes to catch`);
+  await waitForAll([host, ...players], (client) => client.phase() === "VOTING", `${label} automatic voting`, 55_000);
+  ok(host.view?.votesProgress?.submitted === 0, `${label}: voting starts with zero submitted ballots`);
+  ok(host.view?.votesProgress?.total === players.length, `${label}: voting progress reports all participants`);
+  ok(host.view?.votesProgress?.requiredVotes === undefined, `${label}: live progress exposes no quorum target`);
   ok(host.view?.liveVoteTally === undefined, `${label}: Host receives no live target tally`);
   for (const player of players) ok(player.view?.liveVoteTally === undefined, `${label}: player receives no live target tally`);
 }
@@ -200,7 +201,7 @@ async function surviveFirstChallenge(host, players, current, label) {
   ok(host.view?.result?.groupFound === false, `${label}: one correct normal is below majority`);
   ok(host.view?.result?.roundComplete === false, `${label}: impostor stint continues`);
   ok(host.view?.result?.impostorUid === undefined, `${label}: intermediate result hides impostor identity`);
-  ok(host.view?.result?.voteTally?.length === 0, `${label}: intermediate result hides vote distribution`);
+  ok(host.view?.result?.voteTally === undefined, `${label}: intermediate result hides vote distribution`);
   ok(host.view?.scoreboard === undefined, `${label}: intermediate result hides scoreboard`);
   for (const client of [host, ...players]) assertNoMapping(client, `${client.label} ${label}`);
 }
@@ -221,11 +222,14 @@ async function catchCurrent(host, players, current, label) {
 }
 
 async function nextQuestion(host, players, expectedCompleted) {
-  host.send({ t: "NEXT_ROUND" });
+  if (host.view?.result?.roundComplete === true) {
+    host.send({ t: "NEXT_ROUND" });
+  }
   await waitForAll(
     [host, ...players],
     (client) => client.phase() === "QUESTION" && client.view?.room?.completedChallenges === expectedCompleted,
     `next QUESTION after ${expectedCompleted} completed Challenges`,
+    10_000,
   );
 }
 

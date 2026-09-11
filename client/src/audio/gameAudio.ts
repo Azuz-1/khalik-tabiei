@@ -92,6 +92,7 @@ export interface GameAudioRuntime {
   playAction(): void;
   playHold(): void;
   playPromptReveal(): void;
+  playDiscussionWarning(): void;
   playVotingStart(): void;
   playVoteReceived(count?: number): void;
   playCaught(): void;
@@ -184,9 +185,6 @@ export function createGameAudioRuntime(environment: GameAudioEnvironment = {}): 
         ensureMaster(context);
       }
 
-      // Safari/WebKit can expose interruption-like non-running states in
-      // addition to the standard "suspended" state. A user gesture should try
-      // resume for any live context that is not already running.
       if (context.state !== "running" && context.state !== "closed") {
         await context.resume();
       }
@@ -252,6 +250,10 @@ export function createGameAudioRuntime(environment: GameAudioEnvironment = {}): 
       tone(500, 0.18, 0.11, "sine");
       tone(660, 0.22, 0.1, "triangle", 0.075);
     },
+    playDiscussionWarning() {
+      tone(690, 0.09, 0.07, "triangle");
+      tone(820, 0.11, 0.075, "triangle", 0.12);
+    },
     playVotingStart() {
       tone(480, 0.13, 0.075, "triangle");
     },
@@ -293,6 +295,7 @@ export const playCountdownTick = runtime.playCountdownTick;
 export const playAction = runtime.playAction;
 export const playHold = runtime.playHold;
 export const playPromptReveal = runtime.playPromptReveal;
+export const playDiscussionWarning = runtime.playDiscussionWarning;
 export const playVotingStart = runtime.playVotingStart;
 export const playVoteReceived = runtime.playVoteReceived;
 export const playCaught = runtime.playCaught;

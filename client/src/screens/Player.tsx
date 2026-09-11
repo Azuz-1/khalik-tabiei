@@ -3,9 +3,8 @@ import type { ClientView, GameModeInfo, ScoreEntry } from "../../../shared/types
 import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
-import { ResultBody, roundLabel } from "../components/Bits.js";
+import { PhaseCountdown, ResultBody, roundLabel } from "../components/Bits.js";
 import { Players } from "../components/Players.js";
-import { requiredVotesText } from "../i18n/counts.js";
 import { roundDeltaText, scoreReasonText } from "../i18n/score.js";
 
 export function Player({ view }: { view: ClientView }) {
@@ -59,12 +58,12 @@ function PlayerLobby({ view }: { view: ClientView }) {
         <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>أنت داخل 🎉</h1>
         <span className="pill-note" style={{ direction: "ltr", marginInline: "auto" }}>غرفة {view.room.code}</span>
         <span className="chip">🏅 منافسة بالنقاط</span>
-        <p className="subtitle">{view.room.targetChallenges} تحدّيات بالضبط. كل متخفي حدّه 3 تحدّيات، والأغلبية هي اللي تمسكه.</p>
+        <p className="subtitle">{view.room.targetChallenges} تحدّيات بالضبط. كل متخفي حدّه 3 تحدّيات، وأغلبية الأصوات اللي انرسلت هي اللي تمسكه.</p>
         <div className="players">{selectedModes.map((mode) => <span className="chip" key={mode.id}>{mode.icon} {mode.label}</span>)}</div>
       </div>
       <div className="card stack quick-points-card">
         <strong>كيف تجمع نقاط؟</strong>
-        <p className="helper" style={{ margin: 0 }}><strong>إذا أنت طبيعي:</strong> آخر 1 / 2 / 3 تصويتات صحيحة ورا بعض = +1 / +2 / +3. آخر تصويت غلط = 0.</p>
+        <p className="helper" style={{ margin: 0 }}><strong>إذا أنت طبيعي:</strong> آخر 1 / 2 / 3 تصويتات صحيحة ورا بعض = +1 / +2 / +3. التصويت الغلط أو عدم التصويت يقطع السلسلة.</p>
         <p className="helper" style={{ margin: 0 }}><strong>إذا أنت المتخفي:</strong> +1 عن كل تحدّي تنجو منه، حتى +3.</p>
       </div>
       <div className="card">
@@ -179,7 +178,8 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
       <div className="spacer" />
       <div className="q-card stack"><span className="eyebrow">المطلوب كان</span><div className="q-text" style={{ fontSize: "clamp(22px,6vw,30px)" }}>{view.publicPrompt?.text ?? "…"}</div></div>
       <h2 className="title center" style={{ fontSize: "clamp(28px,8vw,42px)" }}>مين تصرفه مو طبيعي؟</h2>
-      <p className="subtitle center">تناقشوا، وبعدها المضيف يفتح التصويت</p>
+      <PhaseCountdown endsAt={view.room.phaseEndsAt} warningAtSeconds={10} warningText="استعدوا للتصويت" />
+      <p className="subtitle center">تناقشوا، والتصويت يفتح تلقائيًا بعد انتهاء الوقت.</p>
       <div className="spacer" />
     </div>
   );
@@ -188,7 +188,7 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
 function PlayerVote({ view }: { view: ClientView }) {
   const [picked, setPicked] = useState<string | null>(null);
   const targets = view.voteTargets ?? [];
-  const progress = view.votesProgress ?? { submitted: 0, total: 0, requiredVotes: 0 };
+  const progress = view.votesProgress ?? { submitted: 0, total: 0 };
   const pickedName = targets.find((target) => target.uid === picked)?.name;
 
   useEffect(() => {
@@ -203,6 +203,7 @@ function PlayerVote({ view }: { view: ClientView }) {
         <div className="spacer" />
         <div className="center stack">
           <div className="ok-badge">تم تسجيل صوتك</div>
+          <PhaseCountdown endsAt={view.room.phaseEndsAt} />
           <p className="subtitle">ننتظر الباقين… <span className="num-ltr">{progress.submitted}/{progress.total}</span></p>
           <p className="helper center">نقاطك وتوزيع الأصوات ما تنكشف إلا بعد نهاية دور المتخفي.</p>
         </div>
@@ -216,7 +217,8 @@ function PlayerVote({ view }: { view: ClientView }) {
       <div className="center stack">
         <div className="eyebrow">{roundLabel(view)}</div>
         <h1 className="title">مين تحس إنه المتخفي؟</h1>
-        {progress.requiredVotes > 0 ? <p className="helper">يحتاج {requiredVotesText(progress.requiredVotes)} عشان ينمسك. تصويتك الشخصي يدخل في نقاطك بعد نهاية دوره.</p> : null}
+        <PhaseCountdown endsAt={view.room.phaseEndsAt} />
+        <p className="helper">أغلبية الأصوات اللي تنرسل خلال الوقت تمسك المتخفي. عدم التصويت ما يدخل في مقام الأغلبية، لكنه يقطع سلسلة تصويتك الصحيحة.</p>
       </div>
       <div className="vote-list" role="radiogroup" aria-label="اختر الشخص اللي تحس إنه المتخفي">
         {targets.map((target) => {
@@ -239,17 +241,19 @@ function PlayerVote({ view }: { view: ClientView }) {
 
 function PlayerResult({ view }: { view: ClientView }) {
   const matchFinished = view.room.completedChallenges >= view.room.targetChallenges;
+  const fullReveal = view.result?.roundComplete === true;
   return (
     <div className="screen">
       <div className="spacer" />
       {view.result ? <div className="card"><ResultBody result={view.result} /></div> : null}
-      {view.result?.roundComplete && view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} round /> : null}
+      {fullReveal && view.scoreboard ? <PlayerScoreboard rows={view.scoreboard} selfUid={view.self.uid} round /> : null}
+      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
       <p className="subtitle center">
         {matchFinished
-          ? "خلصت التحدّيات… ننتظر الترتيب النهائي"
-          : view.result?.roundComplete
-            ? "ننتظر المضيف يبدأ دور متخفي جديد…"
-            : "نفس المتخفي مكمل… ننتظر التحدّي الجاي"}
+          ? "بعد الكشف نروح تلقائيًا للترتيب النهائي."
+          : fullReveal
+            ? "بعد الكشف يبدأ دور المتخفي الجاي تلقائيًا."
+            : "المتخفي نجا 👀 نكمل تلقائيًا بالتحدّي الجاي."}
       </p>
       <div className="spacer" />
     </div>
