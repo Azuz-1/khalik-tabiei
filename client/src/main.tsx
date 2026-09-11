@@ -17,7 +17,26 @@ async function loadRoot(): Promise<ComponentType> {
   if (location.pathname.startsWith("/display/")) {
     return (await import("./screens/Display.js")).DisplayApp;
   }
-  return (await import("./App.js")).App;
+
+  if (location.pathname === "/privacy") {
+    return (await import("./screens/Privacy.js")).PrivacyApp;
+  }
+
+  const [{ App }, { AnalyticsGameObserver }, { PrivacyLink }] = await Promise.all([
+    import("./App.js"),
+    import("./components/AnalyticsGameObserver.js"),
+    import("./screens/Privacy.js"),
+  ]);
+
+  return function ParticipantRoot() {
+    return (
+      <>
+        <App />
+        <AnalyticsGameObserver />
+        <PrivacyLink />
+      </>
+    );
+  };
 }
 
 void loadRoot().then((Root) => {

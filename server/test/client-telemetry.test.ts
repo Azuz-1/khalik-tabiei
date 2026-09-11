@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { AnalyticsEvent } from "../../shared/types.js";
-import { ClientTelemetryIngestor, parseClientTelemetryBatch } from "../src/clientTelemetry.js";
+import { analyticsPlayerId, ClientTelemetryIngestor, parseClientTelemetryBatch } from "../src/clientTelemetry.js";
 import type { AnalyticsProps } from "../src/analytics.js";
 
 test("client telemetry accepts bounded scalar batches and rejects malformed envelopes", () => {
@@ -29,11 +29,12 @@ test("client telemetry accepts bounded scalar batches and rejects malformed enve
   assert.equal(parseClientTelemetryBatch({ events: [{ event: "client_started", props: { nested: { nope: true } } }] }), null);
 });
 
-test("client telemetry strips identity, raw user-agent, paths and unknown properties before analytics", () => {
+test("client telemetry strips raw identity and adds a separate pseudonymous analytics id", () => {
   const recorded: Array<{ event: AnalyticsEvent; props: AnalyticsProps }> = [];
   const ingestor = new ClientTelemetryIngestor((event, props = {}) => { recorded.push({ event, props }); });
+  const identity = "u_transient_rate_limit_only";
 
-  const result = ingestor.ingest("u_transient_rate_limit_only", {
+  const result = ingestor.ingest(identity, {
     events: [{
       event: "client_started",
       props: {
@@ -55,9 +56,53 @@ test("client telemetry strips identity, raw user-agent, paths and unknown proper
   assert.deepEqual(recorded[0], {
     event: "client_started",
     props: {
+      analyticsPlayerId: analyticsPlayerId(identity),
       deviceClass: "phone",
       browserFamily: "safari",
       osFamily: "ios",
+      routeBucket: "join",
+    },
+  });
+  assert.match(String(recorded[0]?.props.analyticsPlayerId), /^ap_[0-9a-f]{32}$/);
+  assert.notEqual(recorded[0]?.props.analyticsPlayerId, identity);
+  assert.equal(analyticsPlayerId(identity), analyticsPlayerId(identity));
+  assert.notEqual(analyticsPlayerId(identity), analyticsPlayerId("u_other"));
+});
+
+test("match participation marker keeps only allowlisted aggregate dimensions and server identity", () => {
+  const recorded: Array<{ event: AnalyticsEvent; props: AnalyticsProps }> = [];
+  const ingestor = new ClientTelemetryIngestor((event, props = {}) => { recorded.push({ event, props }); });
+
+  const result = ingestor.ingest("u_player", {
+    events: [{
+      event: "client_session_summary",
+      props: {
+        summaryKind: "match_participation",
+        playedMatch: true,
+        phase: "QUESTION",
+        isOwner: false,
+        playerCount: 5,
+        targetChallenges: 6,
+        modeCount: 3,
+        routeBucket: "join",
+        roomCode: "SECRET",
+        playerName: "do not keep",
+      },
+    }],
+  });
+
+  assert.deepEqual(result, { ok: true, count: 1 });
+  assert.deepEqual(recorded[0], {
+    event: "client_session_summary",
+    props: {
+      analyticsPlayerId: analyticsPlayerId("u_player"),
+      summaryKind: "match_participation",
+      playedMatch: true,
+      phase: "QUESTION",
+      isOwner: false,
+      playerCount: 5,
+      targetChallenges: 6,
+      modeCount: 3,
       routeBucket: "join",
     },
   });

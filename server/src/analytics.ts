@@ -1,11 +1,12 @@
 /**
- * Privacy-safe server-side gameplay analytics.
+ * Privacy-conscious server-side gameplay analytics.
  *
  * Contract:
  * - event properties are allowlisted per event, never copied wholesale;
- * - no room code, player/session UID, display name, vote mapping, prompt text,
- *   raw client message, raw error text, IP address, or persistent device fingerprint;
+ * - no room code, display name, vote mapping, prompt text, raw client message,
+ *   raw error text, raw IP address, or device fingerprint;
  * - roomSessionId/matchId are random lifecycle-scoped analytics IDs, never derived from a player or room code;
+ * - analyticsPlayerId is a server-derived pseudonymous identifier for the current anonymous session only;
  * - client/device telemetry is deliberately coarse and low-cardinality;
  * - delivery is queued, bounded, async, and never allowed to block gameplay.
  */
@@ -122,6 +123,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   game_error: ["roomSessionId", "matchId", "code", "action", "phase", "duringMatch"],
   suggestion_submitted: ["category", "lengthBucket"],
   client_started: [
+    "analyticsPlayerId",
     "deviceClass",
     "viewportBucket",
     "browserFamily",
@@ -156,6 +158,14 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   ],
   client_vital: ["metric", "value", "rating", "routeBucket"],
   client_session_summary: [
+    "analyticsPlayerId",
+    "summaryKind",
+    "playedMatch",
+    "phase",
+    "isOwner",
+    "playerCount",
+    "targetChallenges",
+    "modeCount",
     "lifetimeSeconds",
     "foregroundSeconds",
     "backgroundTransitions",
