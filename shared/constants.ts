@@ -90,7 +90,8 @@ export const TIMERS = {
   REVEAL_TO_DISCUSSION: 4_000, // legacy TEXT_PAIR
   COUNTDOWN: 5_000,
   ACTION: 1_000,
-  HOLD: 2_000,
+  /** After the synchronized action cue, give the group a full beat to look at each other before revealing the prompt. */
+  HOLD: 5_000,
   PROMPT_REVEAL: 2_500,
   /** Public discussion window before voting begins automatically. */
   DISCUSSION: 45_000,
