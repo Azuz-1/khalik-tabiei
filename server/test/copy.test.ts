@@ -71,7 +71,7 @@ test("current player-facing copy excludes retired or unclear wording", () => {
   assert.ok(combined.includes("مين تصرفه مو طبيعي؟"));
 });
 
-test("TV and player phone both carry synchronized countdown/action cues", () => {
+test("TV and player phone both carry synchronized countdown/action/look-around cues", () => {
   const host = source("client/src/screens/Host.tsx");
   const player = source("client/src/screens/Player.tsx");
 
@@ -79,18 +79,21 @@ test("TV and player phone both carry synchronized countdown/action cues", () => 
   assert.ok(host.includes("إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!»."));
   assert.ok(host.includes("عند «أشروا!»، أشر على شخص واحد."));
   assert.ok(host.includes("عند «ارفعوا أصابعكم!»، ارفع أصابعك بالعدد اللي اخترته."));
+  assert.ok(host.includes("طالعوا بعض"));
+  assert.ok(host.includes("خلكم على وضعكم لين يطلع المطلوب."));
 
   assert.ok(player.includes('case "COUNTDOWN": return <PlayerCountdown view={view} />;'));
   assert.ok(player.includes('case "ACTION": return <PlayerAction view={view} />;'));
-  assert.ok(player.includes('case "HOLD": return <PlayerHold />;'));
+  assert.ok(player.includes('case "HOLD": return <PlayerHold view={view} />;'));
   assert.ok(player.includes("visibleCountdownSecond"));
   assert.ok(player.includes("player-countdown-number"));
   assert.ok(player.includes("modeInfo(view)?.actionLabel"));
+  assert.ok(player.includes("طالعوا بعض"));
 });
 
-test("copy pass leaves physical phase timings unchanged", () => {
+test("physical phase timings keep a five-second countdown plus a five-second look-around beat", () => {
   assert.equal(TIMERS.COUNTDOWN, 5_000);
   assert.equal(TIMERS.ACTION, 1_000);
-  assert.equal(TIMERS.HOLD, 2_000);
+  assert.equal(TIMERS.HOLD, 5_000);
   assert.equal(TIMERS.PROMPT_REVEAL, 2_500);
 });
