@@ -8,6 +8,7 @@ import "@fontsource/tajawal/900.css";
 import "./telemetry.js";
 import "./styles.css";
 import "./c-ux.css";
+import "./game-hud.css";
 import "./home-suggestion-dialog.css";
 
 async function loadRoot(): Promise<ComponentType> {
@@ -22,16 +23,18 @@ async function loadRoot(): Promise<ComponentType> {
     return (await import("./screens/Privacy.js")).PrivacyApp;
   }
 
-  const [{ App }, { AnalyticsGameObserver }, { PrivacyLink }] = await Promise.all([
+  const [{ App }, { AnalyticsGameObserver }, { PrivacyLink }, { GameChrome }] = await Promise.all([
     import("./App.js"),
     import("./components/AnalyticsGameObserver.js"),
     import("./screens/Privacy.js"),
+    import("./components/GameChrome.js"),
   ]);
 
   return function ParticipantRoot() {
     return (
       <>
         <App />
+        <GameChrome />
         <AnalyticsGameObserver />
         <PrivacyLink />
       </>
