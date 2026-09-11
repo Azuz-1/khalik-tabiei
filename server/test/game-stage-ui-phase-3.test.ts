@@ -43,3 +43,27 @@ test("phase 3 stage CSS keeps gameplay viewport-sized and limits scrolling to th
   assert.ok(css.includes("env(safe-area-inset-bottom)"));
   assert.ok(css.includes("text-overflow: ellipsis"));
 });
+
+test("phase 3 styles load after the HUD so gameplay stage rules win the cascade", () => {
+  const main = source("../../client/src/main.tsx");
+  const hudImport = main.indexOf('import "./game-hud.css"');
+  const playerStageImport = main.indexOf('import "./game-stage.css"');
+  const hostStageImport = main.indexOf('import "./game-stage-host.css"');
+  assert.ok(hudImport >= 0);
+  assert.ok(playerStageImport > hudImport, "player stage CSS must load after the gameplay HUD");
+  assert.ok(hostStageImport > playerStageImport, "host stage polish must load after the shared player stage CSS");
+});
+
+test("host challenge and voting keep the same logic while dropping the dashboard-card look", () => {
+  const host = source("../../client/src/screens/Host.tsx");
+  const css = source("../../client/src/game-stage-host.css");
+  assert.ok(host.includes("function HostPromptReveal"));
+  assert.ok(host.includes("function HostDiscussion"));
+  assert.ok(host.includes("function HostVoting"));
+  assert.ok(host.includes("<PhaseCountdown endsAt={view.room.phaseEndsAt}"), "phase 3 must not remove authoritative gameplay timers");
+  assert.ok(host.includes("الأصوات مخفية للحين"), "vote privacy copy must remain intact");
+  assert.ok(css.includes(".host-voting-stage .card"));
+  assert.ok(css.includes("background: transparent"));
+  assert.ok(css.includes("border-top: 1px solid"));
+  assert.ok(css.includes("@media (max-height: 720px)"), "host stage must keep a compact treatment for short screens");
+});
