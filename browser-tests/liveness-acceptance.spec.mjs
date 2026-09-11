@@ -110,10 +110,17 @@ test("real phones: 30s offline rejoins before voting; 60s owner offline transfer
     // Challenge 1: a normal transport outage for a full 30 real seconds during
     // the 45-second discussion must not remove the player's seat or pause time.
     const firstRoles = await readyToDiscussion(players);
+    const offlineStartedAt = Date.now();
     await sleeper.context.setOffline(true);
     await expect(sleeper.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeVisible({ timeout: PHASE_TIMEOUT });
-    await new Promise((resolve) => setTimeout(resolve, 30_000));
-    await expect(owner.page.getByRole("heading", { name: "مين تصرفه مو طبيعي؟" })).toBeVisible();
+    await expect.poll(
+      () => Date.now(),
+      { timeout: 35_000, message: "phone did not remain offline for the full 30-second discussion sample" },
+    ).toBeGreaterThanOrEqual(offlineStartedAt + 30_000);
+    await expect.poll(
+      async () => (await latestView(owner.page))?.room?.phase,
+      { timeout: 5_000, message: "discussion ended before the disconnected phone had been offline for 30 seconds" },
+    ).toBe("DISCUSSION");
 
     await sleeper.context.setOffline(false);
     await expect(sleeper.page.getByText("الاتصال انقطع، قاعدين نحاول نرجعك…")).toBeHidden({ timeout: PHASE_TIMEOUT });
