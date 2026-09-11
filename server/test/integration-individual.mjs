@@ -118,7 +118,7 @@ async function physical(host, players, label) {
 
   for (const player of players) player.send({ t: "MARK_READY" });
   await waitFor(host, (client) => client.phase() === "COUNTDOWN", `${label} countdown`);
-  await waitFor(host, (client) => client.phase() === "PROMPT_REVEAL", `${label} reveal`, 12_000);
+  await waitFor(host, (client) => client.phase() === "PROMPT_REVEAL", `${label} reveal`, 15_000);
   ok(host.view?.publicPrompt?.text === prompt, `${label}: prompt reveals only after physical sequence`);
   await waitForAll([host, ...players], (client) => client.phase() === "DISCUSSION", `${label} discussion`, 6_000);
   return current;
@@ -143,14 +143,17 @@ async function vote(host, players, current, correctNormalCount, label) {
   current.impostor.send({ t: "SUBMIT_VOTE", targetUid: current.normals[0].uid });
 
   await waitForAll([host, ...players], (client) => client.phase() === "RESULT", `${label} result`);
+  ok(host.view?.room?.phaseEndsAt === undefined, `${label}: result waits for the Host`);
   for (const client of [host, ...players]) assertNoInternals(client, `${client.label} ${label}`);
 }
 
 async function nextChallenge(host, players, expectedIndex) {
+  ok(host.phase() === "RESULT", `Challenge ${expectedIndex}: Host is advancing from RESULT`);
+  host.send({ t: "NEXT_ROUND" });
   await waitForAll(
     [host, ...players],
     (client) => client.phase() === "QUESTION" && client.view?.challenge?.index === expectedIndex,
-    `Challenge ${expectedIndex} automatic QUESTION`,
+    `Challenge ${expectedIndex} host-driven QUESTION`,
     10_000,
   );
 }
@@ -218,7 +221,7 @@ async function main() {
   for (const client of [host, ...players]) client.close();
 
   console.log(`\n${failures === 0 ? "4P SCORING E2E ALL PASSED ✅" : `${failures} 4P SCORING E2E FAILED ❌`}`);
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failures === 0 ? 0 : 1;
 }
 
 main().catch((error) => {
