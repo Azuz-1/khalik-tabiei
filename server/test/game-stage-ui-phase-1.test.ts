@@ -81,8 +81,8 @@ test("named owner reconnect during look-around keeps the same authoritative HOLD
     assert.equal(reconnectView.room.phaseEndsAt, originalEndsAt, "reconnect restores the same server deadline");
 
     const revealDeadline = Date.now() + 300;
-    while (room.phase !== "PROMPT_REVEAL" && Date.now() < revealDeadline) await wait(2);
-    assert.equal(room.phase, "PROMPT_REVEAL");
+    while (String(room.phase) !== "PROMPT_REVEAL" && Date.now() < revealDeadline) await wait(2);
+    assert.equal(String(room.phase), "PROMPT_REVEAL");
   } finally {
     manager.dispose();
   }
