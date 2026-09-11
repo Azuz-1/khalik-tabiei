@@ -273,7 +273,14 @@ function DisplayRoom({ view }: { view: ClientView }) {
     case "ACTION":
       return <DisplayStage className="host-action-stage"><h1 className="host-action-title">{mode?.actionLabel ?? "الحين!"}</h1></DisplayStage>;
     case "HOLD":
-      return <DisplayStage className="host-hold-stage"><h1 className="host-hold-title">ثبّتوا…</h1><p className="subtitle host-hold-subtitle">طالعوا بعض</p></DisplayStage>;
+      return (
+        <DisplayStage className="host-hold-stage">
+          <div className="eyebrow">خذوا نظرة 👀</div>
+          <h1 className="host-hold-title">طالعوا بعض</h1>
+          <p className="subtitle host-hold-subtitle">خلكم على وضعكم لين يطلع المطلوب.</p>
+          <PhaseCountdown endsAt={view.room.phaseEndsAt} />
+        </DisplayStage>
+      );
     case "PROMPT_REVEAL":
       return <DisplayStage><div className="eyebrow host-prompt-eyebrow">المطلوب كان…</div><h1 className="host-prompt host-prompt-reveal">{view.publicPrompt?.text ?? "…"}</h1></DisplayStage>;
     case "DISCUSSION":
@@ -306,8 +313,8 @@ function DisplayRoom({ view }: { view: ClientView }) {
         <DisplayStage className="host-result-stage">
           <div className="card host-result-panel">{view.result ? <ResultBody result={view.result} /> : null}</div>
           {fullReveal && view.scoreboard ? <DisplayScoreboard rows={view.scoreboard} title="النقاط بعد دور المتخفي" /> : null}
-          <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-          <p className="subtitle">نكمل تلقائيًا.</p>
+          <div className="pill-note">بانتظار المضيف…</div>
+          <p className="subtitle">النتيجة تبقى على الشاشة لين ينتقل المضيف للمرحلة الجاية.</p>
         </DisplayStage>
       );
     }
