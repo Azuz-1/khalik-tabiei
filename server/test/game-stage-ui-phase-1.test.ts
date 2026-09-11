@@ -4,7 +4,7 @@ import { TIMERS } from "../../shared/constants.js";
 import * as engine from "../src/game/engine.js";
 import { RoomManager } from "../src/game/roomManager.js";
 import { createRoomState, type InternalPlayer } from "../src/game/state.js";
-import { createRoom, joinPlayer, lastMessage, wait } from "./helpers.js";
+import { authenticatedConnection, createRoom, joinPlayer, lastMessage, testUid, wait } from "./helpers.js";
 
 test("physical sequence keeps five seconds for both countdown and look-around beat", () => {
   assert.equal(TIMERS.COUNTDOWN, 5_000);
@@ -42,6 +42,50 @@ test("prompt reveal remains after the look-around hold state", () => {
   assert.equal(room.phaseEndsAt, 12_000);
   engine.revealPrompt(room, 14_500, deps);
   assert.equal(room.phase, "PROMPT_REVEAL");
+});
+
+test("named owner reconnect during look-around keeps the same authoritative HOLD deadline", async () => {
+  const manager = new RoomManager({
+    rng: () => 0,
+    countdownMs: 5,
+    actionMs: 5,
+    holdMs: 80,
+    promptRevealMs: 20,
+  });
+
+  try {
+    const ownerUid = testUid(1);
+    const owner = authenticatedConnection(manager, ownerUid);
+    manager.handle(owner.conn, { t: "CREATE_ROOM", name: "المالك" });
+    const created = lastMessage(owner.socket, "STATE")!;
+    const code = created.view.room.code;
+    const others = [joinPlayer(manager, code, 2), joinPlayer(manager, code, 3)];
+    const room = manager.roomForTests(code)!;
+
+    manager.handle(owner.conn, { t: "START_GAME" });
+    for (const client of [owner, ...others]) manager.handle(client.conn, { t: "MARK_READY" });
+
+    const holdDeadline = Date.now() + 300;
+    while (room.phase !== "HOLD" && Date.now() < holdDeadline) await wait(2);
+    assert.equal(room.phase, "HOLD");
+    const originalEndsAt = room.phaseEndsAt;
+    assert.ok(originalEndsAt && originalEndsAt > Date.now());
+
+    manager.disconnect(owner.conn);
+    assert.equal(room.phase, "HOLD");
+    assert.equal(room.phaseEndsAt, originalEndsAt, "disconnect must not restart or pause look-around");
+
+    const reconnectedOwner = authenticatedConnection(manager, ownerUid);
+    const reconnectView = lastMessage(reconnectedOwner.socket, "STATE")!.view;
+    assert.equal(reconnectView.room.phase, "HOLD");
+    assert.equal(reconnectView.room.phaseEndsAt, originalEndsAt, "reconnect restores the same server deadline");
+
+    const revealDeadline = Date.now() + 300;
+    while (room.phase !== "PROMPT_REVEAL" && Date.now() < revealDeadline) await wait(2);
+    assert.equal(room.phase, "PROMPT_REVEAL");
+  } finally {
+    manager.dispose();
+  }
 });
 
 test("only the host can advance RESULT and a repeated Next cannot skip a Challenge", async () => {
