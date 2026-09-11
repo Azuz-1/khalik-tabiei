@@ -271,6 +271,7 @@ test("competitive UI uses challenge-based progress, hidden live tally, and phone
   assert.equal(player.includes("requiredVotes"), false, "Player must not expose a live quorum target");
   assert.ok(player.includes("PlayerCountdown"));
   assert.ok(player.includes("PlayerAction"));
-  assert.ok(player.includes("طالع الشاشة"));
+  assert.ok(player.includes("طالعوا بعض"), "phone flow must provide its own HOLD instruction");
+  assert.equal(player.includes("طالع الشاشة"), false, "phone flow must not require a shared display");
   assert.equal(player.includes("مغادرة الغرفة"), false, "single-owner exit stays intact");
 });

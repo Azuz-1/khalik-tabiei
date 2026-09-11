@@ -40,7 +40,10 @@ function actionNoFields(value: JsonObject): boolean {
   return exactKeys(value, ["t"], ["rid"]) && validRid(value);
 }
 
-export function validateClientMessage(value: unknown): ClientMessage | null {
+export function validateClientMessage(
+  value: unknown,
+  production = process.env.NODE_ENV === "production",
+): ClientMessage | null {
   if (!isObject(value) || typeof value.t !== "string") return null;
 
   switch (value.t) {
@@ -50,9 +53,17 @@ export function validateClientMessage(value: unknown): ClientMessage | null {
       return value as ClientMessage;
 
     case "CREATE_ROOM":
+      if (!exactKeys(value, ["t"], ["name", "rid"]) || !validRid(value)) return null;
+      // Legacy/internal fixtures may still omit `name` outside production. The
+      // deployed product must always create the room owner as a real player.
+      if (production && value.name === undefined) return null;
+      if (value.name !== undefined && !boundedString(value.name, 1, RAW_NAME_MAX_CODE_POINTS)) return null;
+      return value as ClientMessage;
+
     case "LEAVE_ROOM":
     case "START_GAME":
     case "MARK_READY":
+    case "REDEAL_CHALLENGE":
     case "START_VOTING":
     case "NEXT_ROUND":
     case "CLOSE_ROOM":

@@ -57,25 +57,27 @@ test("active Host UI exposes player management and Player UI exposes explicit le
   assert.ok(disconnectBlock.includes("player.disconnectGeneration += 1"));
 });
 
-test("room exit controls stay single-owner on Player and Host game-over screens", async () => {
+test("room exit controls stay single-owner across player and owner surfaces", async () => {
   const [app, player, host] = await Promise.all([
     readFile(new URL("../../client/src/App.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8"),
   ]);
 
-  // Player exit is owned globally by App so every room phase gets the same
-  // confirmation semantics, remains reachable outside the disabled game fieldset,
-  // and Player screens cannot render a second control.
+  // Non-owner Player exit is owned globally by App so every room phase gets the
+  // same confirmation semantics, while the owner keeps the management close
+  // action instead of receiving a duplicate Player exit control.
   assert.equal((app.match(/ariaLabel="الخروج من الغرفة"/g) ?? []).length, 1);
   assert.equal((app.match(/label="🚪 خروج"/g) ?? []).length, 1);
-  assert.ok(app.includes('view?.self.role === "player"'));
+  assert.ok(app.includes('view?.self.role === "player" && !isOwner'));
   assert.equal(player.includes("function LeaveLink"), false);
   assert.equal(player.includes("<LeaveLink />"), false);
   assert.equal(player.includes("مغادرة الغرفة"), false);
 
-  assert.ok(app.includes('["LOBBY", "DISCUSSION", "GAME_OVER"].includes(view.room.phase)'));
-  assert.ok(app.includes('view?.self.role === "host" && !hostAlreadyHasClose'));
+  assert.ok(app.includes('const canManageRoom = isOwner || legacyHost'));
+  assert.ok(app.includes('const ownerControlSurface = isOwner && ["LOBBY", "RESULT", "GAME_OVER"].includes'));
+  assert.ok(app.includes('const managementSurfaceHasClose = canManageRoom && ["LOBBY", "GAME_OVER"].includes'));
+  assert.ok(app.includes("canManageRoom && view && !managementSurfaceHasClose"));
   assert.ok(app.includes('label="إنهاء اللعبة"'));
   assert.ok(host.includes("function HostGameOver"));
   assert.ok(host.includes("إغلاق الغرفة"));

@@ -7,6 +7,7 @@ import {
   resetToHome,
   useGame,
 } from "./net/socket.js";
+import { estimatedServerNow } from "./net/clock.js";
 import { errorText } from "./i18n/errors.js";
 import { HostAudioLayer } from "./audio/HostAudioLayer.js";
 import { ConfirmDialog, type ConfirmDialogState } from "./components/ConfirmDialog.js";
@@ -14,7 +15,20 @@ import { Home } from "./screens/Home.js";
 import { Host, type ConfirmActionRequest } from "./screens/Host.js";
 import { Player } from "./screens/Player.js";
 
-interface ActiveConfirm extends ConfirmDialogState, ConfirmActionRequest {
+interface RecoveryConfirmActionRequest {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  actionType: "REDEAL_CHALLENGE";
+  run: () => string | null;
+}
+
+type AppConfirmActionRequest = ConfirmActionRequest | RecoveryConfirmActionRequest;
+
+interface ActiveConfirm extends ConfirmDialogState {
+  actionType: AppConfirmActionRequest["actionType"];
+  targetUid?: string;
+  run: () => string | null;
   roomCode: string;
   errorBaseline: number;
   phaseBaseline: string;
@@ -63,9 +77,13 @@ export function App() {
     }
   }, [view]);
 
+  const isOwner = view?.self.isOwner === true;
+  const legacyHost = view?.self.role === "host";
+  const canManageRoom = isOwner || legacyHost;
+
   useEffect(() => {
-    if (view?.self.role !== "host") setShowHostPlayers(false);
-  }, [view?.self.role]);
+    if (!canManageRoom) setShowHostPlayers(false);
+  }, [canManageRoom]);
 
   useEffect(() => {
     if (!confirmRequest) return;
@@ -77,10 +95,11 @@ export function App() {
       setConfirmRequest(null);
       return;
     }
-    if (confirmRequest.actionType === "NEXT_ROUND" && confirmRequest.pending) {
+    if ((confirmRequest.actionType === "NEXT_ROUND" || confirmRequest.actionType === "REDEAL_CHALLENGE") && confirmRequest.pending) {
       const progressed = view.room.phase !== confirmRequest.phaseBaseline ||
         view.room.currentRound !== confirmRequest.roundBaseline ||
-        view.challenge?.index !== confirmRequest.challengeBaseline;
+        view.challenge?.index !== confirmRequest.challengeBaseline ||
+        (confirmRequest.actionType === "REDEAL_CHALLENGE" && view.readyRecovery === undefined);
       if (progressed) {
         setConfirmRequest(null);
         return;
@@ -109,7 +128,7 @@ export function App() {
     return () => window.clearTimeout(h);
   }, [confirmRequest, error, pendingActions, view]);
 
-  const openConfirm = (request: ConfirmActionRequest) => {
+  const openConfirm = (request: AppConfirmActionRequest) => {
     if (!view || confirmRequest) return;
     setConfirmRequest({
       ...request,
@@ -124,8 +143,9 @@ export function App() {
 
   const offlinePlayers = view?.players.filter((player) => !player.connected) ?? [];
   const activeRoom = view != null && !["LOBBY", "GAME_OVER", "CLOSED"].includes(view.room.phase);
-  const hostAlreadyHasClose = view?.self.role === "host" && ["LOBBY", "DISCUSSION", "GAME_OVER"].includes(view.room.phase);
-  const showHostDisconnected = view?.self.role === "player" && view.room.hostConnected === false && view.room.phase !== "CLOSED";
+  const ownerControlSurface = isOwner && ["LOBBY", "RESULT", "GAME_OVER"].includes(view?.room.phase ?? "");
+  const managementSurfaceHasClose = canManageRoom && ["LOBBY", "GAME_OVER"].includes(view?.room.phase ?? "");
+  const showOwnerDisconnected = view?.self.role === "player" && !isOwner && view.room.hostConnected === false && view.room.phase !== "CLOSED";
   const hostDeadline = view?.room.hostCloseDeadline
     ? new Date(view.room.hostCloseDeadline).toLocaleTimeString("ar-SA", { hour: "numeric", minute: "2-digit" })
     : null;
@@ -133,16 +153,46 @@ export function App() {
 
   const requestPlayerExit = () => {
     if (!view || view.self.role !== "player") return;
+    const owner = view.self.isOwner === true;
     const active = !["LOBBY", "GAME_OVER"].includes(view.room.phase);
     openConfirm({
-      title: "الخروج من الغرفة؟",
-      description: active
-        ? "إذا خروجك يمنع استمرار دور المتخفي الحالي، ممكن ترجع اللعبة لشاشة الانتظار. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك."
-        : "بتطلع من الغرفة وترجع للرئيسية. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك.",
-      confirmLabel: "اخرج",
+      title: owner ? "الخروج وتسليم الإدارة؟" : "الخروج من الغرفة؟",
+      description: owner
+        ? active
+          ? "بننقل إدارة الغرفة فورًا لأقدم لاعب متصل مؤهل، ثم بتطلع من اللعب. خروجك قد يغيّر الجولة الحالية حسب دورك وعدد اللاعبين."
+          : "بننقل إدارة الغرفة فورًا لأقدم لاعب متصل مؤهل، ثم بتطلع من الغرفة وترجع للرئيسية."
+        : active
+          ? "إذا خروجك يمنع استمرار دور المتخفي الحالي، ممكن ترجع اللعبة لشاشة الانتظار. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك."
+          : "بتطلع من الغرفة وترجع للرئيسية. وإذا الاتصال مقطوع، لازم يرجع قبل ما نقدر نأكد خروجك.",
+      confirmLabel: owner ? "اخرج وسلّم الإدارة" : "اخرج",
       actionType: "LEAVE_ROOM",
       run: actions.leaveRoom,
     });
+  };
+
+  const renderRoomSurface = () => {
+    if (!view) return <Home />;
+
+    if (isOwner) {
+      return (
+        <HostAudioLayer view={view}>
+          {ownerControlSurface
+            ? <Host view={view} confirmAction={openConfirm} />
+            : <Player view={view} />}
+        </HostAudioLayer>
+      );
+    }
+
+    if (legacyHost) {
+      return (
+        <HostAudioLayer view={view}>
+          <Host view={view} confirmAction={openConfirm} />
+        </HostAudioLayer>
+      );
+    }
+
+    if (view.self.role === "player") return <Player view={view} />;
+    return <Spectator />;
   };
 
   return (
@@ -150,17 +200,31 @@ export function App() {
       <div data-app-content>
         {showConn ? <div className="conn" role="status">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
 
-        {showHostDisconnected ? (
+        {showOwnerDisconnected ? (
           <div className="card host-disconnect-banner" role="status">
-            <strong>المضيف انقطع… ننتظره يرجع</strong>
+            <strong>مالك الغرفة انقطع… ننتظره يرجع</strong>
             {hostDeadline ? <div className="helper">إذا ما رجع قبل {hostDeadline} بتنقفل الغرفة.</div> : null}
           </div>
         ) : null}
 
-        {view?.self.role === "host" && activeRoom && offlinePlayers.length > 0 ? (
+        {isOwner && view?.readyRecovery ? (
+          <ReadyRecoveryBanner
+            availableAt={view.readyRecovery.availableAt}
+            online={status === "online"}
+            onRecover={() => openConfirm({
+              title: "إعادة توزيع التحدي؟",
+              description: "بيبدأ التحدي من جديد باللاعبين المتصلين فقط. إذا كان دور المتخفي الحالي فيه نقاط مؤقتة أو سلسلة تصويت غير مدفوعة، بتنمسح عند إعادة التوزيع. وإذا ما بقي 3 لاعبين متصلين بنرجع لشاشة الانتظار.",
+              confirmLabel: "إعادة توزيع التحدي",
+              actionType: "REDEAL_CHALLENGE",
+              run: actions.redealChallenge,
+            })}
+          />
+        ) : null}
+
+        {canManageRoom && activeRoom && offlinePlayers.length > 0 ? (
           <div className="card offline-player-banner">
             <strong>اتصال {offlinePlayers.map((player) => player.name).join("، ")} منقطع</strong>
-            <div className="helper">مكانه محفوظ وما راح نغيّر المتخفي بسبب نوم الجوال أو انقطاع الشبكة.</div>
+            <div className="helper">مكانه محفوظ وما راح نغيّر المتخفي تلقائيًا بسبب نوم الجوال أو انقطاع الشبكة.</div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowHostPlayers(true)}>إدارة اللاعبين</button>
           </div>
         ) : null}
@@ -171,23 +235,13 @@ export function App() {
           aria-busy={disableGameSurface}
           style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
         >
-          {view == null ? (
-            <Home />
-          ) : view.self.role === "host" ? (
-            <HostAudioLayer view={view}>
-              <Host view={view} confirmAction={openConfirm} />
-            </HostAudioLayer>
-          ) : view.self.role === "player" ? (
-            <Player view={view} />
-          ) : (
-            <Spectator />
-          )}
+          {renderRoomSurface()}
 
-          {view?.self.role === "host" && view.room.phase !== "CLOSED" ? (
+          {canManageRoom && view?.room.phase !== "CLOSED" ? (
             <button type="button" className="btn btn-ghost btn-sm floating-players" onClick={() => setShowHostPlayers(true)}>اللاعبين</button>
           ) : null}
 
-          {view?.self.role === "host" && !hostAlreadyHasClose ? (
+          {canManageRoom && view && !managementSurfaceHasClose ? (
             <RoomExitButton
               label="إنهاء اللعبة"
               onClick={() => openConfirm({
@@ -201,17 +255,19 @@ export function App() {
           ) : null}
         </fieldset>
 
-        {view?.self.role === "player" ? (
+        {view?.self.role === "player" && !isOwner ? (
           <RoomExitButton label="🚪 خروج" ariaLabel="الخروج من الغرفة" onClick={requestPlayerExit} />
         ) : null}
 
-        {view?.self.role === "host" && showHostPlayers ? (
+        {canManageRoom && view && showHostPlayers ? (
           <HostPlayerManager
             players={view.players}
             active={activeRoom}
             lobby={view.room.phase === "LOBBY"}
             admissionLocked={view.room.admissionLocked}
             blockedPlayers={view.blockedPlayers ?? []}
+            protectUnreadyDisconnects={view.readyRecovery !== undefined}
+            onOwnerLeave={isOwner ? () => { setShowHostPlayers(false); requestPlayerExit(); } : undefined}
             onConfirm={openConfirm}
             onClose={() => setShowHostPlayers(false)}
           />
@@ -248,12 +304,44 @@ export function App() {
   );
 }
 
+function ReadyRecoveryBanner({
+  availableAt,
+  online,
+  onRecover,
+}: {
+  availableAt: number;
+  online: boolean;
+  onRecover: () => void;
+}) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => tick((value) => value + 1), 250);
+    return () => window.clearInterval(timer);
+  }, []);
+  const remainingMs = Math.max(0, availableAt - estimatedServerNow());
+  const available = remainingMs <= 0;
+  const seconds = Math.max(1, Math.ceil(remainingMs / 1_000));
+  return (
+    <div className="card offline-player-banner" role="status">
+      <strong>لاعب انقطع قبل ما يجهز</strong>
+      <div className="helper">ننتظر رجوعه بدون أي تغيير تلقائي في دور المتخفي.</div>
+      {available ? (
+        <button type="button" className="btn btn-ghost btn-sm" disabled={!online} onClick={onRecover}>إعادة توزيع التحدي</button>
+      ) : (
+        <div className="helper">إعادة التوزيع تتاح بعد {seconds} ث.</div>
+      )}
+    </div>
+  );
+}
+
 function HostPlayerManager({
   players,
   active,
   lobby,
   admissionLocked,
   blockedPlayers,
+  protectUnreadyDisconnects,
+  onOwnerLeave,
   onConfirm,
   onClose,
 }: {
@@ -262,6 +350,8 @@ function HostPlayerManager({
   lobby: boolean;
   admissionLocked: boolean;
   blockedPlayers: Array<{ uid: string; name: string }>;
+  protectUnreadyDisconnects: boolean;
+  onOwnerLeave?: () => void;
   onConfirm: (request: ConfirmActionRequest) => void;
   onClose: () => void;
 }) {
@@ -344,27 +434,44 @@ function HostPlayerManager({
 
         {orderedPlayers.map((player) => (
           <div key={player.uid} className="row between card manager-player-row">
-            <div><strong>مقعد {player.seatNumber} · {player.name}</strong><div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div></div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => onConfirm({
-                title: `إخراج ${player.name}؟`,
-                description: active
-                  ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع لشاشة الانتظار. غير كذا تكملون بنفس المتخفي والتحدّي."
-                  : "بيطلع من الغرفة وما يقدر يرجع بنفس الهوية إلا إذا سمحت له من إدارة اللاعبين.",
-                confirmLabel: "إخراج",
-                actionType: "KICK_PLAYER",
-                targetUid: player.uid,
-                run: () => actions.kick(player.uid),
-              })}
-            >
-              إخراج
-            </button>
+            <div>
+              <strong>مقعد {player.seatNumber} · {player.name}{player.isHost ? " · مالك الغرفة" : ""}</strong>
+              <div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div>
+            </div>
+            {player.isHost ? (
+              <span className="pill-note">أنت</span>
+            ) : protectUnreadyDisconnects && !player.connected ? (
+              <span className="pill-note">ننتظر أو نعيد التوزيع</span>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => onConfirm({
+                  title: `إخراج ${player.name}؟`,
+                  description: active
+                    ? "إذا كان هو المتخفي أو صار العدد أقل من 3، اللعبة بترجع لشاشة الانتظار. غير كذا تكملون بنفس المتخفي والتحدّي."
+                    : "بيطلع من الغرفة وما يقدر يرجع بنفس الهوية إلا إذا سمحت له من إدارة اللاعبين.",
+                  confirmLabel: "إخراج",
+                  actionType: "KICK_PLAYER",
+                  targetUid: player.uid,
+                  run: () => actions.kick(player.uid),
+                })}
+              >
+                إخراج
+              </button>
+            )}
           </div>
         ))}
 
         {players.length === 0 ? <p className="subtitle center">ما فيه لاعبين الحين.</p> : null}
+
+        {onOwnerLeave ? (
+          <div className="card stack manager-subcard">
+            <strong>مالك الغرفة</strong>
+            <p className="helper">إذا بتطلع، نسلّم الإدارة تلقائيًا لأقدم لاعب متصل مؤهل بدل ما نقفل الغرفة على الكل.</p>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onOwnerLeave}>خروج وتسليم الإدارة</button>
+          </div>
+        ) : null}
 
         {blockedPlayers.length > 0 ? (
           <div className="card stack manager-subcard">
@@ -375,7 +482,7 @@ function HostPlayerManager({
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>السماح له يرجع</button>
               </div>
             ))}
-            <p className="helper">هذي القائمة تمنع رجوع نفس هوية اللعبة. المضيف يقدر يسمح للاعب يرجع من هنا.</p>
+            <p className="helper">هذي القائمة تمنع رجوع نفس هوية اللعبة. مالك الغرفة يقدر يسمح للاعب يرجع من هنا.</p>
           </div>
         ) : null}
       </div>
@@ -392,7 +499,7 @@ function Spectator() {
     <div className="screen center stack">
       <div className="spacer" />
       <h2 className="title">اللعبة شغّالة الحين</h2>
-      <p className="subtitle">ما تقدر تدخل لين يخلص دور المتخفي الحالي. تابع الشاشة لين يخلص.</p>
+      <p className="subtitle">ما تقدر تدخل لين يخلص دور المتخفي الحالي. انتظر لين يرجعون لشاشة الانتظار.</p>
       <button className="btn btn-ghost" onClick={() => resetToHome()}>الرئيسية</button>
       <div className="spacer" />
     </div>

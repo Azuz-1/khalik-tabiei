@@ -74,6 +74,7 @@ export interface PublicPlayer {
   /** Stable numeric identity for the occupied seat; color/status remains supplementary. */
   seatNumber: number;
   connected: boolean;
+  /** True only for the player who owns room-management capabilities. */
   isHost: boolean;
 }
 
@@ -128,7 +129,7 @@ export interface RoundResult {
   normalQuestion?: string;
   impostorQuestion?: string;
   category?: CategoryId;
-  /** Full-reveal aggregate only; omitted entirely from intermediate survival results. */
+  /** Full-reveal aggregate only. Omitted from intermediate survived results. */
   voteTally?: VoteTallyEntry[];
 }
 
@@ -151,6 +152,8 @@ export interface ClientView {
     role: Role;
     name?: string;
     connected: boolean;
+    /** Management capability is independent from gameplay role. New room owners are players. */
+    isOwner?: boolean;
   };
   room: {
     code: string;
@@ -179,9 +182,11 @@ export interface ClientView {
   };
   players: PublicPlayer[];
   settingsEditable?: boolean;
-  /** Host-only list. A blocked signed anonymous identity is not a physical-person ban. */
+  /** Owner-only list. A blocked signed anonymous identity is not a physical-person ban. */
   blockedPlayers?: Array<{ uid: string; name: string }>;
   nextRoundWarning?: string;
+  /** Owner-only, role-blind recovery for a participant who disconnected before Ready. */
+  readyRecovery?: { availableAt: number };
   challenge?: {
     mode: GameMode;
     index: number;
@@ -211,7 +216,8 @@ type RequestMeta = { rid?: RequestId };
 
 export type ClientMessage =
   | ({ t: "HELLO"; protocolVersion?: 2 } & RequestMeta)
-  | ({ t: "CREATE_ROOM" } & RequestMeta)
+  /** New clients provide the owner's display name so the room owner joins as a player. */
+  | ({ t: "CREATE_ROOM"; name?: string } & RequestMeta)
   | ({ t: "JOIN_ROOM"; code: string; name: string } & RequestMeta)
   | ({ t: "LEAVE_ROOM" } & RequestMeta)
   | ({
@@ -226,6 +232,8 @@ export type ClientMessage =
   | ({ t: "START_GAME" } & RequestMeta)
   | ({ t: "MARK_READY" } & RequestMeta)
   | ({ t: "SUBMIT_ANSWER"; answer: string } & RequestMeta)
+  /** Owner-only, role-blind recovery after an unready participant disconnect grace. */
+  | ({ t: "REDEAL_CHALLENGE" } & RequestMeta)
   /** @deprecated Voting starts automatically after the authoritative discussion deadline. */
   | ({ t: "START_VOTING" } & RequestMeta)
   | ({ t: "SUBMIT_VOTE"; targetUid: string } & RequestMeta)

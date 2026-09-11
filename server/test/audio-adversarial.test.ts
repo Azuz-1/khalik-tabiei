@@ -82,11 +82,13 @@ test("create-room gesture unlocks audio before the HostAudioLayer exists", async
     "utf8",
   );
 
-  const createRoomIndex = homeSource.indexOf("actions.createRoom()");
-  const unlockIndex = homeSource.lastIndexOf("void unlockAudio();", createRoomIndex);
-  assert.ok(createRoomIndex > 0, "create-room action missing");
+  const createNameStepIndex = homeSource.indexOf('setStep("create-name")');
+  const unlockIndex = homeSource.lastIndexOf("void unlockAudio();", createNameStepIndex);
+  const createRoomIndex = homeSource.indexOf("actions.createRoom(cleanedName)");
+  assert.ok(createNameStepIndex > 0, "owner create flow is missing");
   assert.ok(unlockIndex > 0, "create-room gesture does not unlock audio");
-  assert.ok(unlockIndex < createRoomIndex, "audio unlock must happen before CREATE_ROOM is sent");
+  assert.ok(unlockIndex < createNameStepIndex, "audio unlock must happen on the gesture that starts room creation");
+  assert.ok(createRoomIndex > createNameStepIndex, "named owner CREATE_ROOM action missing after the create-name step");
 });
 
 test("Host gesture unlock is retryable after pagehide/BFCache-style audio disposal", async () => {

@@ -135,9 +135,9 @@ test("player disconnect never uses Host grace and preserves seat/role/challenge"
   manager.dispose();
 });
 
-test("player UI surfaces Host disconnect without replacing the current screen", async () => {
+test("player UI surfaces room-owner disconnect without replacing the current screen", async () => {
   const app = await readFile(new URL("../../client/src/App.tsx", import.meta.url), "utf8");
   assert.ok(app.includes("view.room.hostConnected === false"));
-  assert.ok(app.includes("المضيف انقطع… ننتظره يرجع"));
+  assert.ok(app.includes("مالك الغرفة انقطع… ننتظره يرجع"));
   assert.ok(app.includes("<Player view={view} />"));
 });
