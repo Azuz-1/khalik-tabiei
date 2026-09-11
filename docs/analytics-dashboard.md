@@ -68,7 +68,10 @@ Player-count balance:
 select
   (properties->>'startingPlayerCount')::int as players,
   count(*) as games,
-  round(avg((properties->>'durationSeconds')::numeric), 1) filter (where event_type = 'game_completed') as avg_completed_seconds
+  round(
+    avg((properties->>'durationSeconds')::numeric) filter (where event_type = 'game_completed'),
+    1
+  ) as avg_completed_seconds
 from public.analytics_events
 where event_type in ('game_started', 'game_completed')
   and occurred_at >= now() - interval '30 days'
