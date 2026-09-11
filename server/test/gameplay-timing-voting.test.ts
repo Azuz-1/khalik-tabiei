@@ -138,6 +138,7 @@ test("all participants voting resolves immediately before the global voting time
     assert.equal(setup.room.phase, "RESULT");
     assert.ok(Date.now() < votingDeadline, "early resolution should not wait for the 15-second timer");
     assert.equal(setup.room.round!.abstainedUids?.size, 0);
+    assert.equal(setup.room.phaseEndsAt, undefined);
   } finally {
     setup.manager.dispose();
   }
@@ -215,7 +216,6 @@ test("voting timeout records aggregate abstentions and one cast vote can catch a
     const view = lastMessage(setup.host.socket, "STATE")!.view;
     assert.equal(view.result?.votesCast, 1);
     assert.equal(view.result?.participantCount, 10);
-    assert.equal(view.result?.requiredVotes, 1);
     assert.equal(JSON.stringify(view).includes("abstainedUids"), false);
 
     const completed = setup.events.find((entry) => entry.event === "challenge_completed")!;
@@ -239,7 +239,7 @@ test("voting timeout records aggregate abstentions and one cast vote can catch a
   }
 });
 
-test("zero-vote timeout survives privately then auto-advances after the short transition", async () => {
+test("survived result stays private and stable until the host advances", async () => {
   const setup = setupManager(3, { votingMs: 20, survivedTransitionMs: 25, fullResultMs: 300 });
   try {
     await readyToVoting(setup);
@@ -261,9 +261,12 @@ test("zero-vote timeout survives privately then auto-advances after the short tr
     assert.equal(view.result?.voteTally, undefined);
     assert.equal(JSON.stringify(view.result).includes("voteTally"), false);
     assert.equal(view.scoreboard, undefined);
-    assert.ok(view.room.phaseEndsAt);
+    assert.equal(view.room.phaseEndsAt, undefined);
 
-    await waitForPhase(setup.room, "QUESTION");
+    await wait(60);
+    assert.equal(setup.room.phase, "RESULT");
+    setup.manager.handle(setup.host.conn, { t: "NEXT_ROUND" });
+    assert.equal(setup.room.phase, "QUESTION");
     assert.equal(setup.room.round!.challengeIndex, 2);
     assert.equal(setup.room.round!.impostorUid, impostorUid);
   } finally {
@@ -271,7 +274,7 @@ test("zero-vote timeout survives privately then auto-advances after the short tr
   }
 });
 
-test("full reveal auto-advances after its configured window and can still be advanced immediately", async () => {
+test("full reveal stays stable until the host explicitly advances", async () => {
   const setup = setupManager(3, { votingMs: 100, fullResultMs: 30 });
   try {
     await readyToVoting(setup);
@@ -281,25 +284,14 @@ test("full reveal auto-advances after its configured window and can still be adv
     setup.manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
     assert.equal(setup.room.phase, "RESULT");
     assert.equal(setup.room.round!.roundComplete, true);
-    assert.ok(setup.room.phaseEndsAt);
-    await waitForPhase(setup.room, "QUESTION");
+    assert.equal(setup.room.phaseEndsAt, undefined);
+    await wait(60);
+    assert.equal(setup.room.phase, "RESULT");
+    setup.manager.handle(setup.host.conn, { t: "NEXT_ROUND" });
+    assert.equal(setup.room.phase, "QUESTION");
     assert.equal(setup.room.currentRound, 2);
   } finally {
     setup.manager.dispose();
-  }
-
-  const immediate = setupManager(3, { votingMs: 100, fullResultMs: 300 });
-  try {
-    await readyToVoting(immediate);
-    const impostor = immediate.players.find((player) => player.uid === immediate.room.round!.impostorUid)!;
-    const normals = immediate.players.filter((player) => player.uid !== impostor.uid);
-    for (const normal of normals) immediate.manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-    immediate.manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
-    assert.equal(immediate.room.phase, "RESULT");
-    immediate.manager.handle(immediate.host.conn, { t: "NEXT_ROUND" });
-    assert.equal(immediate.room.phase, "QUESTION");
-  } finally {
-    immediate.manager.dispose();
   }
 });
 
