@@ -21,12 +21,13 @@ test("gameplay chrome exposes compact HUD, player details and secondary actions"
     "التحدّي",
     "دور المتخفي",
     "إدارة اللاعبين",
-    "نسخ رابط شاشة العرض",
+    "📺 شاشة العرض",
     "إنهاء اللعبة",
     "الخروج من الغرفة",
     "رجع الاتصال ✓",
     ".floating-players",
     ".floating-exit",
+    '[data-testid="owner-display-control"]',
   ]) {
     assert.ok(chrome.includes(marker), `GameChrome must keep ${marker}`);
   }
@@ -43,6 +44,7 @@ test("phase 2 CSS replaces floating controls and the large reconnect banner duri
   const css = source("../../client/src/game-hud.css");
   assert.ok(css.includes("html.game-hud-active .floating-players"));
   assert.ok(css.includes("html.game-hud-active .floating-exit"));
+  assert.ok(css.includes('html.game-hud-active [data-testid="owner-display-control"]'));
   assert.ok(css.includes('content: "جاري إعادة الاتصال…"'));
   assert.ok(css.includes("env(safe-area-inset-top)"));
   assert.ok(css.includes("env(safe-area-inset-bottom)"));
