@@ -8,7 +8,7 @@ The automated audit normalizes active text with NFKC plus whitespace collapse, t
 
 Active prompts receive one best-effort family such as phone/messaging, sleep/energy, food/drink, travel/driving, shopping, home/routine, media, weather/outdoors, sports/games, social gatherings, planning/time, personality/decisions, or miscellaneous. When a new challenge has multiple unused same-mode candidates, the picker prefers a family different from the immediately previous prompt. If only the previous family remains, it falls back to those unused candidates.
 
-Family spacing never overrides the stronger exact no-repeat rule. `usedPromptIds` remains authoritative and game-scoped: a prompt is not reused inside the current game while another unused prompt exists for that mode. A mode's `usedPromptIds` are reset only after all 300 prompts in that mode are exhausted.
+Family spacing never overrides the stronger exact no-repeat rule. `usedPromptIds` is authoritative and room-session scoped: it survives rematches, selected-mode changes, and roster changes while the room exists. A prompt is not reused while another unused prompt exists for that mode. Only when all 300 prompts in one mode have been consumed are that mode's IDs removed from `usedPromptIds`; other modes keep their history. A brand-new room starts with an empty exact history.
 
 ## Cross-room novelty history
 
@@ -18,9 +18,9 @@ On room creation/join and after a newly public prompt is recorded, the browser s
 
 This Bloom filter is compression, not encryption or anonymization. Because the active prompt universe is known, the server can test approximate membership for known prompt tokens. The filter is not used as a player identity, is not linked to IP for novelty selection, and is not written to analytics. Clearing site data, using another browser/device, or using private browsing can therefore begin a new local history.
 
-A Bloom filter may also produce a false positive, which can temporarily hide an unseen candidate. With 24,576 bits, 18 hash positions, and 900 inserted prompts, the modeled false-positive probability is below 0.001%. There are no Bloom-filter false negatives for successfully recorded items.
+A Bloom filter may also produce a false positive, which can temporarily hide an unseen candidate. With 24,576 bits, 18 hash positions, and 900 inserted prompts, the modeled false-positive probability is about 0.000203% (roughly 1 in 494,000). There are no Bloom-filter false negatives for successfully recorded items.
 
-Client novelty data is never authoritative. A malformed filter is rejected. If a stale, saturated, or malicious all-ones filter makes every otherwise-valid candidate appear seen, the picker falls back to the normal current-game eligible pool. It does not clear the browser history, block gameplay, alter scoring, or reset another mode.
+Client novelty data is never authoritative. A malformed filter is rejected. If a stale, saturated, or malicious all-ones filter makes every otherwise-valid candidate appear seen, the picker falls back to the normal exact room-session eligible pool. It does not clear browser history, block gameplay, alter scoring, or reset another mode.
 
 ## Stable novelty identity
 
