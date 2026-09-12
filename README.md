@@ -273,31 +273,40 @@ mode changes.
 
 Every Challenge receives a prompt from its current mode's 300-prompt bank.
 
-`usedPromptIds` is authoritative for the **room session**, not just one Game. It
-survives rematches, selected-mode changes, and roster changes while the room
-exists, so a prompt is not repeated while another unused prompt exists for the
-same mode. When one mode's 300-item bank is exhausted, only that mode becomes
-eligible for reuse; the other modes keep their exact history. A brand-new room
-starts with an empty exact history.
+`usedPromptIds` is exact **current-match** duplicate protection. It resets for a
+new match or abort back to the lobby. Separately, the server keeps an exact
+in-memory room-session prompt history that survives rematches, selected-mode
+changes, and roster changes while the room exists. That room-session history is
+a secondary freshness preference; after all 300 prompts in one mode have been
+seen in the room session, only that mode's session history is recycled.
 
-Participant browsers also keep a versioned approximate Bloom-filter history of
-prompts that actually became public on that browser. On create/join and after a
-new public reveal, the browser sends that compressed history as an advisory hint.
-The server unions histories for the current participants and prefers a prompt
-that no current member probably saw before, including across rematches and new
-rooms on the same browsers.
+Participant browsers keep a versioned bounded **exact bitset (v2)** for prompts
+that actually became public on that browser: 1,536 bits / 192 raw bytes / 256
+base64url characters. Active prompt IDs map deterministically to distinct stable
+history slots, independent of prompt-array ordering, with reserved append room
+inside each mode block. Before a normal browser persistence write, the client ORs
+the latest valid stored value with its current in-memory history and the newly
+seen contribution, so stale tabs cannot normally clear bits written by another
+tab.
 
-The Bloom filter is not encryption or anonymization: because the prompt universe
-is known, the server can test approximate membership for known prompts. It is
-used only for repeat avoidance, held in room memory on the server, and is not
-written to analytics or linked to IP as a novelty identity. Malformed, stale,
-saturated, or malicious histories can only reduce novelty; if every candidate
-appears seen, selection falls back to the normal exact room-session eligible
-pool and gameplay continues.
+On create/join and after a new public reveal, the browser sends this exact history
+as an advisory, untrusted novelty hint. The server validates it and unions the
+histories of the current Challenge participants. If any exact-unseen prompt
+remains in the selected mode, selection is restricted to those unseen prompts;
+room-session history is then applied only as a secondary preference inside that
+eligible pool.
+
+Browser history has no authority over authentication, membership, host status,
+roles, prompt secrecy, voting, scoring, timers, or game transitions. Malformed,
+stale, unavailable-storage, or malicious all-ones histories fail open: they may
+reduce novelty preference, but if the preferred unseen pool is exhausted the
+picker safely falls back to the normal current-match/room-session eligible pool
+and gameplay continues.
 
 The stable novelty token is revealed to participant clients only once the prompt
 itself is public. Internal `promptId` values remain server-only. Clearing site
 data, private browsing, or switching browser/device starts a new local history.
+A brand-new room starts with an empty server-side room-session history.
 
 ---
 
@@ -434,7 +443,7 @@ There is currently **no lint script** in the repository package scripts.
 shared/
   types.ts              Wire contract and shared types
   constants.ts          Modes, player limits, Round options, timers
-  promptNovelty.ts      Versioned Bloom-filter wire/storage primitives
+  promptNovelty.ts      Versioned exact-bitset wire/storage primitives
 
 server/
   src/
@@ -442,7 +451,7 @@ server/
     game/
       imitationPrompts.data.ts  Active 900-prompt bank entry point
       imitationPrompts.expansion.*.ts  570-prompt expansion
-      promptNovelty.ts          Stable novelty tokens + server filter helpers
+      promptNovelty.ts          Stable history-slot tokens + exact server helpers
       questions.data.ts         110 legacy TEXT_PAIR pairs
       questions.ts              Legacy TEXT_PAIR selector
       state.ts                  Internal room/round secret state
