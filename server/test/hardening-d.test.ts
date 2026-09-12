@@ -7,9 +7,9 @@ import { assertActivePromptBank } from "../src/game/promptAudit.js";
 import { RoomManager } from "../src/game/roomManager.js";
 import { createRoom, joinPlayer } from "./helpers.js";
 
-test("active imitation bank is exactly 330 audited prompts with explicit families and quality flags", () => {
+test("active imitation bank is exactly 900 audited prompts with explicit families and quality flags", () => {
   const report = assertActivePromptBank();
-  assert.deepEqual(report.byMode, { HANDS: 110, POINT: 110, NUMBER: 110 });
+  assert.deepEqual(report.byMode, { HANDS: 300, POINT: 300, NUMBER: 300 });
   assert.deepEqual(report.duplicateIds, []);
   assert.deepEqual(report.duplicateTexts, []);
   assert.deepEqual(report.missingFamilyIds, []);
@@ -82,7 +82,7 @@ test("font serving is local-only and production runtime is compiled/non-root", a
   assert.equal(renderBlueprint.includes("healthCheckPath: /healthz"), false);
 });
 
-test("legacy TEXT_PAIR content remains isolated from the 330 active imitation prompts", async () => {
+test("legacy TEXT_PAIR content remains isolated from the 900 active imitation prompts", async () => {
   const [engine, questions] = await Promise.all([
     readFile(new URL("../src/game/engine.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/questions.ts", import.meta.url), "utf8"),
