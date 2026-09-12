@@ -3,6 +3,7 @@ import {
   PROMPT_NOVELTY_FILTER_BYTES,
   PROMPT_NOVELTY_VERSION,
   addPromptNovelty,
+  emptyPromptNoveltyBytes,
   isPromptNoveltyFilter,
 } from "../../../shared/promptNovelty.js";
 
@@ -28,7 +29,7 @@ function decode(bits: string): Uint8Array | null {
 }
 
 function emptyFilter(): PromptNoveltyFilter {
-  return { version: PROMPT_NOVELTY_VERSION, bits: encode(new Uint8Array(PROMPT_NOVELTY_FILTER_BYTES)) };
+  return { version: PROMPT_NOVELTY_VERSION, bits: encode(emptyPromptNoveltyBytes()) };
 }
 
 function load(): PromptNoveltyFilter {
@@ -60,7 +61,6 @@ export function currentPromptNoveltyFilter(): PromptNoveltyFilter {
   return current;
 }
 
-/** Called only when a STATE actually exposes the public prompt to this browser. */
 export function recordPublicPromptNovelty(token: string): boolean {
   const bytes = decode(current.bits);
   if (!bytes) {
