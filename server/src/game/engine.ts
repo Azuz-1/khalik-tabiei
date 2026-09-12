@@ -18,7 +18,13 @@ import {
 } from "./state.js";
 import { IMITATION_PROMPTS, type ImitationPrompt } from "./imitationPrompts.data.js";
 import { promptQualityWeight, type PromptFamily } from "./promptMetadata.js";
-import { promptProbablySeen } from "./promptNovelty.js";
+import { promptSeenByAny } from "./promptNovelty.js";
+import {
+  markSessionPromptSeen,
+  resetSessionMode,
+  sessionModeExhausted,
+  sessionPromptSeen,
+} from "./sessionPromptHistory.js";
 import { pickPair } from "./questions.js";
 import * as voting from "./voting.js";
 
@@ -204,7 +210,8 @@ function pickPrompt(
   deps: EngineDeps,
 ): ImitationPrompt {
   const pool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === mode);
-  let candidates = pool.filter((prompt) => !room.usedPromptIds.has(prompt.id));
+  const unusedThisMatch = (prompt: ImitationPrompt): boolean => !room.usedPromptIds.has(prompt.id);
+  let candidates = pool.filter(unusedThisMatch);
 
   if (!candidates.length) {
     for (const prompt of pool) room.usedPromptIds.delete(prompt.id);
@@ -217,11 +224,18 @@ function pickPrompt(
     .map((uid) => room.promptNoveltyByUid.get(uid))
     .filter((filter): filter is Uint8Array => filter !== undefined);
   if (noveltyFilters.length) {
-    const unseen = candidates.filter((prompt) => !promptProbablySeen(noveltyFilters, prompt.id));
-    // Browser history is an untrusted UX hint. A saturated/malicious filter can
-    // only make us fall back to the normal authoritative pool; it can never
-    // block the game or mutate scoring/roles/timers.
+    const unseen = candidates.filter((prompt) => !promptSeenByAny(noveltyFilters, prompt.id));
+    // Current-player exact history is the primary freshness rule.
     if (unseen.length) candidates = unseen;
+  }
+
+  // Room-session history is only a secondary preference. It must never force
+  // a repeat while an exact-unseen candidate for the current players exists.
+  const sessionFresh = candidates.filter((prompt) => !sessionPromptSeen(room, prompt.id));
+  if (sessionFresh.length) {
+    candidates = sessionFresh;
+  } else if (sessionModeExhausted(room, mode)) {
+    resetSessionMode(room, mode);
   }
 
   const previousFamily = room.round?.promptId
@@ -229,6 +243,7 @@ function pickPrompt(
     : undefined;
   const prompt = choosePromptCandidate(candidates, previousFamily, deps.rng, participantUids.length);
   room.usedPromptIds.add(prompt.id);
+  markSessionPromptSeen(room, prompt.id);
   return prompt;
 }
 
@@ -350,6 +365,7 @@ export function startGame(room: RoomState, uid: string, deps: EngineDeps = defau
   room.currentRound = 1;
   room.completedChallenges = 0;
   room.categories = [];
+  room.usedPromptIds.clear();
   room.usedPairIds.clear();
   room.modeBag = [];
   room.lastMode = undefined;
@@ -619,6 +635,7 @@ export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): v
   room.completedChallenges = 0;
   room.round = null;
   room.categories = [];
+  room.usedPromptIds.clear();
   room.usedPairIds.clear();
   room.modeBag = [];
   room.lastMode = undefined;
