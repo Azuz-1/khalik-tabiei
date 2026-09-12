@@ -110,12 +110,15 @@ export interface RoomState {
   modeBag: GameMode[];
   lastMode?: GameMode;
   players: Map<string, InternalPlayer>;
+  /** Room-scoped copies of browser novelty filters; never serialized or persisted to analytics. */
+  promptNoveltyByUid: Map<string, Uint8Array>;
   round: RoundState | null;
   /** Server-only score deltas accumulated during the active impostor stint. */
   pendingRoundScores: Map<string, number>;
   /** Server-only start Challenge for each normal player's current uninterrupted correct-vote streak. */
   correctVoteStreakStart: Map<string, number>;
   usedPairIds: Set<string>;
+  /** Server-only exact prompt history for this room session. Preserved across rematches; a mode resets only after its full bank is exhausted. */
   usedPromptIds: Set<string>;
   impostorHistory: string[];
   roundOutcomes: RoundOutcome[];
@@ -147,6 +150,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     selectedModes: [...DEFAULT_GAME_MODES],
     modeBag: [],
     players: new Map(),
+    promptNoveltyByUid: new Map(),
     round: null,
     pendingRoundScores: new Map(),
     correctVoteStreakStart: new Map(),

@@ -9,6 +9,8 @@ import {
   type ImitationPrompt,
 } from "../src/game/imitationPrompts.data.js";
 import { EXTRA_IMITATION_PROMPTS } from "../src/game/imitationPrompts.extra.js";
+import { EXPANSION_IMITATION_PROMPTS } from "../src/game/imitationPrompts.expansion.js";
+import { sessionPromptIdsForTests } from "../src/game/sessionPromptHistory.js";
 import {
   createRoomState,
   type InternalPlayer,
@@ -24,7 +26,7 @@ function countMode(prompts: ImitationPrompt[], mode: GameMode): number {
 }
 
 function normalizeText(text: string): string {
-  return text.trim().replace(/\s+/g, " ");
+  return text.normalize("NFKC").trim().replace(/\s+/gu, " ");
 }
 
 function addPlayer(room: RoomState, uid: string, name: string): void {
@@ -73,19 +75,17 @@ function completeSurvivedChallenge(room: RoomState): void {
   assert.equal(room.round!.groupFound, false);
 }
 
-test("curated extra pack loads all 300 prompts with +100 per mode", () => {
+test("active imitation bank contains exactly 900 prompts: 300 per mode", () => {
   assert.equal(BASE_IMITATION_PROMPTS.length, 30);
-  assert.equal(EXTRA_IMITATION_PROMPTS.length, 300);
-  assert.equal(IMITATION_PROMPTS.length, 330);
+  assert.equal(EXPANSION_IMITATION_PROMPTS.length, 570);
+  assert.equal(EXTRA_IMITATION_PROMPTS.length, 870);
+  assert.equal(IMITATION_PROMPTS.length, 900);
 
   for (const mode of MODES) {
-    const baseCount = countMode(BASE_IMITATION_PROMPTS, mode);
-    const extraCount = countMode(EXTRA_IMITATION_PROMPTS, mode);
-    const combinedCount = countMode(IMITATION_PROMPTS, mode);
-
-    assert.equal(extraCount, 100, `${mode} extra count`);
-    assert.equal(combinedCount, baseCount + 100, `${mode} combined count`);
-    assert.equal(baseCount, 10, `${mode} base prompts were retained`);
+    assert.equal(countMode(BASE_IMITATION_PROMPTS, mode), 10, `${mode} base count`);
+    assert.equal(countMode(EXPANSION_IMITATION_PROMPTS, mode), 190, `${mode} expansion count`);
+    assert.equal(countMode(EXTRA_IMITATION_PROMPTS, mode), 290, `${mode} extra count`);
+    assert.equal(countMode(IMITATION_PROMPTS, mode), 300, `${mode} total count`);
   }
 });
 
@@ -101,9 +101,8 @@ test("combined prompt IDs are unique, texts are non-empty, and modes are valid",
   }
 });
 
-test("combined bank has no duplicate text after trim/whitespace normalization", () => {
+test("combined bank has no duplicate text after NFKC/whitespace normalization", () => {
   const seen = new Map<string, string>();
-
   for (const prompt of IMITATION_PROMPTS) {
     const normalized = normalizeText(prompt.text);
     const existing = seen.get(normalized);
@@ -112,7 +111,7 @@ test("combined bank has no duplicate text after trim/whitespace normalization", 
   }
 });
 
-test("H001-H100, P001-P100, and N001-N100 map to the required modes", () => {
+test("H001-H290, P001-P290, and N001-N290 map to the required modes", () => {
   const byId = new Map(EXTRA_IMITATION_PROMPTS.map((prompt) => [prompt.id, prompt]));
   const groups: Array<[string, GameMode]> = [
     ["H", "HANDS"],
@@ -121,7 +120,7 @@ test("H001-H100, P001-P100, and N001-N100 map to the required modes", () => {
   ];
 
   for (const [prefix, mode] of groups) {
-    for (let index = 1; index <= 100; index += 1) {
+    for (let index = 1; index <= 290; index += 1) {
       const id = `${prefix}${String(index).padStart(3, "0")}`;
       const prompt = byId.get(id);
       assert.ok(prompt, `missing ${id}`);
@@ -130,21 +129,16 @@ test("H001-H100, P001-P100, and N001-N100 map to the required modes", () => {
   }
 });
 
-test("new HANDS and POINT prompts preserve their physical response domains", () => {
+test("all extra HANDS and POINT prompts preserve their physical response domains", () => {
   for (const prompt of EXTRA_IMITATION_PROMPTS) {
-    if (prompt.mode === "HANDS") {
-      assert.ok(prompt.text.startsWith("ارفع يدك إذا"), `${prompt.id} is not binary HANDS copy`);
-    }
-    if (prompt.mode === "POINT") {
-      assert.ok(prompt.text.startsWith("أشر على "), `${prompt.id} is not POINT copy`);
-    }
+    if (prompt.mode === "HANDS") assert.ok(prompt.text.startsWith("ارفع يدك إذا"), `${prompt.id} is not HANDS copy`);
+    if (prompt.mode === "POINT") assert.ok(prompt.text.startsWith("أشر على "), `${prompt.id} is not POINT copy`);
   }
 });
 
-test("all new NUMBER prompts have an explicit 0-5 response domain", () => {
+test("all extra NUMBER prompts have an explicit 0-5 response domain", () => {
   const numberPrompts = EXTRA_IMITATION_PROMPTS.filter((prompt) => prompt.mode === "NUMBER");
-  assert.equal(numberPrompts.length, 100);
-
+  assert.equal(numberPrompts.length, 290);
   for (const prompt of numberPrompts) {
     const isFiveItemCount = prompt.text.startsWith("من آخر 5 ");
     const isZeroToFiveScale = prompt.text.startsWith("من 0 إلى 5،");
@@ -152,8 +146,9 @@ test("all new NUMBER prompts have an explicit 0-5 response domain", () => {
   }
 });
 
-test("new prompt copy excludes retired Saudi wording", () => {
-  for (const prompt of EXTRA_IMITATION_PROMPTS) {
+test("the 570-prompt expansion has explicit family metadata and keeps Saudi copy conventions", () => {
+  for (const prompt of EXPANSION_IMITATION_PROMPTS) {
+    assert.ok(prompt.family, `${prompt.id} is missing explicit family metadata`);
     const words = prompt.text.replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/);
     assert.equal(words.includes("مب"), false, `${prompt.id} contains retired word مب`);
     assert.equal(prompt.text.includes("ورّونا"), false, `${prompt.id} contains retired wording ورّونا`);
@@ -162,15 +157,15 @@ test("new prompt copy excludes retired Saudi wording", () => {
   }
 });
 
-test("prompt picker uses the combined bank and resets only after full mode exhaustion", () => {
+test("current-match prompt usage resets after exhaustion without clearing room-session freshness", () => {
   const room = roomWithFourPlayers();
   engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
   engine.startGame(room, "host", deps);
 
   const handsPool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === "HANDS");
-  assert.equal(handsPool.length, 110);
-  const finalPrompt = handsPool[handsPool.length - 1];
-  assert.match(finalPrompt.id, /^H\d{3}$/, "expected final HANDS prompt to come from extra pack");
+  assert.equal(handsPool.length, 300);
+  const firstPromptId = room.round!.promptId;
+  const finalPrompt = handsPool[handsPool.length - 1]!;
 
   room.usedPromptIds = new Set(handsPool.slice(0, -1).map((prompt) => prompt.id));
   completeSurvivedChallenge(room);
@@ -179,20 +174,27 @@ test("prompt picker uses the combined bank and resets only after full mode exhau
   assert.equal(room.round!.challengeIndex, 2);
   assert.equal(room.round!.promptId, finalPrompt.id);
   assert.equal(room.round!.prompt, finalPrompt.text);
-  assert.ok(
-    EXTRA_IMITATION_PROMPTS.some((prompt) => prompt.id === room.round!.promptId),
-    "picker did not reach the extra prompt pack",
-  );
 
   room.usedPromptIds = new Set(handsPool.map((prompt) => prompt.id));
+  const sessionSeenBeforeRefill = new Set(sessionPromptIdsForTests(room));
+  assert.ok(sessionSeenBeforeRefill.has(firstPromptId));
+  assert.ok(sessionSeenBeforeRefill.has(finalPrompt.id));
+  assert.ok(sessionSeenBeforeRefill.size < handsPool.length, "room-session HANDS history should still have fresh prompts");
+
   completeSurvivedChallenge(room);
   engine.nextRound(room, "host", deps);
 
   assert.equal(room.round!.challengeIndex, 3);
-  assert.equal(room.round!.promptId, handsPool[0].id);
-  assert.equal(room.round!.prompt, handsPool[0].text);
+  assert.equal(
+    sessionSeenBeforeRefill.has(room.round!.promptId),
+    false,
+    "current-match exhaustion must not discard the independent room-session freshness preference",
+  );
 
   const handsIds = new Set(handsPool.map((prompt) => prompt.id));
   const usedHandsAfterRefill = [...room.usedPromptIds].filter((id) => handsIds.has(id));
-  assert.deepEqual(usedHandsAfterRefill, [handsPool[0].id]);
+  assert.deepEqual(usedHandsAfterRefill, [room.round!.promptId]);
+  assert.ok(sessionPromptIdsForTests(room).has(firstPromptId));
+  assert.ok(sessionPromptIdsForTests(room).has(finalPrompt.id));
+  assert.ok(sessionPromptIdsForTests(room).has(room.round!.promptId));
 });

@@ -27,8 +27,8 @@ laptop, scan the QR from player phones, type a name, and play.
 - Player-facing UI is **Arabic + RTL**.
 - Multiplayer is authoritative and real-time over WebSockets.
 - Private prompts and roles are projected per recipient on the server.
-- The active playtest bank contains **30 imitation prompts**: 10 HANDS, 10 POINT,
-  and 10 NUMBER.
+- The active bank contains **900 imitation prompts**: 300 HANDS, 300 POINT,
+  and 300 NUMBER.
 - The repository still contains **110 legacy TEXT_PAIR pairs** across 9
   categories. They are retained as legacy content but are **not selectable in
   the current UI/settings**.
@@ -271,14 +271,42 @@ mode changes.
 
 ### Prompt history
 
-Every Challenge receives a prompt from its current mode's bank.
+Every Challenge receives a prompt from its current mode's 300-prompt bank.
 
-`usedPromptIds` is Game-scoped. A prompt is not repeated while an unused prompt
-exists for the same mode.
+`usedPromptIds` is exact **current-match** duplicate protection. It resets for a
+new match or abort back to the lobby. Separately, the server keeps an exact
+in-memory room-session prompt history that survives rematches, selected-mode
+changes, and roster changes while the room exists. That room-session history is
+a secondary freshness preference; after all 300 prompts in one mode have been
+seen in the room session, only that mode's session history is recycled.
 
-When one mode's entire prompt bank is exhausted, only that mode's used prompt
-ids are reset and its prompts become eligible again. A small playtest bank can
-therefore never block a long Game.
+Participant browsers keep a versioned bounded **exact bitset (v2)** for prompts
+that actually became public on that browser: 1,536 bits / 192 raw bytes / 256
+base64url characters. Active prompt IDs map deterministically to distinct stable
+history slots, independent of prompt-array ordering, with reserved append room
+inside each mode block. Before a normal browser persistence write, the client ORs
+the latest valid stored value with its current in-memory history and the newly
+seen contribution, so stale tabs cannot normally clear bits written by another
+tab.
+
+On create/join and after a new public reveal, the browser sends this exact history
+as an advisory, untrusted novelty hint. The server validates it and unions the
+histories of the current Challenge participants. If any exact-unseen prompt
+remains in the selected mode, selection is restricted to those unseen prompts;
+room-session history is then applied only as a secondary preference inside that
+eligible pool.
+
+Browser history has no authority over authentication, membership, host status,
+roles, prompt secrecy, voting, scoring, timers, or game transitions. Malformed,
+stale, unavailable-storage, or malicious all-ones histories fail open: they may
+reduce novelty preference, but if the preferred unseen pool is exhausted the
+picker safely falls back to the normal current-match/room-session eligible pool
+and gameplay continues.
+
+The stable novelty token is revealed to participant clients only once the prompt
+itself is public. Internal `promptId` values remain server-only. Clearing site
+data, private browsing, or switching browser/device starts a new local history.
+A brand-new room starts with an empty server-side room-session history.
 
 ---
 
@@ -328,17 +356,19 @@ Challenge-mode bag slot.
 
 ## Prompt content
 
-Active prompts live in:
+Active prompts are assembled from:
 
 ```text
 server/src/game/imitationPrompts.data.ts
+server/src/game/imitationPrompts.extra.*.ts
+server/src/game/imitationPrompts.expansion.*.ts
 ```
 
-The current playtest bank has 30 items:
+The active bank has 900 items:
 
-- 10 HANDS
-- 10 POINT
-- 10 NUMBER
+- 300 HANDS
+- 300 POINT
+- 300 NUMBER
 
 Do not add Face, CHOOSE, TEXT_PAIR UI, or runtime AI generation without a
 separate product decision.
@@ -413,12 +443,15 @@ There is currently **no lint script** in the repository package scripts.
 shared/
   types.ts              Wire contract and shared types
   constants.ts          Modes, player limits, Round options, timers
+  promptNovelty.ts      Versioned exact-bitset wire/storage primitives
 
 server/
   src/
     auth/session.ts     Anonymous HMAC session identities
     game/
-      imitationPrompts.data.ts  Active 30-prompt playtest bank
+      imitationPrompts.data.ts  Active 900-prompt bank entry point
+      imitationPrompts.expansion.*.ts  570-prompt expansion
+      promptNovelty.ts          Stable history-slot tokens + exact server helpers
       questions.data.ts         110 legacy TEXT_PAIR pairs
       questions.ts              Legacy TEXT_PAIR selector
       state.ts                  Internal room/round secret state
@@ -428,6 +461,10 @@ server/
     security/messages.ts        Strict runtime WebSocket validation
   test/
     engine.test.ts
+    imitation-prompts.test.ts
+    prompt-history-rematch.test.ts
+    prompt-novelty.test.ts
+    prompt-novelty-view-security.test.ts
     room-manager.test.ts
     view-security.test.ts
     intermediate-result-security.test.ts
@@ -437,6 +474,7 @@ server/
 client/
   src/
     net/socket.ts
+    net/promptNovelty.ts
     screens/Home.tsx
     screens/Host.tsx
     screens/Player.tsx

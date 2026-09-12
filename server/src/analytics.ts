@@ -25,7 +25,7 @@ export type AnalyticsSink = (records: readonly AnalyticsRecord[]) => void | Prom
 
 /** Catch threshold changed to a strict majority of ballots actually cast. */
 export const ANALYTICS_RULES_VERSION = "competitive-cast-vote-majority-v3";
-export const ANALYTICS_CONTENT_VERSION = "imitation-330-quality-v1";
+export const ANALYTICS_CONTENT_VERSION = "imitation-900-novelty-v1";
 
 const ENABLED = process.env.ANALYTICS !== "off";
 const MAX_QUEUE = 512;

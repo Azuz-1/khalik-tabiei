@@ -1,3 +1,5 @@
+import type { PromptNoveltyFilter } from "./promptNovelty.js";
+
 export type GamePhase =
   | "LOBBY"
   | "QUESTION"
@@ -195,7 +197,8 @@ export interface ClientView {
   };
   isImpostor?: boolean;
   myPrompt?: { mode: GameMode; text: string };
-  publicPrompt?: { mode: GameMode; text: string };
+  /** noveltyToken is emitted to participant browsers only after this prompt is public. */
+  publicPrompt?: { mode: GameMode; text: string; noveltyToken?: string };
   myReady?: boolean;
   readyProgress?: { submitted: number; total: number };
   myQuestion?: string;
@@ -219,8 +222,8 @@ export type ClientMessage =
   /** Display-only fields are valid only on a display WebSocket's first HELLO frame. */
   | ({ t: "HELLO"; protocolVersion?: 2; displayToken?: string; displayClientId?: string } & RequestMeta)
   /** New clients provide the owner's display name so the room owner joins as a player. */
-  | ({ t: "CREATE_ROOM"; name?: string } & RequestMeta)
-  | ({ t: "JOIN_ROOM"; code: string; name: string } & RequestMeta)
+  | ({ t: "CREATE_ROOM"; name?: string; novelty?: PromptNoveltyFilter } & RequestMeta)
+  | ({ t: "JOIN_ROOM"; code: string; name: string; novelty?: PromptNoveltyFilter } & RequestMeta)
   | ({ t: "LEAVE_ROOM" } & RequestMeta)
   | ({
       t: "SET_SETTINGS";
@@ -243,6 +246,8 @@ export type ClientMessage =
   | ({ t: "KICK_PLAYER"; uid: string } & RequestMeta)
   | ({ t: "CLOSE_ROOM" } & RequestMeta)
   | ({ t: "REMATCH" } & RequestMeta)
+  /** Best-effort UX hint only; never trusted for gameplay authority or analytics. */
+  | { t: "SYNC_NOVELTY"; novelty: PromptNoveltyFilter }
   | { t: "PING"; sampleId?: string; clientMonoMs?: number };
 
 export type ServerMessage =

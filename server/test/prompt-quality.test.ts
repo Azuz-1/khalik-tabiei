@@ -5,9 +5,9 @@ import { IMITATION_PROMPTS, type ImitationPrompt } from "../src/game/imitationPr
 import { auditActivePrompts } from "../src/game/promptAudit.js";
 import { promptQualityWeight } from "../src/game/promptMetadata.js";
 
-test("reviewed prompt risks are explicit and auditable across the active 330 bank", () => {
+test("reviewed prompt risks remain explicit and auditable across the active 900 bank", () => {
   const report = auditActivePrompts();
-  assert.equal(report.total, 330);
+  assert.equal(report.total, 900);
   assert.deepEqual(report.orphanQualityFlagIds, []);
   assert.equal(report.qualityFlagCounts.HIGH_CONSENSUS_RISK, 35);
   assert.equal(report.qualityFlagCounts.CONTEXT_DEPENDENT, 12);
@@ -69,21 +69,15 @@ test("three-player selection materially suppresses high-consensus prompts compar
   assert.ok(threePlayers < tenPlayers / 3);
 });
 
-test("real 330-bank probability mass suppresses high-consensus content most at three players", () => {
+test("real 900-bank probability mass suppresses reviewed high-consensus content most at three players", () => {
   for (const mode of ["HANDS", "POINT", "NUMBER"] as const) {
     const pool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === mode);
     const risky = pool.filter((prompt) => prompt.flags?.includes("HIGH_CONSENSUS_RISK"));
     assert.ok(risky.length > 0, `${mode} should include reviewed high-consensus prompts`);
 
     const weightedShare = (participantCount: number) => {
-      const total = pool.reduce(
-        (sum, prompt) => sum + promptQualityWeight(prompt.flags, participantCount),
-        0,
-      );
-      const riskyWeight = risky.reduce(
-        (sum, prompt) => sum + promptQualityWeight(prompt.flags, participantCount),
-        0,
-      );
+      const total = pool.reduce((sum, prompt) => sum + promptQualityWeight(prompt.flags, participantCount), 0);
+      const riskyWeight = risky.reduce((sum, prompt) => sum + promptQualityWeight(prompt.flags, participantCount), 0);
       return riskyWeight / total;
     };
 

@@ -14,6 +14,7 @@ import { ClientTelemetryIngestor } from "./clientTelemetry.js";
 import { RoomManager } from "./game/roomManager.js";
 import { normalizeCode } from "./game/code.js";
 import { buildDisplayView, createDisplayToken, verifyDisplayToken } from "./game/display.js";
+import { decodePromptNoveltyFilter } from "./game/promptNovelty.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
 import { ensureAnonymousSession, readAnonymousSession } from "./auth/session.js";
@@ -109,6 +110,15 @@ export function createGameServer(options: GameServerOptions = {}) {
       activeConn?.closePolicy("display revoked");
       activeDisplays.delete(key);
     }
+  };
+
+  const applyPromptNovelty = (conn: Connection, novelty: Parameters<typeof decodePromptNoveltyFilter>[0]) => {
+    if (!conn.uid || !conn.roomCode) return;
+    const room = manager.roomForTests(conn.roomCode);
+    if (!room || room.closed || !room.players.has(conn.uid)) return;
+    const decoded = decodePromptNoveltyFilter(novelty);
+    if (!decoded) return;
+    room.promptNoveltyByUid.set(conn.uid, decoded);
   };
 
   app.disable("x-powered-by");
@@ -435,11 +445,20 @@ export function createGameServer(options: GameServerOptions = {}) {
         }
         return;
       }
+      if (msg.t === "SYNC_NOVELTY") {
+        // Browser history is advisory only. A stale/all-ones filter may reduce
+        // novelty but can never block gameplay; stale syncs outside a room are ignored.
+        applyPromptNovelty(conn, msg.novelty);
+        return;
+      }
       if (msg.t === "CREATE_ROOM" && !abuse.allowRoomCreation(conn.ip, conn.uid)) {
         violate("RATE_LIMITED", msg.rid);
         return;
       }
-      manager.handle(conn, msg);
+      const handled = manager.handle(conn, msg);
+      if (handled && (msg.t === "CREATE_ROOM" || msg.t === "JOIN_ROOM") && msg.novelty !== undefined) {
+        applyPromptNovelty(conn, msg.novelty);
+      }
     });
 
     ws.on("pong", () => { conn.alive = true; });

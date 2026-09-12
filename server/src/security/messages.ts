@@ -1,4 +1,5 @@
 import type { ClientMessage } from "../../../shared/types.js";
+import { isPromptNoveltyFilter } from "../../../shared/promptNovelty.js";
 import {
   ANSWER_MAX,
   CATEGORY_IDS,
@@ -57,11 +58,12 @@ export function validateClientMessage(
       return value as ClientMessage;
 
     case "CREATE_ROOM":
-      if (!exactKeys(value, ["t"], ["name", "rid"]) || !validRid(value)) return null;
+      if (!exactKeys(value, ["t"], ["name", "novelty", "rid"]) || !validRid(value)) return null;
       // Legacy/internal fixtures may still omit `name` outside production. The
       // deployed product must always create the room owner as a real player.
       if (production && value.name === undefined) return null;
       if (value.name !== undefined && !boundedString(value.name, 1, RAW_NAME_MAX_CODE_POINTS)) return null;
+      if (value.novelty !== undefined && !isPromptNoveltyFilter(value.novelty)) return null;
       return value as ClientMessage;
 
     case "LEAVE_ROOM":
@@ -84,12 +86,13 @@ export function validateClientMessage(
         : null;
 
     case "JOIN_ROOM": {
-      if (!exactKeys(value, ["t", "code", "name"], ["rid"]) || !validRid(value)) return null;
+      if (!exactKeys(value, ["t", "code", "name"], ["novelty", "rid"]) || !validRid(value)) return null;
       const codeRe = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
       if (typeof value.code !== "string" || !codeRe.test(value.code.toUpperCase())) return null;
       // This is only a cheap abuse bound. cleanName() performs NFC cleaning,
       // visible-content validation and grapheme-cluster length checks server-side.
       if (!boundedString(value.name, 1, RAW_NAME_MAX_CODE_POINTS)) return null;
+      if (value.novelty !== undefined && !isPromptNoveltyFilter(value.novelty)) return null;
       return value as ClientMessage;
     }
 
@@ -128,6 +131,11 @@ export function validateClientMessage(
     case "KICK_PLAYER":
     case "UNBLOCK_PLAYER":
       return exactKeys(value, ["t", "uid"], ["rid"]) && validRid(value) && typeof value.uid === "string" && UID_RE.test(value.uid)
+        ? (value as ClientMessage)
+        : null;
+
+    case "SYNC_NOVELTY":
+      return exactKeys(value, ["t", "novelty"]) && isPromptNoveltyFilter(value.novelty)
         ? (value as ClientMessage)
         : null;
 
