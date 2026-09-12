@@ -75,8 +75,8 @@ export function auditActivePrompts(): PromptAuditReport {
 }
 
 export function assertActivePromptBank(report = auditActivePrompts()): PromptAuditReport {
-  const expectedByMode: Record<GameMode, number> = { HANDS: 110, POINT: 110, NUMBER: 110 };
-  if (report.total !== 330) throw new Error(`Active prompt bank must contain exactly 330 prompts; found ${report.total}`);
+  const expectedByMode: Record<GameMode, number> = { HANDS: 300, POINT: 300, NUMBER: 300 };
+  if (report.total !== 900) throw new Error(`Active prompt bank must contain exactly 900 prompts; found ${report.total}`);
   for (const mode of Object.keys(expectedByMode) as GameMode[]) {
     if (report.byMode[mode] !== expectedByMode[mode]) {
       throw new Error(`Active ${mode} prompt bank must contain exactly ${expectedByMode[mode]}; found ${report.byMode[mode]}`);
