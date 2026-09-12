@@ -20,7 +20,52 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - name: Server tests group A — core/gameplay
+        id: tests_a
+        continue-on-error: true
+        working-directory: server
+        run: >-
+          node --import tsx --test
+          test/adversarial*.test.ts test/analytics*.test.ts test/audio*.test.ts
+          test/challenge*.test.ts test/client*.test.ts test/competitive*.test.ts
+          test/copy*.test.ts test/display*.test.ts test/engine*.test.ts
+          test/full-game*.test.ts test/game-stage*.test.ts test/gameplay*.test.ts
+          test/hardening*.test.ts test/home*.test.ts test/host*.test.ts
+          test/imitation*.test.ts test/intermediate*.test.ts test/liveness*.test.ts
+      - name: Server tests group B — ownership/play style
+        id: tests_b
+        continue-on-error: true
+        working-directory: server
+        run: >-
+          node --import tsx --test
+          test/owner*.test.ts test/party*.test.ts test/play-style*.test.ts
+          test/policy*.test.ts
+      - name: Server tests group C — prompt history/content
+        id: tests_c
+        continue-on-error: true
+        working-directory: server
+        run: node --import tsx --test test/prompt*.test.ts
+      - name: Server tests group D — remaining/security
+        id: tests_d
+        continue-on-error: true
+        working-directory: server
+        run: >-
+          node --import tsx --test
+          test/ready*.test.ts test/removal*.test.ts test/result*.test.ts
+          test/room*.test.ts test/security*.test.ts test/start*.test.ts
+          test/suggestions*.test.ts test/ux*.test.ts test/version*.test.ts
+          test/view*.test.ts test/voting*.test.ts test/ws*.test.ts
+      - name: Aggregate server test diagnostics
+        if: always()
+        run: |
+          echo "group A: ${{ steps.tests_a.outcome }}"
+          echo "group B: ${{ steps.tests_b.outcome }}"
+          echo "group C: ${{ steps.tests_c.outcome }}"
+          echo "group D: ${{ steps.tests_d.outcome }}"
+          test "${{ steps.tests_a.outcome }}" = success
+          test "${{ steps.tests_b.outcome }}" = success
+          test "${{ steps.tests_c.outcome }}" = success
+          test "${{ steps.tests_d.outcome }}" = success
       - run: npm run build
       - name: Run real WebSocket integration E2E
         run: |
