@@ -80,10 +80,6 @@ function CloseRoom({ confirmAction }: { confirmAction: ConfirmAction }) {
 
 function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
   const [copied, setCopied] = useState(false);
-  const [displayUrl, setDisplayUrl] = useState<string | null>(null);
-  const [displayBusy, setDisplayBusy] = useState(false);
-  const [displayCopied, setDisplayCopied] = useState(false);
-  const [displayError, setDisplayError] = useState<string | null>(null);
   const active = view.players.filter((player) => player.connected).length;
   const modes = new Set(view.room.selectedModes);
   const canStart = active >= MIN_PLAYERS && modes.size > 0;
@@ -116,59 +112,6 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
     });
   };
 
-  const prepareDisplay = async () => {
-    if (displayBusy) return;
-    setDisplayBusy(true);
-    setDisplayError(null);
-    try {
-      const response = await fetch(`/api/rooms/${encodeURIComponent(view.room.code)}/display-link`, {
-        method: "GET",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      });
-      const body = await response.json() as { ok?: boolean; path?: string };
-      if (!response.ok || !body.path) throw new Error("display link unavailable");
-      setDisplayUrl(new URL(body.path, location.origin).href);
-    } catch {
-      setDisplayError("ما قدرنا نجهّز رابط العرض. تأكد من الاتصال وحاول مرة ثانية.");
-    } finally {
-      setDisplayBusy(false);
-    }
-  };
-
-  const copyDisplay = async () => {
-    if (!displayUrl) return;
-    try {
-      await navigator.clipboard.writeText(displayUrl);
-      setDisplayCopied(true);
-      window.setTimeout(() => setDisplayCopied(false), 1_500);
-    } catch {
-      setDisplayError("المتصفح ما سمح بنسخ الرابط. افتح شاشة العرض وشارك الرابط من المتصفح.");
-    }
-  };
-
-  const revokeDisplay = async () => {
-    if (displayBusy || !displayUrl) return;
-    setDisplayBusy(true);
-    setDisplayError(null);
-    try {
-      const response = await fetch(`/api/rooms/${encodeURIComponent(view.room.code)}/display-link`, {
-        method: "DELETE",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) throw new Error("display revoke unavailable");
-      setDisplayUrl(null);
-      setDisplayCopied(false);
-    } catch {
-      setDisplayError("ما قدرنا نوقف شاشة العرض. تأكد من الاتصال وحاول مرة ثانية.");
-    } finally {
-      setDisplayBusy(false);
-    }
-  };
-
   return (
     <div className="screen host host-lobby-screen">
       <div className="center" style={{ marginBottom: 8 }}><h1 className="brand">خلك طبيعي</h1></div>
@@ -198,31 +141,6 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
             {view.players.length === 0
               ? <p className="subtitle">امسحوا الرمز بالجوال عشان تدخلون…</p>
               : <Players players={view.players} canKick onKick={confirmKick} />}
-          </div>
-
-          <div className="card stack" data-testid="optional-display-card">
-            <div className="row between">
-              <strong>📺 شاشة عرض</strong>
-              <span className="pill-note">اختيارية</span>
-            </div>
-            <p className="helper" style={{ margin: 0 }}>إذا عندكم تلفزيون أو تابلت، تقدر تخليه يعرض الوقت والمطلوب والنتائج للجميع. ما ينحسب لاعب وما يقدر يتحكم بالغرفة.</p>
-            {!displayUrl ? (
-              <button type="button" className="btn btn-ghost" disabled={displayBusy} onClick={() => void prepareDisplay()}>
-                {displayBusy ? "جاري تجهيز شاشة العرض…" : "جهّز شاشة العرض"}
-              </button>
-            ) : (
-              <div className="stack" style={{ gap: 12 }}>
-                <div className="center"><Qr url={displayUrl} /></div>
-                <p className="helper center" style={{ margin: 0 }}>امسح هذا الرمز من جهاز العرض، أو افتحه في تبويب مستقل.</p>
-                <div className="row" style={{ flexWrap: "wrap" }}>
-                  <a className="btn btn-ghost" href={displayUrl} target="_blank" rel="noopener noreferrer">فتح شاشة العرض</a>
-                  <button type="button" className="btn btn-ghost" onClick={() => void copyDisplay()}>{displayCopied ? "تم نسخ رابط العرض ✓" : "نسخ رابط العرض"}</button>
-                  <button type="button" className="btn btn-ghost" disabled={displayBusy} onClick={() => void revokeDisplay()}>{displayBusy ? "جاري الإيقاف…" : "إيقاف شاشة العرض"}</button>
-                </div>
-                <p className="helper" style={{ margin: 0 }}>الإيقاف يفصل الشاشة الحالية ويبطل الرابط القديم. تقدر تولّد رابط جديد بعدها.</p>
-              </div>
-            )}
-            {displayError ? <p className="helper" role="alert" style={{ color: "var(--bad)", margin: 0 }}>{displayError}</p> : null}
           </div>
 
           <div className="card stack">

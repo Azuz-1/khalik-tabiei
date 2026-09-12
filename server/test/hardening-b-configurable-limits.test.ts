@@ -16,7 +16,6 @@ function guard(limits: Partial<AbuseGuardLimits>, now: () => number): AbuseGuard
 }
 
 // --- configuration surface ---------------------------------------------------
-
 test("operational limits default to the shipped shared-NAT-safe values", () => {
   const config = readConfig({ ...baseEnv });
   assert.deepEqual(config.abuseLimits, DEFAULT_ABUSE_LIMITS);
@@ -34,6 +33,16 @@ test("every new operational limit is overridable from the environment", () => {
     RATE_LIMIT_SESSION_IDENTITY_LIMIT: "4",
     RATE_LIMIT_ROOM_CREATION_IP_LIMIT: "3",
     RATE_LIMIT_ROOM_CREATION_IDENTITY_LIMIT: "2",
+    RATE_LIMIT_DISPLAY_PAIRING_CREATE_IP_LIMIT: "17",
+    RATE_LIMIT_DISPLAY_PAIRING_CREATE_IP_WINDOW_MS: "1700",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IP_LIMIT: "18",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IP_WINDOW_MS: "1800",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IDENTITY_LIMIT: "19",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IDENTITY_WINDOW_MS: "1900",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_IP_LIMIT: "20",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_IP_WINDOW_MS: "2000",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_PAIRING_LIMIT: "21",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_PAIRING_WINDOW_MS: "2100",
     RATE_LIMIT_MAX_TRACKED_KEYS: "50",
     RATE_LIMIT_CLEANUP_INTERVAL_MS: "1234",
     REQUEST_RETENTION_MS: "9000",
@@ -46,6 +55,11 @@ test("every new operational limit is overridable from the environment", () => {
   assert.equal(config.abuseLimits.sessionIdentity.limit, 4);
   assert.equal(config.abuseLimits.roomCreationIp.limit, 3);
   assert.equal(config.abuseLimits.roomCreationIdentity.limit, 2);
+  assert.deepEqual(config.abuseLimits.displayPairingCreateIp, { limit: 17, windowMs: 1_700 });
+  assert.deepEqual(config.abuseLimits.displayPairingClaimIp, { limit: 18, windowMs: 1_800 });
+  assert.deepEqual(config.abuseLimits.displayPairingClaimIdentity, { limit: 19, windowMs: 1_900 });
+  assert.deepEqual(config.abuseLimits.displayPairingStatusIp, { limit: 20, windowMs: 2_000 });
+  assert.deepEqual(config.abuseLimits.displayPairingStatusPairing, { limit: 21, windowMs: 2_100 });
   assert.equal(config.abuseLimits.maxTrackedKeys, 50);
   assert.equal(config.abuseLimits.cleanupIntervalMs, 1_234);
   assert.equal(config.requestRetentionMs, 9_000);
@@ -61,16 +75,30 @@ test("invalid or hostile limit values fall back to defaults instead of disabling
     RATE_LIMIT_CONNECTION_IP_LIMIT: "0",
     RATE_LIMIT_SESSION_IP_LIMIT: "-5",
     RATE_LIMIT_SESSION_IDENTITY_LIMIT: "not-a-number",
+    RATE_LIMIT_DISPLAY_PAIRING_CREATE_IP_LIMIT: "0",
+    RATE_LIMIT_DISPLAY_PAIRING_CREATE_IP_WINDOW_MS: "-1",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IP_LIMIT: "not-a-number",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IP_WINDOW_MS: "0",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IDENTITY_LIMIT: "1e999",
+    RATE_LIMIT_DISPLAY_PAIRING_CLAIM_IDENTITY_WINDOW_MS: "-500",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_IP_LIMIT: "-5",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_IP_WINDOW_MS: "not-a-number",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_PAIRING_LIMIT: "0",
+    RATE_LIMIT_DISPLAY_PAIRING_STATUS_PAIRING_WINDOW_MS: "1e999",
     MAX_REQUESTS_PER_UID: "1e999",
   });
   assert.equal(config.abuseLimits.connectionIp.limit, DEFAULT_ABUSE_LIMITS.connectionIp.limit);
   assert.equal(config.abuseLimits.sessionIp.limit, DEFAULT_ABUSE_LIMITS.sessionIp.limit);
   assert.equal(config.abuseLimits.sessionIdentity.limit, DEFAULT_ABUSE_LIMITS.sessionIdentity.limit);
+  assert.deepEqual(config.abuseLimits.displayPairingCreateIp, DEFAULT_ABUSE_LIMITS.displayPairingCreateIp);
+  assert.deepEqual(config.abuseLimits.displayPairingClaimIp, DEFAULT_ABUSE_LIMITS.displayPairingClaimIp);
+  assert.deepEqual(config.abuseLimits.displayPairingClaimIdentity, DEFAULT_ABUSE_LIMITS.displayPairingClaimIdentity);
+  assert.deepEqual(config.abuseLimits.displayPairingStatusIp, DEFAULT_ABUSE_LIMITS.displayPairingStatusIp);
+  assert.deepEqual(config.abuseLimits.displayPairingStatusPairing, DEFAULT_ABUSE_LIMITS.displayPairingStatusPairing);
   assert.equal(config.maxRequestsPerUid, 128);
 });
 
 // --- injected tiny limits prove the mechanism --------------------------------
-
 test("tiny injected limits enforce their threshold and reset on the next window", () => {
   let now = 0;
   const abuse = guard({ sessionIp: { limit: 2, windowMs: 1_000 } }, () => now);
@@ -154,7 +182,6 @@ test("effectiveLimits reports the merged configuration for operational assertion
 });
 
 // --- the defaults must still fit a real party --------------------------------
-
 test("Host plus ten players on one shared NAT stay allowed under the defaults", () => {
   let now = 0;
   const abuse = new AbuseGuard({ now: () => now, limits: readConfig({ ...baseEnv }).abuseLimits });
@@ -177,7 +204,6 @@ test("Host plus ten players on one shared NAT stay allowed under the defaults", 
 });
 
 // --- request idempotency cache bounds ----------------------------------------
-
 test("the request cache stays bounded by the configured per-uid ceiling", () => {
   const manager = new RoomManager({ now: () => 1_000, maxRequestsPerUid: 8 });
   try {

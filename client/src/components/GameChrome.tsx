@@ -140,7 +140,7 @@ export function GameChrome() {
                   disabled={status !== "online"}
                   onClick={() => clickLegacyControl('[data-testid="owner-display-control"]')}
                 >
-                  📺 شاشة العرض
+                  📺 العب على التلفزيون
                 </button>
               </div>
             ) : null}

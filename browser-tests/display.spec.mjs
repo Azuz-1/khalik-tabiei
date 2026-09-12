@@ -5,11 +5,7 @@ async function quietExternalFonts(context) {
 }
 
 async function createOwner(browser) {
-  const context = await browser.newContext({
-    viewport: { width: 430, height: 932 },
-    isMobile: true,
-    hasTouch: true,
-  });
+  const context = await browser.newContext({ viewport: { width: 430, height: 932 }, isMobile: true, hasTouch: true });
   await quietExternalFonts(context);
   const page = await context.newPage();
   await page.goto("/");
@@ -22,11 +18,7 @@ async function createOwner(browser) {
 }
 
 async function joinPlayer(browser, code, name) {
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    isMobile: true,
-    hasTouch: true,
-  });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await quietExternalFonts(context);
   const page = await context.newPage();
   await page.goto(`/join/${code}`);
@@ -36,7 +28,7 @@ async function joinPlayer(browser, code, name) {
   return { context, page };
 }
 
-test("owner can attach, refresh, and revoke a public Display after the game starts", async ({ browser }) => {
+test("owner can attach, refresh, and revoke a direct-link public Display after the game starts", async ({ browser }) => {
   const owner = await createOwner(browser);
   const first = await joinPlayer(browser, owner.code, "لاعب 2");
   const second = await joinPlayer(browser, owner.code, "لاعب 3");
@@ -47,16 +39,16 @@ test("owner can attach, refresh, and revoke a public Display after the game star
     await expect(start).toBeEnabled();
     await start.click();
 
-    // The owner remains a real player during private gameplay. Display
-    // management is now a secondary action inside the compact gameplay HUD.
     await expect(owner.page.getByRole("button", { name: "جاهز", exact: true })).toBeVisible();
     await owner.page.getByRole("button", { name: "المزيد", exact: true }).click();
     const gameOptions = owner.page.getByRole("dialog", { name: "خيارات اللعبة" });
     await expect(gameOptions).toBeVisible();
-    await gameOptions.getByRole("button", { name: "📺 شاشة العرض", exact: true }).click();
-    await expect(owner.page.getByRole("dialog", { name: "إدارة شاشة العرض" })).toBeVisible();
+    await gameOptions.getByRole("button", { name: "📺 العب على التلفزيون", exact: true }).click();
+    const displayPanel = owner.page.getByRole("dialog", { name: "إدارة شاشة العرض" });
+    await expect(displayPanel).toBeVisible();
 
-    await owner.page.getByRole("button", { name: "جهّز رابط شاشة العرض", exact: true }).click();
+    await displayPanel.getByText("خيارات أخرى", { exact: true }).click();
+    await displayPanel.getByRole("button", { name: "جهّز رابط شاشة العرض", exact: true }).click();
     const link = owner.page.getByTestId("active-display-link");
     await expect(link).toBeVisible();
     const href = await link.getAttribute("href");
@@ -72,18 +64,14 @@ test("owner can attach, refresh, and revoke a public Display after the game star
     await expect(displayPage.getByText("أنت المتخفي", { exact: true })).toHaveCount(0);
     await expect.poll(() => displayPage.url()).not.toContain("#token=");
 
-    // Refresh must keep this same physical Display identity and reclaim the one
-    // active slot rather than rejecting itself as a second screen.
     await displayPage.reload();
     await expect(displayPage.getByText("شاشة عرض · بدون تحكم", { exact: true })).toBeVisible();
     await expect(displayPage.getByRole("heading", { name: "شوفوا جوالاتكم", exact: true })).toBeVisible();
 
-    // Revocation remains available mid-game and must disconnect the public
-    // screen while leaving the owner's private gameplay surface intact.
-    await owner.page.getByRole("button", { name: "إيقاف أي شاشة عرض وإبطال الرابط", exact: true }).click();
+    await displayPanel.getByRole("button", { name: "إيقاف شاشة العرض الحالية", exact: true }).click();
     await expect(displayPage.getByText("تم إيقاف رابط شاشة العرض من مالك الغرفة.", { exact: true })).toBeVisible();
     await expect(owner.page.getByRole("button", { name: "جاهز", exact: true })).toBeVisible();
-    await expect(owner.page.getByRole("button", { name: "جهّز رابط شاشة العرض", exact: true })).toBeVisible();
+    await expect(displayPanel.getByRole("button", { name: "جهّز رابط شاشة العرض", exact: true })).toBeVisible();
   } finally {
     await displayContext?.close();
     await second.context.close();

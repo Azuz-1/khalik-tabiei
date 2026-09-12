@@ -24,7 +24,7 @@ export function HostAudioLayer({
       >
         <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span>
       </button>
-      {view.self.isOwner === true && view.room.phase !== "LOBBY" ? <OwnerDisplayControl view={view} /> : null}
+      {view.self.isOwner === true ? <OwnerDisplayControl view={view} /> : null}
       {children}
     </>
   );

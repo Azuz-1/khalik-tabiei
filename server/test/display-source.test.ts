@@ -4,22 +4,29 @@ import { readFile } from "node:fs/promises";
 
 const mainUrl = new URL("../../client/src/main.tsx", import.meta.url);
 const displayUrl = new URL("../../client/src/screens/Display.tsx", import.meta.url);
+const tvUrl = new URL("../../client/src/screens/TvPairing.tsx", import.meta.url);
 const hostUrl = new URL("../../client/src/screens/Host.tsx", import.meta.url);
+const ownerDisplayUrl = new URL("../../client/src/components/OwnerDisplayControl.tsx", import.meta.url);
 const serverUrl = new URL("../src/index.ts", import.meta.url);
 const projectionUrl = new URL("../src/game/display.ts", import.meta.url);
 
-test("display route is code-split before the participant socket is imported", async () => {
-  const [main, display] = await Promise.all([
+test("display and TV routes are code-split before the participant socket is imported", async () => {
+  const [main, display, tv] = await Promise.all([
     readFile(mainUrl, "utf8"),
     readFile(displayUrl, "utf8"),
+    readFile(tvUrl, "utf8"),
   ]);
 
   assert.ok(main.includes('location.pathname.startsWith("/display/")'));
   assert.ok(main.includes('import("./screens/Display.js")'));
+  assert.ok(main.includes('location.pathname === "/tv"'));
+  assert.ok(main.includes('import("./screens/TvPairing.js")'));
   assert.ok(main.includes('import("./App.js")'));
-  assert.equal(main.includes('from "./App.js"'), false, "App must not be statically imported on a display page");
+  assert.equal(main.includes('from "./App.js"'), false, "App must not be statically imported on a public display/TV page");
   assert.equal(display.includes('from "../net/socket.js"'), false, "display must not bootstrap participant socket/actions");
   assert.equal(display.includes("actions."), false, "display surface must not expose gameplay or owner actions");
+  assert.equal(tv.includes('from "../net/socket.js"'), false, "TV pairing must not bootstrap participant socket/actions");
+  assert.equal(tv.includes("actions."), false, "TV pairing must not expose gameplay or owner actions");
   assert.ok(display.includes('mode: "display"'));
   assert.ok(display.includes("شاشة عرض · بدون تحكم"));
 });
@@ -40,6 +47,17 @@ test("display capability stays out of HTTP/WebSocket URLs and survives same-entr
   assert.ok(display.includes('/^\\/display\\/([A-Za-z2-9]{5})\\/?$/'), "display route must match one exact room code");
 });
 
+test("TV pairing secret stays in history state and hands off without putting the display token in the URL", async () => {
+  const tv = await readFile(tvUrl, "utf8");
+  assert.ok(tv.includes("tvPairing"));
+  assert.ok(tv.includes("Authorization: `Bearer ${pairing.secret}`"));
+  assert.ok(tv.includes('history.replaceState({ ...rest, displayToken }, "", `/display/${roomCode}`)'));
+  assert.equal(tv.includes("?secret="), false);
+  assert.equal(tv.includes("#token="), false);
+  assert.equal(tv.includes("localStorage"), false);
+  assert.ok(tv.includes("1_750"), "TV should poll without aggressive requests");
+});
+
 test("display server uses a dedicated projection and one revocable reconnect-safe active slot", async () => {
   const [server, projection] = await Promise.all([
     readFile(serverUrl, "utf8"),
@@ -51,18 +69,26 @@ test("display server uses a dedicated projection and one revocable reconnect-saf
   assert.ok(server.includes("displayClientId"), "transport must distinguish same-display reconnects from a second screen");
   assert.ok(server.includes("display connection replaced"), "same display reconnect must replace a stale old socket");
   assert.ok(server.includes('app.delete("/api/rooms/:code/display-link"'), "owner-authenticated revocation endpoint must exist");
+  assert.ok(server.includes('app.post("/api/display-pairings"'), "TV pairing creation endpoint must exist");
+  assert.ok(server.includes('"/api/rooms/:code/display-pairings/claim"'), "owner pairing claim endpoint must exist");
   assert.ok(projection.includes("displayAlias("));
   assert.ok(projection.includes('uid: "display"'));
 });
 
-test("owner lobby exposes optional display generation and explicit revocation", async () => {
-  const host = await readFile(hostUrl, "utf8");
-  assert.ok(host.includes('data-testid="optional-display-card"'));
-  assert.ok(host.includes("شاشة عرض"));
-  assert.ok(host.includes("اختيارية"));
-  assert.ok(host.includes("ما ينحسب لاعب وما يقدر يتحكم بالغرفة"));
-  assert.ok(host.includes("/display-link"));
-  assert.ok(host.includes('method: "DELETE"'), "owner UI must be able to revoke the issued display capability");
-  assert.ok(host.includes("إيقاف شاشة العرض"));
-  assert.ok(host.includes("يبطل الرابط القديم"));
+test("owner TV pairing is primary while the direct display link remains a secondary fallback", async () => {
+  const [host, ownerDisplay] = await Promise.all([
+    readFile(hostUrl, "utf8"),
+    readFile(ownerDisplayUrl, "utf8"),
+  ]);
+  assert.equal(host.includes('data-testid="optional-display-card"'), false, "lobby must not keep a second display-management control");
+  assert.equal(host.includes("/display-link"), false, "direct display management should live in the reusable owner control");
+  assert.ok(ownerDisplay.includes("📺 العب على التلفزيون"));
+  assert.ok(ownerDisplay.includes("📺 اربط التلفزيون"));
+  assert.ok(ownerDisplay.includes('inputMode="numeric"'));
+  assert.ok(ownerDisplay.includes("/display-pairings/claim"));
+  assert.ok(ownerDisplay.includes("خيارات أخرى"));
+  assert.ok(ownerDisplay.includes("استخدم الرابط المباشر إذا بتفتح شاشة العرض على لابتوب أو تابلت"));
+  assert.ok(ownerDisplay.includes("/display-link"));
+  assert.ok(ownerDisplay.includes('method: "DELETE"'), "owner UI must retain explicit display revocation");
+  assert.ok(ownerDisplay.includes("إيقاف شاشة العرض الحالية"));
 });
