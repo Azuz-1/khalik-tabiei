@@ -118,6 +118,7 @@ export interface RoomState {
   /** Server-only start Challenge for each normal player's current uninterrupted correct-vote streak. */
   correctVoteStreakStart: Map<string, number>;
   usedPairIds: Set<string>;
+  /** Server-only exact prompt history for this room session. Preserved across rematches; a mode resets only after its full bank is exhausted. */
   usedPromptIds: Set<string>;
   impostorHistory: string[];
   roundOutcomes: RoundOutcome[];
