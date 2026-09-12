@@ -273,10 +273,12 @@ mode changes.
 
 Every Challenge receives a prompt from its current mode's 300-prompt bank.
 
-`usedPromptIds` remains authoritative inside the current Game. A prompt is not
-repeated while another unused prompt exists for the same mode. When one mode's
-300-item bank is exhausted, only that mode becomes eligible for reuse; this
-never resets another mode or blocks a long Game.
+`usedPromptIds` is authoritative for the **room session**, not just one Game. It
+survives rematches, selected-mode changes, and roster changes while the room
+exists, so a prompt is not repeated while another unused prompt exists for the
+same mode. When one mode's 300-item bank is exhausted, only that mode becomes
+eligible for reuse; the other modes keep their exact history. A brand-new room
+starts with an empty exact history.
 
 Participant browsers also keep a versioned approximate Bloom-filter history of
 prompts that actually became public on that browser. On create/join and after a
@@ -290,8 +292,8 @@ is known, the server can test approximate membership for known prompts. It is
 used only for repeat avoidance, held in room memory on the server, and is not
 written to analytics or linked to IP as a novelty identity. Malformed, stale,
 saturated, or malicious histories can only reduce novelty; if every candidate
-appears seen, selection falls back to the normal current-Game eligible pool and
-gameplay continues.
+appears seen, selection falls back to the normal exact room-session eligible
+pool and gameplay continues.
 
 The stable novelty token is revealed to participant clients only once the prompt
 itself is public. Internal `promptId` values remain server-only. Clearing site
@@ -451,6 +453,7 @@ server/
   test/
     engine.test.ts
     imitation-prompts.test.ts
+    prompt-history-rematch.test.ts
     prompt-novelty.test.ts
     prompt-novelty-view-security.test.ts
     room-manager.test.ts
