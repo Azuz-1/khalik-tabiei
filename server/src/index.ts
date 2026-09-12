@@ -14,6 +14,10 @@ import { ClientTelemetryIngestor } from "./clientTelemetry.js";
 import { RoomManager } from "./game/roomManager.js";
 import { normalizeCode } from "./game/code.js";
 import { buildDisplayView, createDisplayToken, verifyDisplayToken } from "./game/display.js";
+import {
+  DisplayPairingRegistry,
+  type DisplayPairingBinding,
+} from "./game/displayPairing.js";
 import { decodePromptNoveltyFilter } from "./game/promptNovelty.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
@@ -55,6 +59,7 @@ interface ActiveDisplay {
 interface GameServerOptions {
   suggestions?: SuggestionService;
   clientTelemetry?: ClientTelemetryIngestor;
+  displayPairings?: DisplayPairingRegistry;
 }
 
 function rejectUpgrade(socket: Duplex, status: number, reason: string): void {
@@ -76,6 +81,12 @@ function deployedCommit(): string {
   return process.env.RENDER_GIT_COMMIT?.trim() || "unknown";
 }
 
+function bearerSecret(value: string | undefined): string | null {
+  if (!value) return null;
+  const match = /^Bearer ([A-Za-z0-9_-]{16,256})$/.exec(value);
+  return match?.[1] ?? null;
+}
+
 export function createGameServer(options: GameServerOptions = {}) {
   const app = express();
   const manager = new RoomManager({
@@ -86,6 +97,7 @@ export function createGameServer(options: GameServerOptions = {}) {
   const abuse = new AbuseGuard({ limits: config.abuseLimits });
   const suggestions = options.suggestions ?? createConfiguredSuggestionService();
   const clientTelemetry = options.clientTelemetry ?? new ClientTelemetryIngestor();
+  const displayPairings = options.displayPairings ?? new DisplayPairingRegistry();
   const capacity = new ConnectionCapacity(config.maxConcurrentSockets, config.maxConcurrentSocketsPerIp);
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true, maxPayload: config.maxMessageBytes });
@@ -100,6 +112,14 @@ export function createGameServer(options: GameServerOptions = {}) {
 
   const displayRoomKey = (code: string, createdAt: number) => `${code}:${createdAt}`;
   const displayEpoch = (code: string, createdAt: number) => displayEpochs.get(displayRoomKey(code, createdAt)) ?? 0;
+  const displayInUse = (code: string, createdAt: number): boolean => {
+    const key = displayRoomKey(code, createdAt);
+    const active = activeDisplays.get(key);
+    if (!active) return false;
+    if (active.ws.readyState <= 1) return true;
+    activeDisplays.delete(key);
+    return false;
+  };
   const revokeDisplay = (code: string, createdAt: number) => {
     const key = displayRoomKey(code, createdAt);
     displayEpochs.set(key, (displayEpochs.get(key) ?? 0) + 1);
@@ -155,6 +175,119 @@ export function createGameServer(options: GameServerOptions = {}) {
     ensureAnonymousSession(req, res, config.sessionSecret, config.production);
     res.json({ ok: true });
   });
+
+  app.post("/api/display-pairings", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (draining) {
+      res.status(503).json({ ok: false, code: "SERVER_RESTARTING" });
+      return;
+    }
+    const ip = clientIp(req, config.clientIpMode);
+    if (!abuse.allowDisplayPairingCreate(ip)) {
+      res.status(429).json({ ok: false, code: "RATE_LIMITED" });
+      return;
+    }
+    try {
+      const pairing = displayPairings.create();
+      res.status(201).json({ ok: true, ...pairing });
+    } catch {
+      res.status(503).json({ ok: false, code: "PAIRING_UNAVAILABLE" });
+    }
+  });
+
+  app.get("/api/display-pairings/:id", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (draining) {
+      res.status(503).json({ ok: false, code: "SERVER_RESTARTING" });
+      return;
+    }
+    const id = typeof req.params.id === "string" && req.params.id.length <= 128 ? req.params.id : "";
+    const ip = clientIp(req, config.clientIpMode);
+    if (!id || !abuse.allowDisplayPairingStatus(ip, id)) {
+      res.status(id ? 429 : 404).json({ ok: false, code: id ? "RATE_LIMITED" : "PAIRING_UNAVAILABLE" });
+      return;
+    }
+    const secret = bearerSecret(typeof req.headers.authorization === "string" ? req.headers.authorization : undefined);
+    const pairing = secret ? displayPairings.read(id, secret) : null;
+    if (!pairing) {
+      res.status(404).json({ ok: false, code: "PAIRING_UNAVAILABLE" });
+      return;
+    }
+    if (pairing.status === "pending") {
+      res.json({ ok: true, status: "pending", expiresAt: pairing.expiresAt });
+      return;
+    }
+
+    const binding = pairing.binding;
+    const room = manager.roomForTests(binding.roomCode);
+    const currentEpoch = room ? displayEpoch(room.code, room.createdAt) : -1;
+    if (
+      !room
+      || room.closed
+      || room.code !== binding.roomCode
+      || room.createdAt !== binding.roomCreatedAt
+      || room.hostUid !== binding.hostUid
+      || currentEpoch !== binding.displayEpoch
+    ) {
+      res.status(404).json({ ok: false, code: "PAIRING_UNAVAILABLE" });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      status: "claimed",
+      roomCode: room.code,
+      displayToken: createDisplayToken(room, config.sessionSecret, binding.displayEpoch),
+      expiresAt: pairing.expiresAt,
+    });
+  });
+
+  app.post(
+    "/api/rooms/:code/display-pairings/claim",
+    express.json({ limit: "1kb", strict: true }),
+    (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      if (draining) {
+        res.status(503).json({ ok: false, code: "SERVER_RESTARTING" });
+        return;
+      }
+      if (!req.is("application/json")) {
+        res.status(415).json({ ok: false, code: "BAD_REQUEST" });
+        return;
+      }
+      const session = readAnonymousSession(req, config.sessionSecret);
+      if (!session) {
+        res.status(401).json({ ok: false, code: "UNAUTHORIZED" });
+        return;
+      }
+      const ip = clientIp(req, config.clientIpMode);
+      if (!abuse.allowDisplayPairingClaim(ip, session.uid)) {
+        res.status(429).json({ ok: false, code: "RATE_LIMITED" });
+        return;
+      }
+      const code = normalizeCode(req.params.code);
+      const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
+      if (!room || room.closed || room.hostUid !== session.uid) {
+        res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
+        return;
+      }
+      if (displayInUse(room.code, room.createdAt)) {
+        res.status(409).json({ ok: false, code: "DISPLAY_IN_USE" });
+        return;
+      }
+      const binding: DisplayPairingBinding = {
+        roomCode: room.code,
+        roomCreatedAt: room.createdAt,
+        hostUid: room.hostUid,
+        displayEpoch: displayEpoch(room.code, room.createdAt),
+      };
+      if (!displayPairings.claim(req.body?.pairingCode, binding)) {
+        res.status(400).json({ ok: false, code: "PAIRING_UNAVAILABLE" });
+        return;
+      }
+      res.json({ ok: true });
+    },
+  );
 
   app.get("/api/rooms/:code/display-link", (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -527,13 +660,25 @@ export function createGameServer(options: GameServerOptions = {}) {
     if (drainTimer) clearTimeout(drainTimer);
     displayEpochs.clear();
     activeDisplays.clear();
+    displayPairings.clear();
     abuse.dispose();
     suggestions.cleanup();
     manager.dispose();
     for (const ws of wss.clients) ws.terminate();
   };
   server.on("close", dispose);
-  return { app, server, wss, manager, dispose, capacity, beginDrain, finishDrain, isReady: () => !draining };
+  return {
+    app,
+    server,
+    wss,
+    manager,
+    displayPairings,
+    dispose,
+    capacity,
+    beginDrain,
+    finishDrain,
+    isReady: () => !draining,
+  };
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
