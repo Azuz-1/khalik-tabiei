@@ -1,18 +1,16 @@
-import { createHash } from "node:crypto";
 import type { PromptNoveltyFilter } from "../../../shared/promptNovelty.js";
 import {
   PROMPT_NOVELTY_FILTER_BYTES,
-  PROMPT_NOVELTY_VERSION,
   hasPromptNovelty,
   isPromptNoveltyFilter,
+  promptNoveltySlot,
+  promptNoveltyTokenForSlot,
   unionPromptNovelty,
 } from "../../../shared/promptNovelty.js";
 
-const TOKEN_PREFIX = `khalik-prompt-novelty:v${PROMPT_NOVELTY_VERSION}:`;
-
-/** Stable per-prompt token. It is serialized only after the prompt is already public. */
-export function promptNoveltyToken(promptId: string): string {
-  return createHash("sha256").update(`${TOKEN_PREFIX}${promptId}`).digest("hex").slice(0, 32);
+export function promptNoveltyToken(promptId: string): string | undefined {
+  const slot = promptNoveltySlot(promptId);
+  return slot === undefined ? undefined : promptNoveltyTokenForSlot(slot);
 }
 
 export function decodePromptNoveltyFilter(value: PromptNoveltyFilter | undefined): Uint8Array | undefined {
@@ -23,9 +21,8 @@ export function decodePromptNoveltyFilter(value: PromptNoveltyFilter | undefined
   return Uint8Array.from(decoded);
 }
 
-export function promptProbablySeen(
-  filters: Iterable<Uint8Array>,
-  promptId: string,
-): boolean {
-  return hasPromptNovelty(unionPromptNovelty(filters), promptNoveltyToken(promptId));
+export function promptSeenByAny(filters: Iterable<Uint8Array>, promptId: string): boolean {
+  const token = promptNoveltyToken(promptId);
+  if (token === undefined) return false;
+  return hasPromptNovelty(unionPromptNovelty(filters), token);
 }
