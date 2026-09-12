@@ -4,12 +4,12 @@ import { NAME_MAX } from "../../shared/constants.js";
 import {
   PROMPT_NOVELTY_ENCODED_LENGTH,
   PROMPT_NOVELTY_FILTER_BYTES,
-  PROMPT_NOVELTY_HASH_COUNT,
+  PROMPT_NOVELTY_SLOTS_PER_MODE,
   PROMPT_NOVELTY_VERSION,
   addPromptNovelty,
   hasPromptNovelty,
   isPromptNoveltyFilter,
-  promptNoveltyFalsePositiveProbability,
+  promptNoveltySlot,
   unionPromptNovelty,
   type PromptNoveltyFilter,
 } from "../../shared/promptNovelty.js";
@@ -17,6 +17,7 @@ import { readConfig } from "../src/config.js";
 import * as engine from "../src/game/engine.js";
 import { IMITATION_PROMPTS } from "../src/game/imitationPrompts.data.js";
 import { decodePromptNoveltyFilter, promptNoveltyToken } from "../src/game/promptNovelty.js";
+import { markSessionPromptSeen } from "../src/game/sessionPromptHistory.js";
 import { createRoomState, type InternalPlayer, type RoomState } from "../src/game/state.js";
 import { parseClientMessage } from "../src/security/messages.js";
 
@@ -54,51 +55,67 @@ function roomWithPlayers(code = "ABCDE"): RoomState {
   return room;
 }
 
-test("Bloom v1 has fixed dimensions and strict version/encoding validation", () => {
+test("exact history v2 has fixed dimensions and strict version/encoding validation", () => {
   const valid = filter();
   assert.equal(valid.bits.length, PROMPT_NOVELTY_ENCODED_LENGTH);
-  assert.equal(PROMPT_NOVELTY_FILTER_BYTES, 3_072);
-  assert.equal(PROMPT_NOVELTY_HASH_COUNT, 18);
+  assert.equal(PROMPT_NOVELTY_FILTER_BYTES, 192);
+  assert.equal(PROMPT_NOVELTY_SLOTS_PER_MODE, 512);
   assert.equal(isPromptNoveltyFilter(valid), true);
   assert.ok(decodePromptNoveltyFilter(valid));
 
   assert.equal(isPromptNoveltyFilter({ version: 0, bits: valid.bits }), false);
-  assert.equal(isPromptNoveltyFilter({ version: 2, bits: valid.bits }), false);
-  assert.equal(isPromptNoveltyFilter({ version: 1, bits: valid.bits.slice(1) }), false);
-  assert.equal(isPromptNoveltyFilter({ version: 1, bits: `${valid.bits.slice(0, -1)}!` }), false);
+  assert.equal(isPromptNoveltyFilter({ version: 1, bits: valid.bits }), false);
+  assert.equal(isPromptNoveltyFilter({ version: 2, bits: valid.bits.slice(1) }), false);
+  assert.equal(isPromptNoveltyFilter({ version: 2, bits: `${valid.bits.slice(0, -1)}!` }), false);
   assert.equal(isPromptNoveltyFilter({ ...valid, extra: true }), false);
   assert.equal(
-    decodePromptNoveltyFilter({ version: 2, bits: valid.bits } as unknown as PromptNoveltyFilter),
+    decodePromptNoveltyFilter({ version: 1, bits: valid.bits } as unknown as PromptNoveltyFilter),
     undefined,
   );
 });
 
-test("900-item Bloom false-positive probability stays below one in 100,000", () => {
-  const probability = promptNoveltyFalsePositiveProbability(900);
-  assert.ok(probability > 0);
-  assert.ok(probability < 0.00001, `FP probability too high: ${probability}`);
+test("every prompt owns a distinct immutable history slot", () => {
+  assert.equal(IMITATION_PROMPTS.length, 900);
+  const slots = new Map<number, string>();
+  for (const prompt of IMITATION_PROMPTS) {
+    const slot = promptNoveltySlot(prompt.id);
+    assert.ok(slot !== undefined, `${prompt.id} has no history slot`);
+    assert.equal(slots.has(slot), false, `slot ${slot} collides: ${slots.get(slot)} vs ${prompt.id}`);
+    slots.set(slot, prompt.id);
+  }
+  // Slots are a pure function of the id, so the data-file order cannot move them.
+  assert.equal(promptNoveltySlot("H01"), 0);
+  assert.equal(promptNoveltySlot("H001"), 10);
+  assert.equal(promptNoveltySlot("P01"), PROMPT_NOVELTY_SLOTS_PER_MODE);
+  assert.equal(promptNoveltySlot("N290"), 2 * PROMPT_NOVELTY_SLOTS_PER_MODE + 299);
+  assert.equal(promptNoveltySlot("X01"), undefined);
 });
 
-test("Bloom has no false negatives for all 900 stable prompt novelty tokens", () => {
-  assert.equal(IMITATION_PROMPTS.length, 900);
+test("exact history is exact: no false positives and no false negatives across the 900 bank", () => {
   const bytes = new Uint8Array(PROMPT_NOVELTY_FILTER_BYTES);
-  for (const prompt of IMITATION_PROMPTS) addPromptNovelty(bytes, promptNoveltyToken(prompt.id));
+  const half = IMITATION_PROMPTS.filter((_, index) => index % 2 === 0);
+  for (const prompt of half) addPromptNovelty(bytes, promptNoveltyToken(prompt.id)!);
   for (const prompt of IMITATION_PROMPTS) {
-    assert.equal(hasPromptNovelty(bytes, promptNoveltyToken(prompt.id)), true, `false negative for ${prompt.id}`);
+    const expected = half.includes(prompt);
+    assert.equal(
+      hasPromptNovelty(bytes, promptNoveltyToken(prompt.id)!),
+      expected,
+      `${prompt.id} should read back as ${expected}`,
+    );
   }
 });
 
 test("stable novelty tokens depend on prompt identity, not prompt wording", () => {
   assert.equal(promptNoveltyToken("H101"), promptNoveltyToken("H101"));
   assert.notEqual(promptNoveltyToken("H101"), promptNoveltyToken("H102"));
-  assert.match(promptNoveltyToken("H101"), /^[a-f0-9]{32}$/);
+  assert.match(promptNoveltyToken("H101")!, /^[a-f0-9]{4}$/);
 });
 
 test("union combines very different participant histories", () => {
   const a = new Uint8Array(PROMPT_NOVELTY_FILTER_BYTES);
   const b = new Uint8Array(PROMPT_NOVELTY_FILTER_BYTES);
-  const tokenA = promptNoveltyToken("H101");
-  const tokenB = promptNoveltyToken("P205");
+  const tokenA = promptNoveltyToken("H101")!;
+  const tokenB = promptNoveltyToken("P205")!;
   addPromptNovelty(a, tokenA);
   addPromptNovelty(b, tokenB);
   const merged = unionPromptNovelty([a, b]);
@@ -113,7 +130,7 @@ test("cross-room novelty avoids a prompt seen by any current participant", () =>
   const seenPromptId = first.round!.promptId;
 
   const history = new Uint8Array(PROMPT_NOVELTY_FILTER_BYTES);
-  addPromptNovelty(history, promptNoveltyToken(seenPromptId));
+  addPromptNovelty(history, promptNoveltyToken(seenPromptId)!);
 
   const second = roomWithPlayers("BBBBB");
   engine.setSettings(second, "host", { selectedModes: ["HANDS"] }, deps);
@@ -121,6 +138,31 @@ test("cross-room novelty avoids a prompt seen by any current participant", () =>
   engine.startGame(second, "host", deps);
 
   assert.notEqual(second.round!.promptId, seenPromptId);
+});
+
+test("current-player exact history outranks room-session preference", () => {
+  const hands = IMITATION_PROMPTS.filter((prompt) => prompt.mode === "HANDS");
+  assert.equal(hands.length, 300);
+  const seenByCurrentPlayers = hands[hands.length - 1]!;
+
+  const history = new Uint8Array(PROMPT_NOVELTY_FILTER_BYTES);
+  addPromptNovelty(history, promptNoveltyToken(seenByCurrentPlayers.id)!);
+
+  const room = roomWithPlayers();
+  engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
+  room.promptNoveltyByUid.set("p1", history);
+  for (const prompt of hands) {
+    if (prompt.id !== seenByCurrentPlayers.id) markSessionPromptSeen(room, prompt.id);
+  }
+
+  engine.startGame(room, "host", deps);
+
+  assert.notEqual(
+    room.round!.promptId,
+    seenByCurrentPlayers.id,
+    "room-session preference must never force a repeat while exact-unseen prompts exist",
+  );
+  assert.equal(hasPromptNovelty(history, promptNoveltyToken(room.round!.promptId)!), false);
 });
 
 test("malicious all-ones history degrades only novelty and never blocks gameplay", () => {
@@ -136,7 +178,7 @@ test("malicious all-ones history degrades only novelty and never blocks gameplay
 test("all-seen HANDS history does not consume or reset another mode", () => {
   const history = new Uint8Array(PROMPT_NOVELTY_FILTER_BYTES);
   for (const prompt of IMITATION_PROMPTS.filter((candidate) => candidate.mode === "HANDS")) {
-    addPromptNovelty(history, promptNoveltyToken(prompt.id));
+    addPromptNovelty(history, promptNoveltyToken(prompt.id)!);
   }
 
   const room = roomWithPlayers();
