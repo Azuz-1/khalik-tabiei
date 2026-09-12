@@ -3,6 +3,7 @@
 This feature is a UX repeat-avoidance layer, not an authentication or security identity.
 
 - Each participant browser stores a versioned **exact bitset (v2)** in local site storage: 1,536 bits / 192 raw bytes / 256 base64url characters.
+- Browser persistence is grow-only during normal play: before each write, the client ORs the latest valid stored history with its current in-memory history and the newly seen contribution, so a stale tab cannot overwrite newer bits written by another tab.
 - The 900 active prompts map to stable, reorder-independent history slots. The current bank has one unique slot per prompt, with reserved append-only room inside each mode block.
 - A prompt is recorded only after the server has made that prompt public to that participant.
 - The internal `promptId` remains server-only. Only an opaque history-slot token is exposed to participating players at the public reveal boundary; Host/Display/spectator views do not receive it.
