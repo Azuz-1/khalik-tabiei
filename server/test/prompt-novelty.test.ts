@@ -66,7 +66,10 @@ test("Bloom v1 has fixed dimensions and strict version/encoding validation", () 
   assert.equal(isPromptNoveltyFilter({ version: 1, bits: valid.bits.slice(1) }), false);
   assert.equal(isPromptNoveltyFilter({ version: 1, bits: `${valid.bits.slice(0, -1)}!` }), false);
   assert.equal(isPromptNoveltyFilter({ ...valid, extra: true }), false);
-  assert.equal(decodePromptNoveltyFilter({ version: 2, bits: valid.bits }), null);
+  assert.equal(
+    decodePromptNoveltyFilter({ version: 2, bits: valid.bits } as unknown as PromptNoveltyFilter),
+    undefined,
+  );
 });
 
 test("900-item Bloom false-positive probability stays below one in 100,000", () => {
