@@ -20,20 +20,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Diagnostic — display pairing registry
+      - name: Diagnostic — remaining server tests group A
+        continue-on-error: true
         working-directory: server
-        run: node --import tsx --test test/display-pairing.test.ts
-      - name: Diagnostic — display pairing rate limits
+        run: |
+          mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
+          midpoint=$(( (${#tests[@]} + 1) / 2 ))
+          printf 'Group A (%s files):\n' "$midpoint"
+          printf '  %s\n' "${tests[@]:0:$midpoint}"
+          node --import tsx --test "${tests[@]:0:$midpoint}"
+      - name: Diagnostic — remaining server tests group B
+        continue-on-error: true
         working-directory: server
-        run: node --import tsx --test test/display-pairing-rate-limit.test.ts
-      - name: Diagnostic — display pairing HTTP
-        working-directory: server
-        run: node --import tsx --test test/display-pairing-http.test.ts
-      - name: Diagnostic — display source contracts
-        working-directory: server
-        run: node --import tsx --test test/display-source.test.ts
-      - name: Diagnostic — complete server suite
-        run: npm test
+        run: |
+          mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
+          midpoint=$(( (${#tests[@]} + 1) / 2 ))
+          printf 'Group B (%s files):\n' "$((${#tests[@]} - midpoint))"
+          printf '  %s\n' "${tests[@]:$midpoint}"
+          node --import tsx --test "${tests[@]:$midpoint}"
+      - name: Diagnostic — stop after split
+        run: exit 1
       - run: npm run build
       - name: Run real WebSocket integration E2E
         run: |
