@@ -29,12 +29,11 @@ async function loadRoot(): Promise<ComponentType> {
     return (await import("./screens/Privacy.js")).PrivacyApp;
   }
 
-  const [{ App }, { AnalyticsGameObserver }, { PrivacyLink }, { GameChrome }, { OwnerDisplayControl }] = await Promise.all([
+  const [{ App }, { AnalyticsGameObserver }, { PrivacyLink }, { GameChrome }] = await Promise.all([
     import("./App.js"),
     import("./components/AnalyticsGameObserver.js"),
     import("./screens/Privacy.js"),
     import("./components/GameChrome.js"),
-    import("./components/OwnerDisplayControl.js"),
   ]);
 
   return function ParticipantRoot() {
@@ -42,7 +41,6 @@ async function loadRoot(): Promise<ComponentType> {
       <>
         <App />
         <GameChrome />
-        <OwnerDisplayControl />
         <AnalyticsGameObserver />
         <PrivacyLink />
       </>

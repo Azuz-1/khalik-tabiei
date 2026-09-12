@@ -22,7 +22,6 @@ test("display and TV routes are code-split before the participant socket is impo
   assert.ok(main.includes('location.pathname === "/tv"'));
   assert.ok(main.includes('import("./screens/TvPairing.js")'));
   assert.ok(main.includes('import("./App.js")'));
-  assert.ok(main.includes('import("./components/OwnerDisplayControl.js")'));
   assert.equal(main.includes('from "./App.js"'), false, "App must not be statically imported on a public display/TV page");
   assert.equal(display.includes('from "../net/socket.js"'), false, "display must not bootstrap participant socket/actions");
   assert.equal(display.includes("actions."), false, "display surface must not expose gameplay or owner actions");

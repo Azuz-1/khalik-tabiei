@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGame } from "../net/socket.js";
+import type { ClientView } from "../../../shared/types.js";
 import "../tv-pairing.css";
 import { Qr } from "./Qr.js";
 
@@ -11,8 +11,7 @@ export function formatPairingCode(value: string): string {
   return value.length <= 3 ? value : `${value.slice(0, 3)} ${value.slice(3)}`;
 }
 
-export function OwnerDisplayControl() {
-  const { view, status } = useGame();
+export function OwnerDisplayControl({ view }: { view: ClientView }) {
   const [open, setOpen] = useState(false);
   const [pairingCode, setPairingCode] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
@@ -22,14 +21,14 @@ export function OwnerDisplayControl() {
   const [copied, setCopied] = useState(false);
   const [directMessage, setDirectMessage] = useState<string | null>(null);
 
-  if (!view || view.self.isOwner !== true || view.room.phase === "CLOSED") return null;
+  if (view.self.isOwner !== true || view.room.phase === "CLOSED") return null;
 
   const roomCode = view.room.code;
   const tvAddress = `${location.host}/tv`;
 
   const claimPairing = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (pairingBusy || pairingCode.length !== 6 || status !== "online") return;
+    if (pairingBusy || pairingCode.length !== 6) return;
     setPairingBusy(true);
     setPairingMessage(null);
     try {
@@ -182,7 +181,7 @@ export function OwnerDisplayControl() {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={pairingCode.length !== 6 || pairingBusy || status !== "online"}
+                disabled={pairingCode.length !== 6 || pairingBusy}
               >
                 {pairingBusy ? "جاري ربط التلفزيون…" : "ربط التلفزيون"}
               </button>

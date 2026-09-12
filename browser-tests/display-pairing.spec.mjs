@@ -63,6 +63,7 @@ test("owner pairs /tv with six digits and TV hands off to the existing public Di
     await expect(tv.getByText("امسح الرمز عشان تدخل كلاعب", { exact: true })).toBeVisible();
     await expect(tv.locator(".count-pill")).toContainText("1");
 
+    await panel.getByRole("button", { name: "إغلاق", exact: true }).click();
     first = await joinPlayer(browser, owner.code, "لاعب 2");
     second = await joinPlayer(browser, owner.code, "لاعب 3");
     await expect(tv.locator(".count-pill")).toContainText("3");
