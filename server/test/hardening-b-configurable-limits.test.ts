@@ -16,7 +16,6 @@ function guard(limits: Partial<AbuseGuardLimits>, now: () => number): AbuseGuard
 }
 
 // --- configuration surface ---------------------------------------------------
-
 test("operational limits default to the shipped shared-NAT-safe values", () => {
   const config = readConfig({ ...baseEnv });
   assert.deepEqual(config.abuseLimits, DEFAULT_ABUSE_LIMITS);
@@ -100,7 +99,6 @@ test("invalid or hostile limit values fall back to defaults instead of disabling
 });
 
 // --- injected tiny limits prove the mechanism --------------------------------
-
 test("tiny injected limits enforce their threshold and reset on the next window", () => {
   let now = 0;
   const abuse = guard({ sessionIp: { limit: 2, windowMs: 1_000 } }, () => now);
@@ -148,7 +146,7 @@ test("identity and IP limits are enforced separately", () => {
     // A different IP is unaffected.
     assert.equal(ipBound.allowConnection("198.51.100.9", testUid(3)), true);
   } finally {
-    abuse.dispose();
+    ipBound.dispose();
   }
 });
 
@@ -184,7 +182,6 @@ test("effectiveLimits reports the merged configuration for operational assertion
 });
 
 // --- the defaults must still fit a real party --------------------------------
-
 test("Host plus ten players on one shared NAT stay allowed under the defaults", () => {
   let now = 0;
   const abuse = new AbuseGuard({ now: () => now, limits: readConfig({ ...baseEnv }).abuseLimits });
@@ -207,7 +204,6 @@ test("Host plus ten players on one shared NAT stay allowed under the defaults", 
 });
 
 // --- request idempotency cache bounds ----------------------------------------
-
 test("the request cache stays bounded by the configured per-uid ceiling", () => {
   const manager = new RoomManager({ now: () => 1_000, maxRequestsPerUid: 8 });
   try {
