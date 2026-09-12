@@ -20,32 +20,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Prompt bank test 1 — counts
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="active imitation bank contains exactly 900 prompts" test/imitation-prompts.test.ts
-      - name: Prompt bank test 2 — ids and modes
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="combined prompt IDs are unique" test/imitation-prompts.test.ts
-      - name: Prompt bank test 3 — duplicate text
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="combined bank has no duplicate text" test/imitation-prompts.test.ts
-      - name: Prompt bank test 4 — id ranges
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="map to the required modes" test/imitation-prompts.test.ts
-      - name: Prompt bank test 5 — hands and point domains
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="preserve their physical response domains" test/imitation-prompts.test.ts
-      - name: Prompt bank test 6 — number domain
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="explicit 0-5 response domain" test/imitation-prompts.test.ts
-      - name: Prompt bank test 7 — family metadata
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="explicit family metadata" test/imitation-prompts.test.ts
-      - name: Prompt bank test 8 — exhaustion behavior
-        working-directory: server
-        run: node --import tsx --test --test-name-pattern="resets only after full mode exhaustion" test/imitation-prompts.test.ts
-      - name: Run complete server test suite
-        run: npm test
+      - run: npm test
       - run: npm run build
       - name: Run real WebSocket integration E2E
         run: |
