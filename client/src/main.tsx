@@ -14,22 +14,27 @@ import "./game-stage-host.css";
 import "./home-suggestion-dialog.css";
 
 async function loadRoot(): Promise<ComponentType> {
-  // Display mode intentionally does not import App/socket.ts. This prevents a
-  // same-browser display tab from ever bootstrapping the owner's participant
-  // WebSocket or receiving player secrets before the display connection starts.
+  // Display/TV modes intentionally do not import App/socket.ts. This prevents a
+  // public screen from ever bootstrapping the owner's participant WebSocket or
+  // receiving player secrets before the dedicated display connection starts.
   if (location.pathname.startsWith("/display/")) {
     return (await import("./screens/Display.js")).DisplayApp;
+  }
+
+  if (location.pathname === "/tv" || location.pathname === "/tv/") {
+    return (await import("./screens/TvPairing.js")).TvPairing;
   }
 
   if (location.pathname === "/privacy") {
     return (await import("./screens/Privacy.js")).PrivacyApp;
   }
 
-  const [{ App }, { AnalyticsGameObserver }, { PrivacyLink }, { GameChrome }] = await Promise.all([
+  const [{ App }, { AnalyticsGameObserver }, { PrivacyLink }, { GameChrome }, { OwnerDisplayControl }] = await Promise.all([
     import("./App.js"),
     import("./components/AnalyticsGameObserver.js"),
     import("./screens/Privacy.js"),
     import("./components/GameChrome.js"),
+    import("./components/OwnerDisplayControl.js"),
   ]);
 
   return function ParticipantRoot() {
@@ -37,6 +42,7 @@ async function loadRoot(): Promise<ComponentType> {
       <>
         <App />
         <GameChrome />
+        <OwnerDisplayControl />
         <AnalyticsGameObserver />
         <PrivacyLink />
       </>
