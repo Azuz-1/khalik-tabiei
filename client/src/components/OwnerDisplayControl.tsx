@@ -24,7 +24,7 @@ export function OwnerDisplayControl({ view }: { view: ClientView }) {
   if (view.self.isOwner !== true || view.room.phase === "CLOSED") return null;
 
   const roomCode = view.room.code;
-  const tvAddress = `${location.host}/tv`;
+  const tvAddress = `${location.origin}/tv`;
 
   const claimPairing = async (event: React.FormEvent) => {
     event.preventDefault();
