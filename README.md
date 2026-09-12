@@ -27,8 +27,8 @@ laptop, scan the QR from player phones, type a name, and play.
 - Player-facing UI is **Arabic + RTL**.
 - Multiplayer is authoritative and real-time over WebSockets.
 - Private prompts and roles are projected per recipient on the server.
-- The active playtest bank contains **30 imitation prompts**: 10 HANDS, 10 POINT,
-  and 10 NUMBER.
+- The active bank contains **900 imitation prompts**: 300 HANDS, 300 POINT,
+  and 300 NUMBER.
 - The repository still contains **110 legacy TEXT_PAIR pairs** across 9
   categories. They are retained as legacy content but are **not selectable in
   the current UI/settings**.
@@ -271,14 +271,31 @@ mode changes.
 
 ### Prompt history
 
-Every Challenge receives a prompt from its current mode's bank.
+Every Challenge receives a prompt from its current mode's 300-prompt bank.
 
-`usedPromptIds` is Game-scoped. A prompt is not repeated while an unused prompt
-exists for the same mode.
+`usedPromptIds` remains authoritative inside the current Game. A prompt is not
+repeated while another unused prompt exists for the same mode. When one mode's
+300-item bank is exhausted, only that mode becomes eligible for reuse; this
+never resets another mode or blocks a long Game.
 
-When one mode's entire prompt bank is exhausted, only that mode's used prompt
-ids are reset and its prompts become eligible again. A small playtest bank can
-therefore never block a long Game.
+Participant browsers also keep a versioned approximate Bloom-filter history of
+prompts that actually became public on that browser. On create/join and after a
+new public reveal, the browser sends that compressed history as an advisory hint.
+The server unions histories for the current participants and prefers a prompt
+that no current member probably saw before, including across rematches and new
+rooms on the same browsers.
+
+The Bloom filter is not encryption or anonymization: because the prompt universe
+is known, the server can test approximate membership for known prompts. It is
+used only for repeat avoidance, held in room memory on the server, and is not
+written to analytics or linked to IP as a novelty identity. Malformed, stale,
+saturated, or malicious histories can only reduce novelty; if every candidate
+appears seen, selection falls back to the normal current-Game eligible pool and
+gameplay continues.
+
+The stable novelty token is revealed to participant clients only once the prompt
+itself is public. Internal `promptId` values remain server-only. Clearing site
+data, private browsing, or switching browser/device starts a new local history.
 
 ---
 
@@ -328,17 +345,19 @@ Challenge-mode bag slot.
 
 ## Prompt content
 
-Active prompts live in:
+Active prompts are assembled from:
 
 ```text
 server/src/game/imitationPrompts.data.ts
+server/src/game/imitationPrompts.extra.*.ts
+server/src/game/imitationPrompts.expansion.*.ts
 ```
 
-The current playtest bank has 30 items:
+The active bank has 900 items:
 
-- 10 HANDS
-- 10 POINT
-- 10 NUMBER
+- 300 HANDS
+- 300 POINT
+- 300 NUMBER
 
 Do not add Face, CHOOSE, TEXT_PAIR UI, or runtime AI generation without a
 separate product decision.
@@ -413,12 +432,15 @@ There is currently **no lint script** in the repository package scripts.
 shared/
   types.ts              Wire contract and shared types
   constants.ts          Modes, player limits, Round options, timers
+  promptNovelty.ts      Versioned Bloom-filter wire/storage primitives
 
 server/
   src/
     auth/session.ts     Anonymous HMAC session identities
     game/
-      imitationPrompts.data.ts  Active 30-prompt playtest bank
+      imitationPrompts.data.ts  Active 900-prompt bank entry point
+      imitationPrompts.expansion.*.ts  570-prompt expansion
+      promptNovelty.ts          Stable novelty tokens + server filter helpers
       questions.data.ts         110 legacy TEXT_PAIR pairs
       questions.ts              Legacy TEXT_PAIR selector
       state.ts                  Internal room/round secret state
@@ -428,6 +450,9 @@ server/
     security/messages.ts        Strict runtime WebSocket validation
   test/
     engine.test.ts
+    imitation-prompts.test.ts
+    prompt-novelty.test.ts
+    prompt-novelty-view-security.test.ts
     room-manager.test.ts
     view-security.test.ts
     intermediate-result-security.test.ts
@@ -437,6 +462,7 @@ server/
 client/
   src/
     net/socket.ts
+    net/promptNovelty.ts
     screens/Home.tsx
     screens/Host.tsx
     screens/Player.tsx
