@@ -20,16 +20,35 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Server tests group A — core/gameplay
+      - name: Server tests A1 — adversarial/analytics/audio
         working-directory: server
         run: >-
           node --import tsx --test
           test/adversarial*.test.ts test/analytics*.test.ts test/audio*.test.ts
+      - name: Server tests A2 — challenge/client/competitive/copy
+        working-directory: server
+        run: >-
+          node --import tsx --test
           test/challenge*.test.ts test/client*.test.ts test/competitive*.test.ts
-          test/copy*.test.ts test/display*.test.ts test/engine*.test.ts
+          test/copy*.test.ts
+      - name: Server tests A3 — display/engine
+        working-directory: server
+        run: >-
+          node --import tsx --test test/display*.test.ts test/engine*.test.ts
+      - name: Server tests A4 — acceptance/stage/gameplay
+        working-directory: server
+        run: >-
+          node --import tsx --test
           test/full-game*.test.ts test/game-stage*.test.ts test/gameplay*.test.ts
-          test/hardening*.test.ts test/home*.test.ts test/host*.test.ts
-          test/imitation*.test.ts test/intermediate*.test.ts test/liveness*.test.ts
+      - name: Server tests A5 — hardening
+        working-directory: server
+        run: node --import tsx --test test/hardening*.test.ts
+      - name: Server tests A6 — home/host/imitation/intermediate/liveness
+        working-directory: server
+        run: >-
+          node --import tsx --test
+          test/home*.test.ts test/host*.test.ts test/imitation*.test.ts
+          test/intermediate*.test.ts test/liveness*.test.ts
       - name: Server tests group B — ownership/play style
         working-directory: server
         run: >-
