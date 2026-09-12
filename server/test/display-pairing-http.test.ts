@@ -314,6 +314,111 @@ test("an already active Display makes a new host pairing claim fail before bindi
   }
 });
 
+test("two pending TVs may receive the same room epoch, but only one distinct Display can become active", async () => {
+  const { runtime, origin, wsOrigin, browserOrigin } = await startRuntime(deterministicRegistry([410001, 410002]));
+  let owner: WebSocket | undefined;
+  let displayA: WebSocket | undefined;
+  let displayB: WebSocket | undefined;
+  let staleA: WebSocket | undefined;
+  let staleB: WebSocket | undefined;
+  try {
+    const current = await createOwnerRoom(runtime, origin, wsOrigin, browserOrigin, "مالك");
+    owner = current.ws;
+    const tvA = await createPairing(origin);
+    const tvB = await createPairing(origin);
+
+    assert.equal((await claim(origin, current.code, current.cookie, tvA.code)).status, 200);
+    assert.equal((await claim(origin, current.code, current.cookie, tvB.code)).status, 200);
+
+    const bodyA = await (await status(origin, tvA)).json() as { roomCode?: string; displayToken?: string };
+    const bodyB = await (await status(origin, tvB)).json() as { roomCode?: string; displayToken?: string };
+    assert.equal(bodyA.roomCode, current.code);
+    assert.equal(bodyB.roomCode, current.code);
+    assert.ok(bodyA.displayToken);
+    assert.ok(bodyB.displayToken);
+    assert.equal(verifyDisplayToken(current.room, config.sessionSecret, bodyA.displayToken, 0), true);
+    assert.equal(verifyDisplayToken(current.room, config.sessionSecret, bodyB.displayToken, 0), true);
+
+    const displayUrl = `${wsOrigin}/ws?mode=display&code=${encodeURIComponent(current.code)}`;
+    displayA = await open(displayUrl, browserOrigin);
+    const publicStateMessage = nextMessage(displayA);
+    displayA.send(JSON.stringify({
+      t: "HELLO",
+      protocolVersion: 2,
+      displayToken: bodyA.displayToken,
+      displayClientId: "dc_pairing_race_a_01",
+    }));
+    const publicState = await publicStateMessage;
+    assert.equal(publicState.t, "STATE");
+    if (publicState.t !== "STATE") throw new Error("paired display state missing");
+    assert.equal(publicState.view.self.role, "spectator");
+    assert.equal(publicState.view.self.isOwner, false);
+    assert.equal(publicState.view.myPrompt, undefined);
+    assert.equal(publicState.view.isImpostor, undefined);
+    assert.equal(publicState.view.voteTargets, undefined);
+    assert.equal(JSON.stringify(publicState.view).includes(current.uid), false, "TV projection must not contain the real owner uid");
+
+    displayB = await open(displayUrl, browserOrigin);
+    const rejectedMessage = nextMessage(displayB);
+    const displayBClosed = once(displayB, "close");
+    displayB.send(JSON.stringify({
+      t: "HELLO",
+      protocolVersion: 2,
+      displayToken: bodyB.displayToken,
+      displayClientId: "dc_pairing_race_b_02",
+    }));
+    const rejected = await rejectedMessage;
+    assert.equal(rejected.t, "ERROR");
+    if (rejected.t !== "ERROR") throw new Error("second paired display rejection missing");
+    assert.equal(rejected.code, "DISPLAY_IN_USE");
+    await displayBClosed;
+    displayB = undefined;
+
+    const revokedMessage = nextMessage(displayA);
+    const displayAClosed = once(displayA, "close");
+    const revoke = await fetch(`${origin}/api/rooms/${current.code}/display-link`, {
+      method: "DELETE",
+      headers: { Cookie: current.cookie },
+    });
+    assert.equal(revoke.status, 204);
+    const revoked = await revokedMessage;
+    assert.equal(revoked.t, "ROOM_CLOSED");
+    if (revoked.t !== "ROOM_CLOSED") throw new Error("paired display revocation missing");
+    assert.equal(revoked.reason, "display_revoked");
+    await displayAClosed;
+    displayA = undefined;
+
+    assert.equal((await status(origin, tvA)).status, 404, "revocation invalidates pairing A's old epoch");
+    assert.equal((await status(origin, tvB)).status, 404, "revocation invalidates pairing B's old epoch");
+
+    for (const [token, clientId] of [
+      [bodyA.displayToken, "dc_pairing_stale_a_03"],
+      [bodyB.displayToken, "dc_pairing_stale_b_04"],
+    ] as const) {
+      const ws = await open(displayUrl, browserOrigin);
+      if (clientId.endsWith("03")) staleA = ws;
+      else staleB = ws;
+      const responseMessage = nextMessage(ws);
+      const closed = once(ws, "close");
+      ws.send(JSON.stringify({ t: "HELLO", protocolVersion: 2, displayToken: token, displayClientId: clientId }));
+      const response = await responseMessage;
+      assert.equal(response.t, "ERROR");
+      if (response.t !== "ERROR") throw new Error("stale paired display rejection missing");
+      assert.equal(response.code, "UNAUTHORIZED");
+      await closed;
+      if (clientId.endsWith("03")) staleA = undefined;
+      else staleB = undefined;
+    }
+  } finally {
+    try { staleB?.terminate(); } catch { /* ignore */ }
+    try { staleA?.terminate(); } catch { /* ignore */ }
+    try { displayB?.terminate(); } catch { /* ignore */ }
+    try { displayA?.terminate(); } catch { /* ignore */ }
+    try { owner?.terminate(); } catch { /* ignore */ }
+    await stopRuntime(runtime);
+  }
+});
+
 test("expired and nonexistent pairing codes share the same owner-facing failure", async () => {
   let now = 1_000;
   const registry = deterministicRegistry([500001], () => now, 100);
