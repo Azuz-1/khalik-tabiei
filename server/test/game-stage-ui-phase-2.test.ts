@@ -21,7 +21,7 @@ test("gameplay chrome exposes compact HUD, player details and secondary actions"
     "التحدّي",
     "دور المتخفي",
     "إدارة اللاعبين",
-    "📺 شاشة العرض",
+    "📺 العب على التلفزيون",
     "إنهاء اللعبة",
     "الخروج من الغرفة",
     "رجع الاتصال ✓",
