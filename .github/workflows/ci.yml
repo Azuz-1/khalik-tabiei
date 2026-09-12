@@ -20,7 +20,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - name: Diagnostic — display pairing registry
+        working-directory: server
+        run: node --import tsx --test test/display-pairing.test.ts
+      - name: Diagnostic — display pairing rate limits
+        working-directory: server
+        run: node --import tsx --test test/display-pairing-rate-limit.test.ts
+      - name: Diagnostic — display pairing HTTP
+        working-directory: server
+        run: node --import tsx --test test/display-pairing-http.test.ts
+      - name: Diagnostic — display source contracts
+        working-directory: server
+        run: node --import tsx --test test/display-source.test.ts
+      - name: Diagnostic — complete server suite
+        run: npm test
       - run: npm run build
       - name: Run real WebSocket integration E2E
         run: |
