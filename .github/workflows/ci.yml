@@ -33,8 +33,7 @@ jobs:
           test/copy*.test.ts
       - name: Server tests A3 — display/engine
         working-directory: server
-        run: >-
-          node --import tsx --test test/display*.test.ts test/engine*.test.ts
+        run: node --import tsx --test test/display*.test.ts test/engine*.test.ts
       - name: Server tests A4 — acceptance/stage/gameplay
         working-directory: server
         run: >-
@@ -43,12 +42,21 @@ jobs:
       - name: Server tests A5 — hardening
         working-directory: server
         run: node --import tsx --test test/hardening*.test.ts
-      - name: Server tests A6 — home/host/imitation/intermediate/liveness
+      - name: Server tests A6.1 — home
         working-directory: server
-        run: >-
-          node --import tsx --test
-          test/home*.test.ts test/host*.test.ts test/imitation*.test.ts
-          test/intermediate*.test.ts test/liveness*.test.ts
+        run: node --import tsx --test test/home*.test.ts
+      - name: Server tests A6.2 — host
+        working-directory: server
+        run: node --import tsx --test test/host*.test.ts
+      - name: Server tests A6.3 — imitation prompts
+        working-directory: server
+        run: node --import tsx --test test/imitation*.test.ts
+      - name: Server tests A6.4 — intermediate result
+        working-directory: server
+        run: node --import tsx --test test/intermediate*.test.ts
+      - name: Server tests A6.5 — liveness
+        working-directory: server
+        run: node --import tsx --test test/liveness*.test.ts
       - name: Server tests group B — ownership/play style
         working-directory: server
         run: >-
