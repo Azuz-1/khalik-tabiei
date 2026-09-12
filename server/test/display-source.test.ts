@@ -22,6 +22,7 @@ test("display and TV routes are code-split before the participant socket is impo
   assert.ok(main.includes('location.pathname === "/tv"'));
   assert.ok(main.includes('import("./screens/TvPairing.js")'));
   assert.ok(main.includes('import("./App.js")'));
+  assert.ok(main.includes('import("./components/OwnerDisplayControl.js")'));
   assert.equal(main.includes('from "./App.js"'), false, "App must not be statically imported on a public display/TV page");
   assert.equal(display.includes('from "../net/socket.js"'), false, "display must not bootstrap participant socket/actions");
   assert.equal(display.includes("actions."), false, "display surface must not expose gameplay or owner actions");
@@ -87,7 +88,7 @@ test("owner TV pairing is primary while the direct display link remains a second
   assert.ok(ownerDisplay.includes('inputMode="numeric"'));
   assert.ok(ownerDisplay.includes("/display-pairings/claim"));
   assert.ok(ownerDisplay.includes("خيارات أخرى"));
-  assert.ok(ownerDisplay.includes("رابط مباشر إذا بتفتح شاشة العرض على لابتوب أو تابلت"));
+  assert.ok(ownerDisplay.includes("استخدم الرابط المباشر إذا بتفتح شاشة العرض على لابتوب أو تابلت"));
   assert.ok(ownerDisplay.includes("/display-link"));
   assert.ok(ownerDisplay.includes('method: "DELETE"'), "owner UI must retain explicit display revocation");
   assert.ok(ownerDisplay.includes("إيقاف شاشة العرض الحالية"));
