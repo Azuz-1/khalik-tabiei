@@ -20,36 +20,32 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Diagnostic — four pairing files together
-        continue-on-error: true
-        working-directory: server
-        run: node --import tsx --test test/display-pairing.test.ts test/display-pairing-rate-limit.test.ts test/display-pairing-http.test.ts test/display-source.test.ts
-      - name: Diagnostic — base plus registry and rate limits
-        continue-on-error: true
+      - name: Diagnostic — full server suite default concurrency
         working-directory: server
         run: |
-          mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-pairing.test.ts test/display-pairing-rate-limit.test.ts
-      - name: Diagnostic — base plus HTTP and source
+          set +e
+          node --import tsx --test --test-reporter=spec test/*.test.ts 2>&1 | tee /tmp/server-full-suite.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > /tmp/server-full-suite.status
+          exit 0
+      - name: Diagnostic — full server suite serial
         continue-on-error: true
         working-directory: server
+        run: node --import tsx --test --test-concurrency=1 test/*.test.ts
+      - name: Upload full-suite diagnostic output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tv-pairing-full-suite-diagnostic
+          path: |
+            /tmp/server-full-suite.log
+            /tmp/server-full-suite.status
+          if-no-files-found: error
+          retention-days: 1
+      - name: Diagnostic — preserve default result
         run: |
-          mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-pairing-http.test.ts test/display-source.test.ts
-      - name: Diagnostic — base plus registry and HTTP
-        continue-on-error: true
-        working-directory: server
-        run: |
-          mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-pairing.test.ts test/display-pairing-http.test.ts
-      - name: Diagnostic — base plus rate limits and source
-        continue-on-error: true
-        working-directory: server
-        run: |
-          mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-pairing-rate-limit.test.ts test/display-source.test.ts
-      - name: Diagnostic — stop after multi-file split
-        run: exit 1
+          status=$(cat /tmp/server-full-suite.status)
+          test "$status" -eq 0
       - run: npm run build
       - name: Run real WebSocket integration E2E
         run: |
