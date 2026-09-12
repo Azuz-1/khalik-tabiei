@@ -350,7 +350,6 @@ export function startGame(room: RoomState, uid: string, deps: EngineDeps = defau
   room.currentRound = 1;
   room.completedChallenges = 0;
   room.categories = [];
-  room.usedPromptIds.clear();
   room.usedPairIds.clear();
   room.modeBag = [];
   room.lastMode = undefined;
@@ -620,7 +619,6 @@ export function abortToLobby(room: RoomState, deps: EngineDeps = defaultDeps): v
   room.completedChallenges = 0;
   room.round = null;
   room.categories = [];
-  room.usedPromptIds.clear();
   room.usedPairIds.clear();
   room.modeBag = [];
   room.lastMode = undefined;
