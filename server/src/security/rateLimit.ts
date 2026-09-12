@@ -68,6 +68,11 @@ export interface AbuseGuardLimits {
   sessionIdentity: RateLimitRule;
   roomCreationIp: RateLimitRule;
   roomCreationIdentity: RateLimitRule;
+  displayPairingCreateIp: RateLimitRule;
+  displayPairingClaimIp: RateLimitRule;
+  displayPairingClaimIdentity: RateLimitRule;
+  displayPairingStatusIp: RateLimitRule;
+  displayPairingStatusPairing: RateLimitRule;
   /** Upper bound on tracked keys per limiter, so one attacker cannot grow the maps without limit. */
   maxTrackedKeys: number;
   cleanupIntervalMs: number;
@@ -77,6 +82,7 @@ export interface AbuseGuardLimits {
  * A party commonly places Host + 10 players behind one NAT and browsers can
  * overlap old/new sockets during reconnect, so the coarse per-IP shields stay
  * roomy and the tighter limits key on the signed anonymous session instead.
+ * Pairing claims follow the same model: tight owner identity, roomy shared NAT.
  */
 export const DEFAULT_ABUSE_LIMITS: AbuseGuardLimits = {
   connectionIp: { limit: 300, windowMs: 60_000 },
@@ -85,6 +91,11 @@ export const DEFAULT_ABUSE_LIMITS: AbuseGuardLimits = {
   sessionIdentity: { limit: 120, windowMs: 60_000 },
   roomCreationIp: { limit: 36, windowMs: 60_000 },
   roomCreationIdentity: { limit: 3, windowMs: 60_000 },
+  displayPairingCreateIp: { limit: 60, windowMs: 5 * 60_000 },
+  displayPairingClaimIp: { limit: 120, windowMs: 5 * 60_000 },
+  displayPairingClaimIdentity: { limit: 8, windowMs: 5 * 60_000 },
+  displayPairingStatusIp: { limit: 6_000, windowMs: 5 * 60_000 },
+  displayPairingStatusPairing: { limit: 240, windowMs: 5 * 60_000 },
   maxTrackedKeys: 20_000,
   cleanupIntervalMs: 60_000,
 };
@@ -102,6 +113,11 @@ export class AbuseGuard {
   private readonly sessionIdentity: FixedWindowLimiter;
   private readonly creationIp: FixedWindowLimiter;
   private readonly creationIdentity: FixedWindowLimiter;
+  private readonly displayPairingCreateIp: FixedWindowLimiter;
+  private readonly displayPairingClaimIp: FixedWindowLimiter;
+  private readonly displayPairingClaimIdentity: FixedWindowLimiter;
+  private readonly displayPairingStatusIp: FixedWindowLimiter;
+  private readonly displayPairingStatusPairing: FixedWindowLimiter;
   private readonly generic: FixedWindowLimiter;
   private readonly httpFallback: FixedWindowLimiter;
   private readonly actions = new Map<ClientMessage["t"], FixedWindowLimiter>();
@@ -120,6 +136,11 @@ export class AbuseGuard {
     this.sessionIdentity = build(limits.sessionIdentity);
     this.creationIp = build(limits.roomCreationIp);
     this.creationIdentity = build(limits.roomCreationIdentity);
+    this.displayPairingCreateIp = build(limits.displayPairingCreateIp);
+    this.displayPairingClaimIp = build(limits.displayPairingClaimIp);
+    this.displayPairingClaimIdentity = build(limits.displayPairingClaimIdentity);
+    this.displayPairingStatusIp = build(limits.displayPairingStatusIp);
+    this.displayPairingStatusPairing = build(limits.displayPairingStatusPairing);
     this.generic = new FixedWindowLimiter(80, 10_000, keys, now);
     this.httpFallback = new FixedWindowLimiter(120, 60_000, keys, now);
     for (const [type, [limit, windowMs]] of Object.entries(ACTION_LIMITS)) {
@@ -148,6 +169,18 @@ export class AbuseGuard {
     return this.creationIp.allow(ip) && this.creationIdentity.allow(identity);
   }
 
+  allowDisplayPairingCreate(ip: string): boolean {
+    return this.displayPairingCreateIp.allow(ip);
+  }
+
+  allowDisplayPairingClaim(ip: string, identity: string): boolean {
+    return this.displayPairingClaimIp.allow(ip) && this.displayPairingClaimIdentity.allow(identity);
+  }
+
+  allowDisplayPairingStatus(ip: string, pairingId: string): boolean {
+    return this.displayPairingStatusIp.allow(ip) && this.displayPairingStatusPairing.allow(pairingId);
+  }
+
   allowMessage(identity: string, type?: ClientMessage["t"]): boolean {
     if (!this.generic.allow(identity)) return false;
     const limiter = type ? this.actions.get(type) : undefined;
@@ -163,6 +196,11 @@ export class AbuseGuard {
     this.sessionIdentity.cleanup();
     this.creationIp.cleanup();
     this.creationIdentity.cleanup();
+    this.displayPairingCreateIp.cleanup();
+    this.displayPairingClaimIp.cleanup();
+    this.displayPairingClaimIdentity.cleanup();
+    this.displayPairingStatusIp.cleanup();
+    this.displayPairingStatusPairing.cleanup();
     this.generic.cleanup();
     this.httpFallback.cleanup();
     for (const limiter of this.actions.values()) limiter.cleanup();
