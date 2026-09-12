@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { NAME_MAX } from "../../shared/constants.js";
 import {
   PROMPT_NOVELTY_ENCODED_LENGTH,
   PROMPT_NOVELTY_FILTER_BYTES,
@@ -157,7 +158,7 @@ test("full JOIN_ROOM novelty envelope fits the shipped WebSocket max and parses"
   const message = {
     t: "JOIN_ROOM",
     code: "ABCDE",
-    name: "ع".repeat(128),
+    name: "ع".repeat(NAME_MAX),
     novelty,
     rid: "r".repeat(32),
   };
