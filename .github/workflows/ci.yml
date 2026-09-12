@@ -20,31 +20,35 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Diagnostic — remaining plus pairing registry
+      - name: Diagnostic — four pairing files together
+        continue-on-error: true
+        working-directory: server
+        run: node --import tsx --test test/display-pairing.test.ts test/display-pairing-rate-limit.test.ts test/display-pairing-http.test.ts test/display-source.test.ts
+      - name: Diagnostic — base plus registry and rate limits
         continue-on-error: true
         working-directory: server
         run: |
           mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-pairing.test.ts
-      - name: Diagnostic — remaining plus pairing rate limits
+          node --import tsx --test "${tests[@]}" test/display-pairing.test.ts test/display-pairing-rate-limit.test.ts
+      - name: Diagnostic — base plus HTTP and source
         continue-on-error: true
         working-directory: server
         run: |
           mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-pairing-rate-limit.test.ts
-      - name: Diagnostic — remaining plus pairing HTTP
+          node --import tsx --test "${tests[@]}" test/display-pairing-http.test.ts test/display-source.test.ts
+      - name: Diagnostic — base plus registry and HTTP
         continue-on-error: true
         working-directory: server
         run: |
           mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-pairing-http.test.ts
-      - name: Diagnostic — remaining plus display source
+          node --import tsx --test "${tests[@]}" test/display-pairing.test.ts test/display-pairing-http.test.ts
+      - name: Diagnostic — base plus rate limits and source
         continue-on-error: true
         working-directory: server
         run: |
           mapfile -t tests < <(find test -maxdepth 1 -name '*.test.ts' -print | sort | grep -Ev 'test/(display-pairing|display-source)')
-          node --import tsx --test "${tests[@]}" test/display-source.test.ts
-      - name: Diagnostic — stop after interaction split
+          node --import tsx --test "${tests[@]}" test/display-pairing-rate-limit.test.ts test/display-source.test.ts
+      - name: Diagnostic — stop after multi-file split
         run: exit 1
       - run: npm run build
       - name: Run real WebSocket integration E2E
