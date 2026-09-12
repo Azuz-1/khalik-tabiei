@@ -10,6 +10,7 @@ import {
 } from "../src/game/imitationPrompts.data.js";
 import { EXTRA_IMITATION_PROMPTS } from "../src/game/imitationPrompts.extra.js";
 import { EXPANSION_IMITATION_PROMPTS } from "../src/game/imitationPrompts.expansion.js";
+import { sessionPromptIdsForTests } from "../src/game/sessionPromptHistory.js";
 import {
   createRoomState,
   type InternalPlayer,
@@ -156,15 +157,15 @@ test("the 570-prompt expansion has explicit family metadata and keeps Saudi copy
   }
 });
 
-test("prompt picker uses the 300-item mode bank and resets only after full mode exhaustion", () => {
+test("current-match prompt usage resets after exhaustion without clearing room-session freshness", () => {
   const room = roomWithFourPlayers();
   engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
   engine.startGame(room, "host", deps);
 
   const handsPool = IMITATION_PROMPTS.filter((prompt) => prompt.mode === "HANDS");
   assert.equal(handsPool.length, 300);
-  const finalPrompt = handsPool[handsPool.length - 1];
-  assert.equal(finalPrompt.id, "H290");
+  const firstPromptId = room.round!.promptId;
+  const finalPrompt = handsPool[handsPool.length - 1]!;
 
   room.usedPromptIds = new Set(handsPool.slice(0, -1).map((prompt) => prompt.id));
   completeSurvivedChallenge(room);
@@ -175,14 +176,25 @@ test("prompt picker uses the 300-item mode bank and resets only after full mode 
   assert.equal(room.round!.prompt, finalPrompt.text);
 
   room.usedPromptIds = new Set(handsPool.map((prompt) => prompt.id));
+  const sessionSeenBeforeRefill = new Set(sessionPromptIdsForTests(room));
+  assert.ok(sessionSeenBeforeRefill.has(firstPromptId));
+  assert.ok(sessionSeenBeforeRefill.has(finalPrompt.id));
+  assert.ok(sessionSeenBeforeRefill.size < handsPool.length, "room-session HANDS history should still have fresh prompts");
+
   completeSurvivedChallenge(room);
   engine.nextRound(room, "host", deps);
 
   assert.equal(room.round!.challengeIndex, 3);
-  assert.equal(room.round!.promptId, handsPool[0].id);
-  assert.equal(room.round!.prompt, handsPool[0].text);
+  assert.equal(
+    sessionSeenBeforeRefill.has(room.round!.promptId),
+    false,
+    "current-match exhaustion must not discard the independent room-session freshness preference",
+  );
 
   const handsIds = new Set(handsPool.map((prompt) => prompt.id));
   const usedHandsAfterRefill = [...room.usedPromptIds].filter((id) => handsIds.has(id));
-  assert.deepEqual(usedHandsAfterRefill, [handsPool[0].id]);
+  assert.deepEqual(usedHandsAfterRefill, [room.round!.promptId]);
+  assert.ok(sessionPromptIdsForTests(room).has(firstPromptId));
+  assert.ok(sessionPromptIdsForTests(room).has(finalPrompt.id));
+  assert.ok(sessionPromptIdsForTests(room).has(room.round!.promptId));
 });
