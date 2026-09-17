@@ -6,7 +6,7 @@
  * - no room code, display name, vote mapping, prompt text, raw client message,
  *   raw error text, raw IP address, or device fingerprint;
  * - roomSessionId/matchId are random lifecycle-scoped analytics IDs, never derived from a player or room code;
- * - analyticsPlayerId is a server-derived pseudonymous identifier for the current anonymous session only;
+ * - analyticsPlayerId is a server-derived pseudonymous identifier stable for the signed anonymous browser-session cookie lifetime;
  * - client/device telemetry is deliberately coarse and low-cardinality;
  * - delivery is queued, bounded, async, and never allowed to block gameplay.
  */
