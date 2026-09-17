@@ -9,8 +9,8 @@ Never store or send in structured analytics:
 - player display names;
 - session/player UIDs;
 - room codes;
-- IP addresses;
-- raw user-agent strings or persistent device fingerprints;
+- raw IP addresses;
+- raw user-agent strings or hardware/device fingerprints;
 - exact URLs/paths that could contain a room code;
 - prompt text (use `promptId` only);
 - voter → target mappings;
@@ -20,7 +20,9 @@ Never store or send in structured analytics:
 
 The allowlist in `server/src/analytics.ts` is the source of truth. Adding a property requires an explicit allowlist change and review.
 
-Client telemetry deliberately converts potentially identifying browser signals into **coarse low-cardinality buckets before sending**. Examples: browser family instead of the raw user agent, viewport buckets instead of exact screen dimensions, device-memory/hardware-concurrency buckets instead of precise values, and route buckets (`home` / `join` / `other`) instead of URLs. The signed anonymous session is used only transiently to rate-limit telemetry ingestion; it is not written into analytics rows.
+The server derives an `analyticsPlayerId` from the signed anonymous-session identity using domain-separated hashing. It is stable for that browser cookie's lifetime (currently up to 30 days), but it is **not** the gameplay UID, a name, an IP address, or a device fingerprint. The server authors the room/match relationship itself through `room_participant_joined` and `match_participant`; clients cannot choose or spoof `roomSessionId`, `matchId`, or another player's analytics identity. This supports retention and group-overlap analysis without storing direct identity data.
+
+Client telemetry deliberately converts potentially identifying browser signals into **coarse low-cardinality buckets before sending**. Examples: browser family instead of the raw user agent, viewport buckets instead of exact screen dimensions, device-memory/hardware-concurrency buckets instead of precise values, and route buckets (`home` / `join` / `other`) instead of URLs. The signed anonymous-session UID is never written into analytics rows. The server uses it transiently for abuse-rate limiting and as the input to the one-way `analyticsPlayerId` derivation described above.
 
 The Home suggestion box is the one intentional free-text surface. Its message is stored in a **separate** `suggestions` table that has no player/session identifier, room code, IP, or device fields. IP and signed session UID are used only transiently in process memory for abuse-rate limiting and are never written with the suggestion. Structured analytics receives only the suggestion category and a coarse length bucket, never the message text.
 
@@ -47,7 +49,7 @@ Server-authored gameplay telemetry covers room creation, game start/completion, 
 
 For `challenge_completed`, voting telemetry is aggregate-only: `votesCast`, `abstentionCount`, whether the voting deadline timed out, maximum votes on any one target, aggregate impostor-vote count, whether the impostor cast a ballot, whether a one-ballot catch occurred, and the final majority threshold. It never includes voter identity, abstainer identity, or voter → target mappings.
 
-Anonymous client telemetry adds device/browser compatibility and UX health without storing an identity: device class; coarse viewport; browser/OS family; browser vs standalone display mode; Arabic/English/other language bucket; touch support; coarse network type and Save-Data; reduced-motion preference; coarse CPU/memory/pixel-ratio buckets; orientation; support for audio/vibration/share/Intl.Segmenter/VisualViewport/Network Information APIs; navigation type; TTFB/FCP/load/DOMContentLoaded timings; resource count and transferred KB; LCP/CLS/coarse interaction delay; foreground/background duration; online/offline transitions; resize/orientation changes; and only the **kind** of client error (`runtime`, `resource`, `promise`) without message, stack, filename or URL.
+Anonymous client telemetry adds device/browser compatibility and UX health alongside the pseudonymous analytics identity where needed: device class; coarse viewport; browser/OS family; browser vs standalone display mode; Arabic/English/other language bucket; touch support; coarse network type and Save-Data; reduced-motion preference; coarse CPU/memory/pixel-ratio buckets; orientation; support for audio/vibration/share/Intl.Segmenter/VisualViewport/Network Information APIs; navigation type; TTFB/FCP/load/DOMContentLoaded timings; resource count and transferred KB; LCP/CLS/coarse interaction delay; foreground/background duration; online/offline transitions; resize/orientation changes; and only the **kind** of client error (`runtime`, `resource`, `promise`) without message, stack, filename or URL.
 
 ## Voting rules-version boundary
 
@@ -207,7 +209,7 @@ group by 1, 2
 order by 3 desc;
 ```
 
-Because client telemetry intentionally has no persistent/session identifier, device/performance correlation is approximate by close timestamp. Use aggregate distributions, not per-user journeys.
+Device/performance fields remain coarse and should be analyzed primarily as aggregate distributions. The pseudonymous analytics identity is intended for product journeys and retention, not fingerprinting or re-identification.
 
 ### Web-vital distribution
 
@@ -276,6 +278,45 @@ group by 1, 2
 order by 1 desc, 3 desc;
 ```
 
-## Retention
+## Player journeys, group overlap, and retention
 
-Start with 90 days of raw structured telemetry. The data intentionally has no cross-day player identity, so long-lived user profiling is neither possible nor needed for product decisions. Suggestions can use the same 90-day default initially, with useful product ideas moved into the normal product backlog before expiry.
+Authoritative server-authored membership edges now let product analysis connect a pseudonymous browser identity to a room and match without storing a player name, room code, raw IP address, or gameplay UID.
+
+### Returning-player journey
+
+```sql
+select
+  analytics_player_id,
+  first_played_at,
+  last_played_at,
+  rooms_played,
+  matches_played,
+  active_play_days
+from analytics_player_journeys
+where matches_played > 0
+order by last_played_at desc;
+```
+
+### Did the same group create a new room?
+
+```sql
+select
+  room_a,
+  room_b,
+  shared_players,
+  room_a_players,
+  room_b_players,
+  overlap_pct_of_smaller_room
+from analytics_room_overlap
+order by overlap_pct_of_smaller_room desc, shared_players desc;
+```
+
+### Match membership
+
+```sql
+select room_session_id, match_id, match_ordinal, analytics_player_id, was_owner
+from analytics_match_participants
+order by first_seen_at;
+```
+
+Raw structured telemetry is retained on a rolling 180-day window. The browser pseudonym normally survives for the signed anonymous cookie lifetime (currently 30 days); clearing cookies, using private browsing, or changing browsers/devices creates a new pseudonym, so retention remains a conservative browser-level estimate rather than a claim about physical-person identity. Suggestions stay separate and contain no player/session identifier.

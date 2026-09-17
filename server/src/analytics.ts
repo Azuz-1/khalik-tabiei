@@ -6,10 +6,11 @@
  * - no room code, display name, vote mapping, prompt text, raw client message,
  *   raw error text, raw IP address, or device fingerprint;
  * - roomSessionId/matchId are random lifecycle-scoped analytics IDs, never derived from a player or room code;
- * - analyticsPlayerId is a server-derived pseudonymous identifier for the current anonymous session only;
+ * - analyticsPlayerId is a server-derived pseudonymous identifier stable for the signed anonymous browser-session cookie lifetime;
  * - client/device telemetry is deliberately coarse and low-cardinality;
  * - delivery is queued, bounded, async, and never allowed to block gameplay.
  */
+import { createHash } from "node:crypto";
 import type { AnalyticsEvent } from "../../shared/types.js";
 import { createConfiguredAnalyticsSink } from "./analyticsSink.js";
 
@@ -27,6 +28,19 @@ export type AnalyticsSink = (records: readonly AnalyticsRecord[]) => void | Prom
 export const ANALYTICS_RULES_VERSION = "competitive-cast-vote-majority-v3";
 export const ANALYTICS_CONTENT_VERSION = "imitation-900-novelty-v1";
 
+/**
+ * Stable pseudonymous browser identity for analytics correlation.
+ * The input uid is already derived server-side from the signed anonymous
+ * session cookie; domain separation ensures analytics never stores that uid.
+ */
+export function analyticsPlayerId(identity: string): string {
+  return `ap_${createHash("sha256")
+    .update("khalik-tabiei:analytics-player:v1\0")
+    .update(identity)
+    .digest("hex")
+    .slice(0, 32)}`;
+}
+
 const ENABLED = process.env.ANALYTICS !== "off";
 const MAX_QUEUE = 512;
 const FLUSH_BATCH = 64;
@@ -36,9 +50,10 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   room_created: ["roomSessionId"],
   settings_changed: ["roomSessionId", "targetChallenges", "modeCount", "modeSet"],
   player_joined: ["roomSessionId", "playerCount"],
-  player_kicked: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch", "playerCountAfter"],
-  host_disconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch"],
-  host_reconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch"],
+  room_participant_joined: ["roomSessionId", "analyticsPlayerId", "isOwner", "playerCount"],
+  player_kicked: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch", "playerCountAfter", "analyticsPlayerId"],
+  host_disconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch", "analyticsPlayerId"],
+  host_reconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch", "analyticsPlayerId"],
   game_started: [
     "roomSessionId",
     "matchId",
@@ -50,6 +65,15 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "modeSet",
     "rulesVersion",
     "contentVersion",
+  ],
+  match_participant: [
+    "roomSessionId",
+    "matchId",
+    "matchOrdinal",
+    "analyticsPlayerId",
+    "isOwner",
+    "startingPlayerCount",
+    "targetChallenges",
   ],
   challenge_completed: [
     "roomSessionId",
@@ -115,12 +139,12 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   ],
   rematch_requested: ["roomSessionId", "matchId", "matchOrdinal", "targetChallenges", "startingPlayerCount"],
   rematch_started: ["roomSessionId", "previousMatchId", "matchId", "previousMatchOrdinal", "matchOrdinal", "targetChallenges", "startingPlayerCount"],
-  player_left: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch"],
-  player_disconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch"],
-  player_reconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch"],
+  player_left: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch", "analyticsPlayerId"],
+  player_disconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch", "analyticsPlayerId"],
+  player_reconnected: ["roomSessionId", "matchId", "matchOrdinal", "phase", "duringMatch", "analyticsPlayerId"],
   room_closed: ["roomSessionId", "matchId", "reason", "matchOrdinal", "duringMatch"],
   room_ended_unknown: ["roomSessionId", "matchId", "reason", "matchOrdinal", "phase"],
-  game_error: ["roomSessionId", "matchId", "code", "action", "phase", "duringMatch"],
+  game_error: ["roomSessionId", "matchId", "code", "action", "phase", "duringMatch", "analyticsPlayerId"],
   suggestion_submitted: ["category", "lengthBucket"],
   client_started: [
     "analyticsPlayerId",

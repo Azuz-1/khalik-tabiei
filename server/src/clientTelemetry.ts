@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
 import type { AnalyticsEvent } from "../../shared/types.js";
-import { sanitizeAnalyticsProps, track, type AnalyticsProps, type AnalyticsTracker } from "./analytics.js";
+import { analyticsPlayerId, sanitizeAnalyticsProps, track, type AnalyticsProps, type AnalyticsTracker } from "./analytics.js";
 import { FixedWindowLimiter } from "./security/rateLimit.js";
+
+export { analyticsPlayerId };
 
 export type ClientTelemetryEvent = Extract<
   AnalyticsEvent,
@@ -38,16 +39,6 @@ function telemetryScalar(value: unknown): string | number | boolean | undefined 
     return cleaned && cleaned.length <= 80 ? cleaned : undefined;
   }
   return undefined;
-}
-
-/**
- * Analytics identity is deliberately separate from the gameplay/session uid.
- * The input uid is already a server-derived pseudonym from a random HttpOnly
- * session token; domain-separated hashing prevents the analytics store from
- * containing the gameplay uid itself while remaining stable for that session.
- */
-export function analyticsPlayerId(identity: string): string {
-  return `ap_${createHash("sha256").update("khalik-tabiei:analytics-player:v1\0").update(identity).digest("hex").slice(0, 32)}`;
 }
 
 export function parseClientTelemetryBatch(value: unknown): TelemetryEnvelope[] | null {

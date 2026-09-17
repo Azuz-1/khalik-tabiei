@@ -5,6 +5,7 @@ import { MAX_ACTIVE_ROOMS, MAX_CONNECTIONS_PER_UID, MAX_PLAYERS, TIMERS } from "
 import {
   ANALYTICS_CONTENT_VERSION,
   ANALYTICS_RULES_VERSION,
+  analyticsPlayerId,
   track,
   type AnalyticsProps,
   type AnalyticsTracker,
@@ -163,8 +164,8 @@ export class RoomManager {
       if (legacyHostWasDisconnected) this.resumeAfterHostReconnect(room);
     }
     room.updatedAt = this.deps.now();
-    if (playerWasDisconnected) this.emitAnalytics("player_reconnected", this.connectionAnalyticsProps(room));
-    if (legacyHostWasDisconnected) this.emitAnalytics("host_reconnected", this.connectionAnalyticsProps(room));
+    if (playerWasDisconnected) this.emitAnalytics("player_reconnected", this.connectionAnalyticsProps(room, uid));
+    if (legacyHostWasDisconnected) this.emitAnalytics("host_reconnected", this.connectionAnalyticsProps(room, uid));
     this.broadcast(room);
   }
 
@@ -189,7 +190,7 @@ export class RoomManager {
       player.lastSeen = this.deps.now();
       player.disconnectedAt = player.lastSeen;
       player.disconnectGeneration += 1;
-      this.emitAnalytics("player_disconnected", this.connectionAnalyticsProps(room));
+      this.emitAnalytics("player_disconnected", this.connectionAnalyticsProps(room, uid));
       if (uid === room.hostUid) this.scheduleOwnerTransfer(room, player);
       this.refreshReadyRecoveryDeadline(room);
     }
@@ -199,7 +200,7 @@ export class RoomManager {
     if (uid === room.hostUid && !player) {
       room.hostConnected = false;
       room.hostCloseDeadline = this.deps.now() + this.deps.hostDisconnectGraceMs;
-      this.emitAnalytics("host_disconnected", this.connectionAnalyticsProps(room));
+      this.emitAnalytics("host_disconnected", this.connectionAnalyticsProps(room, uid));
       this.pauseForHostDisconnect(room);
       this.broadcast(room);
       this.schedule(room, HOST_DISCONNECT_TIMER, this.deps.hostDisconnectGraceMs, () => {
@@ -266,6 +267,7 @@ export class RoomManager {
         action: message.t,
         phase: room?.phase ?? "NONE",
         duringMatch: room ? this.matchInProgress(room) : false,
+        analyticsPlayerId: analyticsPlayerId(uid),
       });
       if (rid) {
         this.rememberRequest(uid, rid, {
@@ -375,6 +377,14 @@ export class RoomManager {
     this.attachAll(uid, code);
     const analytics = this.analyticsState(room);
     this.emitAnalytics("room_created", { roomSessionId: analytics.roomSessionId });
+    if (rawName !== undefined) {
+      this.emitAnalytics("room_participant_joined", {
+        roomSessionId: analytics.roomSessionId,
+        analyticsPlayerId: analyticsPlayerId(uid),
+        isOwner: true,
+        playerCount: room.players.size,
+      });
+    }
     this.broadcast(room);
   }
 
@@ -419,6 +429,12 @@ export class RoomManager {
     this.attachAll(uid, code);
     const analytics = this.analyticsState(room);
     this.emitAnalytics("player_joined", { roomSessionId: analytics.roomSessionId, playerCount: room.players.size });
+    this.emitAnalytics("room_participant_joined", {
+      roomSessionId: analytics.roomSessionId,
+      analyticsPlayerId: analyticsPlayerId(uid),
+      isOwner: false,
+      playerCount: room.players.size,
+    });
     this.broadcast(room);
   }
 
@@ -457,7 +473,7 @@ export class RoomManager {
       }
     }
 
-    this.emitAnalytics("player_left", this.connectionAnalyticsProps(room));
+    this.emitAnalytics("player_left", this.connectionAnalyticsProps(room, uid));
     this.removePlayerByChoice(room, uid);
     this.refreshReadyRecoveryDeadline(room);
     this.markMeaningful(room);
@@ -497,6 +513,17 @@ export class RoomManager {
         rulesVersion: ANALYTICS_RULES_VERSION,
         contentVersion: ANALYTICS_CONTENT_VERSION,
       });
+      for (const player of activePlayers(room)) {
+        this.emitAnalytics("match_participant", {
+          roomSessionId: analytics.roomSessionId,
+          matchId: analytics.matchId,
+          matchOrdinal: analytics.matchOrdinal,
+          analyticsPlayerId: analyticsPlayerId(player.uid),
+          isOwner: player.uid === room.hostUid,
+          startingPlayerCount: analytics.startingPlayerCount,
+          targetChallenges: room.targetChallenges,
+        });
+      }
       if (startsAfterCompletedMatch) {
         this.emitAnalytics("rematch_started", {
           roomSessionId: analytics.roomSessionId,
@@ -831,6 +858,7 @@ export class RoomManager {
         phase: phaseBefore,
         duringMatch: wasDuringMatch,
         playerCountAfter: room.players.size,
+        analyticsPlayerId: analyticsPlayerId(targetUid),
       });
       for (const conn of this.connsByUid.get(targetUid) ?? []) conn.send({ t: "KICKED" });
       this.broadcast(room);
@@ -1177,7 +1205,7 @@ export class RoomManager {
     return analytics.matchOrdinal > analytics.completedMatchOrdinal && analytics.abandonedMatchOrdinal !== analytics.matchOrdinal && room.phase !== "LOBBY" && room.phase !== "CLOSED";
   }
 
-  private connectionAnalyticsProps(room: RoomState): AnalyticsProps {
+  private connectionAnalyticsProps(room: RoomState, uid?: string): AnalyticsProps {
     const analytics = this.analyticsState(room);
     return {
       roomSessionId: analytics.roomSessionId,
@@ -1185,6 +1213,7 @@ export class RoomManager {
       matchOrdinal: analytics.matchOrdinal,
       phase: room.phase,
       duringMatch: this.matchInProgress(room, analytics),
+      ...(uid ? { analyticsPlayerId: analyticsPlayerId(uid) } : {}),
     };
   }
 
