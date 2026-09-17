@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { AnalyticsEvent } from "../../shared/types.js";
 import type { AnalyticsProps } from "../src/analytics.js";
 import { RoomManager } from "../src/game/roomManager.js";
-import { createRoom, joinPlayer } from "./helpers.js";
+import { authenticatedConnection, createRoom, joinPlayer, lastMessage, testUid } from "./helpers.js";
 
 interface RecordedEvent { event: AnalyticsEvent; props: AnalyticsProps }
 
@@ -104,5 +104,50 @@ test("abandoned matches are recorded once with anonymous lifecycle ids", () => {
   assert.equal(typeof abandoned[0]!.props.matchId, "string");
   assert.equal("uid" in abandoned[0]!.props, false);
   assert.equal("roomCode" in abandoned[0]!.props, false);
+  manager.dispose();
+});
+
+
+test("authoritative analytics links pseudonymous players to rooms and matches", () => {
+  const recorded = recorder();
+  const manager = new RoomManager({ analytics: recorded.track, rng: () => 0 });
+  const ownerUid = testUid(10);
+  const owner = authenticatedConnection(manager, ownerUid);
+
+  assert.equal(manager.handle(owner.conn, { t: "CREATE_ROOM", name: "المالك" }), true);
+  const ownerState = lastMessage(owner.socket, "STATE");
+  assert.ok(ownerState);
+  const code = ownerState.view.room.code;
+  joinPlayer(manager, code, 11);
+  joinPlayer(manager, code, 12);
+
+  const roomParticipants = recorded.events.filter((entry) => entry.event === "room_participant_joined");
+  assert.equal(roomParticipants.length, 3);
+  assert.equal(roomParticipants.filter((entry) => entry.props.isOwner === true).length, 1);
+  assert.equal(new Set(roomParticipants.map((entry) => entry.props.analyticsPlayerId)).size, 3);
+  for (const entry of roomParticipants) {
+    assert.match(String(entry.props.analyticsPlayerId), /^ap_[0-9a-f]{32}$/);
+    assert.equal(typeof entry.props.roomSessionId, "string");
+    assert.equal("uid" in entry.props, false);
+    assert.equal("name" in entry.props, false);
+    assert.equal("roomCode" in entry.props, false);
+  }
+
+  assert.equal(manager.handle(owner.conn, { t: "START_GAME" }), true);
+  const started = recorded.events.find((entry) => entry.event === "game_started")!;
+  const matchParticipants = recorded.events.filter((entry) => entry.event === "match_participant");
+  assert.equal(matchParticipants.length, 3);
+  assert.equal(matchParticipants.filter((entry) => entry.props.isOwner === true).length, 1);
+  assert.equal(new Set(matchParticipants.map((entry) => entry.props.analyticsPlayerId)).size, 3);
+  for (const entry of matchParticipants) {
+    assert.equal(entry.props.roomSessionId, started.props.roomSessionId);
+    assert.equal(entry.props.matchId, started.props.matchId);
+    assert.equal(entry.props.matchOrdinal, 1);
+    assert.equal(entry.props.startingPlayerCount, 3);
+    assert.equal("uid" in entry.props, false);
+    assert.equal("name" in entry.props, false);
+    assert.equal("roomCode" in entry.props, false);
+  }
+
   manager.dispose();
 });
