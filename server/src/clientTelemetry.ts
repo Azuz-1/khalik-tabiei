@@ -2,6 +2,8 @@ import type { AnalyticsEvent } from "../../shared/types.js";
 import { analyticsPlayerId, sanitizeAnalyticsProps, track, type AnalyticsProps, type AnalyticsTracker } from "./analytics.js";
 import { FixedWindowLimiter } from "./security/rateLimit.js";
 
+export { analyticsPlayerId };
+
 export type ClientTelemetryEvent = Extract<
   AnalyticsEvent,
   "client_started" | "client_performance" | "client_vital" | "client_session_summary" | "client_error"
