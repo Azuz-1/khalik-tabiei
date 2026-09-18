@@ -952,7 +952,8 @@ export class RoomManager {
     const disconnectGeneration = owner.disconnectGeneration;
     const deadline = this.deps.now() + this.deps.ownerTransferGraceMs;
     room.ownerTransferDeadline = deadline;
-    this.schedule(room, OWNER_TRANSFER_TIMER, this.deps.ownerTransferGraceMs, () => {
+
+    const attemptTransfer = (): void => {
       const currentOwner = room.players.get(ownerUid);
       if (
         room.hostUid !== ownerUid ||
@@ -961,8 +962,21 @@ export class RoomManager {
         currentOwner.disconnectGeneration !== disconnectGeneration ||
         room.ownerTransferDeadline !== deadline
       ) return;
+
+      // Node timers are not guaranteed to wake at or after an exact wall-clock
+      // deadline. If the callback arrives a millisecond early, preserve the
+      // one-shot ownership transfer by waiting the remaining time instead of
+      // consuming the timer and leaving the room ownerless indefinitely.
+      const remainingMs = deadline - this.deps.now();
+      if (remainingMs > 0) {
+        this.schedule(room, OWNER_TRANSFER_TIMER, remainingMs, attemptTransfer);
+        return;
+      }
+
       if (this.maybeTransferOwnership(room)) this.broadcast(room);
-    });
+    };
+
+    this.schedule(room, OWNER_TRANSFER_TIMER, this.deps.ownerTransferGraceMs, attemptTransfer);
   }
 
   private refreshReadyRecoveryDeadline(room: RoomState): void {
