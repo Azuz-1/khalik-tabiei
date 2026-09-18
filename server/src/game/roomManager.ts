@@ -147,10 +147,9 @@ export class RoomManager {
       player.connected = true;
       player.lastSeen = this.deps.now();
       if (uid === room.hostUid) {
-        room.ownerTransferDeadline = undefined;
-        this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
-      } else if (room.ownerTransferDeadline !== undefined && this.deps.now() >= room.ownerTransferDeadline) {
-        this.maybeTransferOwnership(room);
+        this.clearOwnerTransferState(room);
+      } else {
+        this.tryTransferOwnershipAfterGrace(room);
       }
       this.refreshReadyRecoveryDeadline(room);
     }
@@ -375,6 +374,7 @@ export class RoomManager {
     this.rooms.set(code, room);
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
+    this.tryTransferOwnershipAfterGrace(room);
     const analytics = this.analyticsState(room);
     this.emitAnalytics("room_created", { roomSessionId: analytics.roomSessionId });
     if (rawName !== undefined) {
@@ -405,7 +405,7 @@ export class RoomManager {
       existing.connected = true;
       existing.lastSeen = this.deps.now();
       this.attachAll(uid, code);
-      if (room.ownerTransferDeadline !== undefined && this.deps.now() >= room.ownerTransferDeadline) this.maybeTransferOwnership(room);
+      this.tryTransferOwnershipAfterGrace(room);
       this.refreshReadyRecoveryDeadline(room);
       this.broadcast(room);
       return;
@@ -432,7 +432,7 @@ export class RoomManager {
     this.emitAnalytics("room_participant_joined", {
       roomSessionId: analytics.roomSessionId,
       analyticsPlayerId: analyticsPlayerId(uid),
-      isOwner: false,
+      isOwner: uid === room.hostUid,
       playerCount: room.players.size,
     });
     this.broadcast(room);
@@ -467,10 +467,7 @@ export class RoomManager {
     if (uid === room.hostUid && player) {
       const successor = this.ownerCandidate(room, uid);
       if (successor) this.transferOwnership(room, successor.uid);
-      else {
-        this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
-        room.ownerTransferDeadline = this.deps.now();
-      }
+      else this.markOwnerTransferGraceElapsed(room);
     }
 
     this.emitAnalytics("player_left", this.connectionAnalyticsProps(room, uid));
@@ -914,12 +911,23 @@ export class RoomManager {
       .sort((a, b) => a.joinedAt - b.joinedAt || a.uid.localeCompare(b.uid))[0];
   }
 
+  private clearOwnerTransferState(room: RoomState): void {
+    room.ownerTransferDeadline = undefined;
+    room.ownerTransferGraceElapsed = false;
+    this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+  }
+
+  private markOwnerTransferGraceElapsed(room: RoomState): void {
+    room.ownerTransferDeadline = undefined;
+    room.ownerTransferGraceElapsed = true;
+    this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+  }
+
   private transferOwnership(room: RoomState, nextOwnerUid: string): boolean {
     const nextOwner = room.players.get(nextOwnerUid);
     if (!nextOwner || !nextOwner.connected || nextOwner.pendingRemoval) return false;
     if (room.hostUid === nextOwnerUid) {
-      room.ownerTransferDeadline = undefined;
-      this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+      this.clearOwnerTransferState(room);
       return true;
     }
     const previousOwner = room.players.get(room.hostUid);
@@ -929,18 +937,16 @@ export class RoomManager {
     room.hostUid = nextOwnerUid;
     room.hostConnected = true;
     room.hostCloseDeadline = undefined;
-    room.ownerTransferDeadline = undefined;
-    this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
     room.updatedAt = this.deps.now();
+    this.clearOwnerTransferState(room);
     return true;
   }
 
-  private maybeTransferOwnership(room: RoomState): boolean {
-    if (room.ownerTransferDeadline === undefined || this.deps.now() < room.ownerTransferDeadline) return false;
+  private tryTransferOwnershipAfterGrace(room: RoomState): boolean {
+    if (!room.ownerTransferGraceElapsed) return false;
     const currentOwner = room.players.get(room.hostUid);
     if (currentOwner?.connected) {
-      room.ownerTransferDeadline = undefined;
-      this.cancelTimer(room.code, OWNER_TRANSFER_TIMER);
+      this.clearOwnerTransferState(room);
       return false;
     }
     const successor = this.ownerCandidate(room, room.hostUid);
@@ -952,6 +958,7 @@ export class RoomManager {
     const disconnectGeneration = owner.disconnectGeneration;
     const deadline = this.deps.now() + this.deps.ownerTransferGraceMs;
     room.ownerTransferDeadline = deadline;
+    room.ownerTransferGraceElapsed = false;
 
     this.schedule(room, OWNER_TRANSFER_TIMER, this.deps.ownerTransferGraceMs, () => {
       const currentOwner = room.players.get(ownerUid);
@@ -964,12 +971,10 @@ export class RoomManager {
       ) return;
 
       // The timer itself is authoritative that the grace interval elapsed.
-      // Re-checking a wall-clock deadline here can lose the one-shot transfer
-      // if the callback wakes just before Date.now() crosses the computed
-      // deadline, or if the wall clock moves backward while the monotonic
-      // timer continues normally.
-      const successor = this.ownerCandidate(room, ownerUid);
-      if (successor && this.transferOwnership(room, successor.uid)) this.broadcast(room);
+      // Persist that fact if no successor exists yet; a later join/reconnect
+      // must be able to complete the transfer without another wall-clock check.
+      this.markOwnerTransferGraceElapsed(room);
+      if (this.tryTransferOwnershipAfterGrace(room)) this.broadcast(room);
     });
   }
 
@@ -1087,6 +1092,7 @@ export class RoomManager {
     room.pause = undefined;
     room.hostCloseDeadline = undefined;
     room.ownerTransferDeadline = undefined;
+    room.ownerTransferGraceElapsed = false;
     room.readyRecoveryDeadline = undefined;
     room.closed = true;
     room.phase = "CLOSED";
