@@ -150,10 +150,7 @@ test("named owner offline through discussion+voting does not pause the game; aft
     }
 
     await waitForCondition(() => room.phase === "RESULT");
-    await waitForCondition(
-      () => room.hostUid !== originalOwnerUid,
-      10_000,
-    );
+    await waitForCondition(() => room.hostUid !== originalOwnerUid);
     const successorUid = room.hostUid;
     assert.equal(successorUid, joined[0]!.uid, "oldest connected eligible player receives management authority");
     assert.equal(room.players.has(originalOwnerUid), true, "authority transfer must not remove the former owner from gameplay");
