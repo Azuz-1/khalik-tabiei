@@ -115,6 +115,7 @@ jobs:
           curl --fail --silent http://localhost:8080/readyz >/dev/null
           npm run test:integration:multigroup
         env:
+          NODE_ENV: production
           PUBLIC_ORIGIN: http://localhost:8080
           SESSION_SECRET: adversarial-test-secret-0123456789-abcdef
 
