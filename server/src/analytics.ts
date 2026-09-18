@@ -10,14 +10,22 @@
  * - client/device telemetry is deliberately coarse and low-cardinality;
  * - delivery is queued, bounded, async, and never allowed to block gameplay.
  */
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { AnalyticsEvent } from "../../shared/types.js";
 import { createConfiguredAnalyticsSink } from "./analyticsSink.js";
+import { analyticsPlayerId } from "./analyticsIdentity.js";
+
+export { analyticsPlayerId };
 
 export type AnalyticsValue = string | number | boolean;
 export type AnalyticsProps = Record<string, AnalyticsValue | undefined>;
 export type AnalyticsTracker = (event: AnalyticsEvent, props?: AnalyticsProps) => void;
+export type AnalyticsEnvironment = "production" | "staging" | "development" | "test";
+
 export interface AnalyticsRecord {
+  eventId: string;
+  schemaVersion: number;
+  environment: AnalyticsEnvironment;
   event: AnalyticsEvent;
   occurredAt: string;
   props: AnalyticsProps;
@@ -28,18 +36,7 @@ export type AnalyticsSink = (records: readonly AnalyticsRecord[]) => void | Prom
 export const ANALYTICS_RULES_VERSION = "competitive-cast-vote-majority-v3";
 export const ANALYTICS_CONTENT_VERSION = "imitation-900-novelty-v1";
 
-/**
- * Stable pseudonymous browser identity for analytics correlation.
- * The input uid is already derived server-side from the signed anonymous
- * session cookie; domain separation ensures analytics never stores that uid.
- */
-export function analyticsPlayerId(identity: string): string {
-  return `ap_${createHash("sha256")
-    .update("khalik-tabiei:analytics-player:v1\0")
-    .update(identity)
-    .digest("hex")
-    .slice(0, 32)}`;
-}
+export const ANALYTICS_SCHEMA_VERSION = 2;
 
 const ENABLED = process.env.ANALYTICS !== "off";
 const MAX_QUEUE = 512;
@@ -148,6 +145,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   suggestion_submitted: ["category", "lengthBucket"],
   client_started: [
     "analyticsPlayerId",
+    "clientSessionId",
     "deviceClass",
     "viewportBucket",
     "browserFamily",
@@ -171,6 +169,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "routeBucket",
   ],
   client_performance: [
+    "clientSessionId",
     "navigationType",
     "domContentLoadedMs",
     "loadMs",
@@ -180,9 +179,10 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "transferKb",
     "routeBucket",
   ],
-  client_vital: ["metric", "value", "rating", "routeBucket"],
+  client_vital: ["clientSessionId", "metric", "value", "rating", "routeBucket"],
   client_session_summary: [
     "analyticsPlayerId",
+    "clientSessionId",
     "summaryKind",
     "playedMatch",
     "phase",
@@ -199,7 +199,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "orientationChanges",
     "routeBucket",
   ],
-  client_error: ["kind", "routeBucket", "online"],
+  client_error: ["clientSessionId", "kind", "routeBucket", "online"],
 };
 
 const queue: AnalyticsRecord[] = [];
@@ -236,6 +236,43 @@ export function sanitizeAnalyticsProps(event: AnalyticsEvent, props: AnalyticsPr
   return safe;
 }
 
+export function analyticsEnvironment(
+  env: NodeJS.ProcessEnv = process.env,
+): AnalyticsEnvironment {
+  const explicit = env.ANALYTICS_ENVIRONMENT;
+  if (
+    explicit === "production" ||
+    explicit === "staging" ||
+    explicit === "development" ||
+    explicit === "test"
+  ) return explicit;
+  if (env.NODE_ENV === "test") return "test";
+  if (env.NODE_ENV === "production") return "production";
+  return "development";
+}
+
+const RETRY_DELAYS_MS = [150, 600] as const;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function deliverWithRetry(batch: readonly AnalyticsRecord[]): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      await deliverWithRetry(batch);
+      return;
+    } catch (error) {
+      lastError = error;
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) break;
+      await sleep(delay);
+    }
+  }
+  throw lastError;
+}
+
 function scheduleFlush(): void {
   if (flushScheduled || flushInProgress) return;
   flushScheduled = true;
@@ -257,7 +294,10 @@ async function flush(): Promise<void> {
     dropped += batch.length;
     try {
       // eslint-disable-next-line no-console
-      console.warn("[analytics] dropped batch", JSON.stringify({ count: batch.length }));
+      console.warn("[analytics] dropped batch", JSON.stringify({
+        count: batch.length,
+        firstEventId: batch[0]?.eventId,
+      }));
     } catch { /* analytics failures stay isolated */ }
   } finally {
     flushInProgress = false;
@@ -269,6 +309,9 @@ export const track: AnalyticsTracker = (event, props = {}) => {
   if (!ENABLED) return;
   try {
     const record: AnalyticsRecord = {
+      eventId: randomUUID(),
+      schemaVersion: ANALYTICS_SCHEMA_VERSION,
+      environment: analyticsEnvironment(),
       event,
       occurredAt: new Date().toISOString(),
       props: sanitizeAnalyticsProps(event, props),
@@ -291,4 +334,12 @@ export function analyticsQueueStateForTests(): { queued: number; dropped: number
 /** Test-only hook; production configuration is fixed at module initialization. */
 export function setAnalyticsSinkForTests(next: AnalyticsSink): void {
   sink = next;
+}
+
+/** Test-only hook to deterministically await queued delivery. */
+export async function flushAnalyticsForTests(): Promise<void> {
+  while (queue.length || flushInProgress) {
+    await flush();
+    if (flushInProgress) await new Promise((resolve) => setImmediate(resolve));
+  }
 }
