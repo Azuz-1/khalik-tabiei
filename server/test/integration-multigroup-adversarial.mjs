@@ -204,14 +204,13 @@ async function readyToDiscussion(group) {
   await Promise.all(group.clients.map((client) => client.waitForView((view) => view.room.phase === "DISCUSSION")));
 }
 
-async function ownerOpensVoting(group) {
-  await expectAck(
-    group.owner.action({ t: "START_VOTING" }, rid(`${group.label}-open-vote`)),
-    `${group.label}: owner can open voting early from discussion`,
+async function waitForAutomaticVoting(group) {
+  await Promise.all(
+    group.clients
+      .filter((client) => client.ws?.readyState === WebSocket.OPEN)
+      .map((client) => client.waitForView((view) => view.room.phase === "VOTING", 65_000)),
   );
-  await Promise.all(group.clients.filter((client) => client.ws?.readyState === WebSocket.OPEN).map(
-    (client) => client.waitForView((view) => view.room.phase === "VOTING"),
-  ));
+  check(group.owner.view.votesProgress?.submitted === 0, `${group.label}: authoritative discussion timer opens a fresh ballot`);
 }
 
 async function voteToCatch(group, skip = new Set()) {
@@ -240,7 +239,7 @@ async function runGoodCop(group) {
 
   for (let challenge = 1; challenge <= group.targetChallenges; challenge += 1) {
     await readyToDiscussion(group);
-    await ownerOpensVoting(group);
+    await waitForAutomaticVoting(group);
     await voteToCatch(group);
     check(
       group.owner.view.room.completedChallenges === challenge,
@@ -297,10 +296,10 @@ async function runBadCop(group) {
   await readyToDiscussion(group);
   await expectError(
     attacker.action({ t: "START_VOTING" }, rid(`${group.label}-bad-open`)),
-    "NOT_HOST",
-    `${group.label}: non-owner cannot force voting open`,
+    "INVALID_PHASE",
+    `${group.label}: production server rejects client-forced voting`,
   );
-  await ownerOpensVoting(group);
+  await waitForAutomaticVoting(group);
 
   await expectError(
     attacker.action({ t: "SUBMIT_VOTE", targetUid: attacker.uid }, rid(`${group.label}-self-vote`)),
@@ -370,7 +369,7 @@ async function runFailureRecovery(group) {
   await group.owner.waitForView((view) => view.room.phase === "DISCUSSION" && view.self.isOwner === true);
   check(group.owner.view.room.hostUid === ownerUid, `${group.label}: short owner outage does not transfer authority`);
 
-  await ownerOpensVoting(group);
+  await waitForAutomaticVoting(group);
   const roles = currentRoles(group);
   const kickTarget = roles.normals.find(
     (client) => client.uid !== group.owner.uid && client.uid !== reconnecting.uid,
