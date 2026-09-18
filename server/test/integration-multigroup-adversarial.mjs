@@ -197,12 +197,14 @@ function currentRoles(group) {
 }
 
 async function readyToDiscussion(group) {
+  const roles = currentRoles(group);
   await Promise.all(
     group.clients.map((client) =>
       expectAck(client.action({ t: "MARK_READY" }, rid(`${group.label}-ready`)), `${client.label}: ready accepted`),
     ),
   );
   await Promise.all(group.clients.map((client) => client.waitForView((view) => view.room.phase === "DISCUSSION")));
+  return roles;
 }
 
 async function waitForAutomaticVoting(group) {
@@ -214,8 +216,8 @@ async function waitForAutomaticVoting(group) {
   check(group.owner.view.votesProgress?.submitted === 0, `${group.label}: authoritative discussion timer opens a fresh ballot`);
 }
 
-async function voteToCatch(group, skip = new Set()) {
-  const { impostor, normals } = currentRoles(group);
+async function voteToCatch(group, roles, skip = new Set()) {
+  const { impostor, normals } = roles;
   const firstNormal = normals.find((client) => !skip.has(client.uid));
   if (!firstNormal) throw new Error(`${group.label}: no normal target available`);
 
@@ -239,9 +241,9 @@ async function runGoodCop(group) {
   await startGame(group);
 
   for (let challenge = 1; challenge <= group.targetChallenges; challenge += 1) {
-    await readyToDiscussion(group);
+    const roles = await readyToDiscussion(group);
     await waitForAutomaticVoting(group);
-    await voteToCatch(group);
+    await voteToCatch(group, roles);
     check(
       group.owner.view.room.completedChallenges === challenge,
       `${group.label}: challenge counter reaches ${challenge}`,
@@ -371,7 +373,7 @@ async function runFailureRecovery(group) {
   check(group.owner.view.room.hostUid === ownerUid, `${group.label}: short owner outage does not transfer authority`);
 
   await waitForAutomaticVoting(group);
-  const roles = currentRoles(group);
+  const roles = initialRoles;
   const kickTarget = roles.normals.find(
     (client) => client.uid !== group.owner.uid && client.uid !== reconnecting.uid,
   ) ?? roles.normals.find((client) => client.uid !== group.owner.uid);
