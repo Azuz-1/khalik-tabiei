@@ -26,6 +26,7 @@ test("operational limits default to the shipped shared-NAT-safe values", () => {
 test("production analytics requires an independent strong secret unless explicitly disabled", () => {
   const productionBase = {
     ...baseEnv,
+    SESSION_SECRET: "production-session-secret-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     NODE_ENV: "production",
     PUBLIC_ORIGIN: "https://example.invalid",
   };
