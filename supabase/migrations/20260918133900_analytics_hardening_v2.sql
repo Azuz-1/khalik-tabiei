@@ -89,9 +89,14 @@ where properties ? 'analyticsPlayerId'
     or
     (
       schema_version = 1
-      and event_type = 'client_session_summary'
-      and properties->>'summaryKind' = 'match_participation'
-      and properties->>'playedMatch' = 'true'
+      and (
+        event_type = 'match_participant'
+        or (
+          event_type = 'client_session_summary'
+          and properties->>'summaryKind' = 'match_participation'
+          and properties->>'playedMatch' = 'true'
+        )
+      )
     )
   );
 
