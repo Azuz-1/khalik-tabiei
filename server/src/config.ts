@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { sessionSecretProblem } from "./auth/session.js";
+import { analyticsSecretProblem } from "./analyticsIdentity.js";
 import { canonicalOrigin } from "./security/origin.js";
 import {
   DEFAULT_ABUSE_LIMITS,
@@ -41,6 +42,13 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     if (production) throw new Error(`Configuration error: ${secretProblem}`);
     sessionSecret = randomBytes(32).toString("base64url");
     console.warn("SESSION_SECRET is missing/weak; using an ephemeral development secret.");
+  }
+
+  if (production && env.ANALYTICS !== "off") {
+    const analyticsProblem = analyticsSecretProblem(env.ANALYTICS_SECRET);
+    if (analyticsProblem) {
+      throw new Error(`Configuration error: ${analyticsProblem}`);
+    }
   }
 
   const configuredOrigin = env.PUBLIC_ORIGIN ? canonicalOrigin(env.PUBLIC_ORIGIN) : renderOrigin(env);

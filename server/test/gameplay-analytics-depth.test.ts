@@ -126,7 +126,7 @@ test("authoritative analytics links pseudonymous players to rooms and matches", 
   assert.equal(roomParticipants.filter((entry) => entry.props.isOwner === true).length, 1);
   assert.equal(new Set(roomParticipants.map((entry) => entry.props.analyticsPlayerId)).size, 3);
   for (const entry of roomParticipants) {
-    assert.match(String(entry.props.analyticsPlayerId), /^ap_[0-9a-f]{32}$/);
+    assert.match(String(entry.props.analyticsPlayerId), /^ap2_[0-9a-f]{32}$/);
     assert.equal(typeof entry.props.roomSessionId, "string");
     assert.equal("uid" in entry.props, false);
     assert.equal("name" in entry.props, false);

@@ -4,6 +4,9 @@ import { createConfiguredAnalyticsSink, createSupabaseAnalyticsSink } from "../s
 import type { AnalyticsRecord, AnalyticsSink } from "../src/analytics.js";
 
 const record: AnalyticsRecord = {
+  eventId: "11111111-1111-4111-8111-111111111111",
+  schemaVersion: 2,
+  environment: "production",
   event: "challenge_completed",
   occurredAt: "2026-09-10T07:30:00.000Z",
   props: {
@@ -31,14 +34,17 @@ test("Supabase sink batches rows with apikey-only server authentication", async 
 
   await sink([record]);
 
-  assert.equal(requestUrl, "https://example.supabase.co/rest/v1/analytics_events");
+  assert.equal(requestUrl, "https://example.supabase.co/rest/v1/analytics_events?on_conflict=event_id");
   const headers = new Headers(requestInit?.headers);
   assert.equal(headers.get("apikey"), "sb_secret_test_value");
   assert.equal(headers.get("authorization"), null, "new Supabase secret keys must not be sent as bearer JWTs");
-  assert.equal(headers.get("prefer"), "return=minimal");
+  assert.equal(headers.get("prefer"), "resolution=ignore-duplicates,return=minimal");
 
   const rows = JSON.parse(String(requestInit?.body));
   assert.deepEqual(rows, [{
+    event_id: record.eventId,
+    schema_version: 2,
+    environment: "production",
     occurred_at: record.occurredAt,
     event_type: "challenge_completed",
     properties: record.props,

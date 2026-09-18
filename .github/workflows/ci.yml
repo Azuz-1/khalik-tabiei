@@ -64,6 +64,7 @@ jobs:
           CID=$(docker run -d --rm -p 18080:8080 \
             -e PUBLIC_ORIGIN=https://example.invalid \
             -e SESSION_SECRET=container-smoke-secret-0123456789-abcdef \
+            -e ANALYTICS_SECRET=container-analytics-secret-0123456789-abcdef \
             khalik-tabiei:ci)
           cleanup() { docker stop "$CID" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
@@ -120,6 +121,7 @@ jobs:
           ORIGIN: https://adversarial.example.invalid
           HTTP_BASE: http://localhost:8080
           SESSION_SECRET: adversarial-test-secret-0123456789-abcdef
+          ANALYTICS_SECRET: adversarial-analytics-secret-0123456789-abcdef
 
   browser:
     needs: validate
