@@ -374,7 +374,6 @@ export class RoomManager {
     this.rooms.set(code, room);
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
-    this.tryTransferOwnershipAfterGrace(room);
     const analytics = this.analyticsState(room);
     this.emitAnalytics("room_created", { roomSessionId: analytics.roomSessionId });
     if (rawName !== undefined) {
@@ -427,6 +426,7 @@ export class RoomManager {
     room.meaningfulAt = now;
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
+    this.tryTransferOwnershipAfterGrace(room);
     const analytics = this.analyticsState(room);
     this.emitAnalytics("player_joined", { roomSessionId: analytics.roomSessionId, playerCount: room.players.size });
     this.emitAnalytics("room_participant_joined", {
