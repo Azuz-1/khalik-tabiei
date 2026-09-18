@@ -261,7 +261,7 @@ async function deliverWithRetry(batch: readonly AnalyticsRecord[]): Promise<void
   let lastError: unknown;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      await deliverWithRetry(batch);
+      await sink(batch);
       return;
     } catch (error) {
       lastError = error;
@@ -287,7 +287,7 @@ async function flush(): Promise<void> {
   const batch = queue.splice(0, FLUSH_BATCH);
 
   try {
-    await sink(batch);
+    await deliverWithRetry(batch);
   } catch {
     // Telemetry is best-effort. Failed batches are dropped rather than retried
     // indefinitely in memory, and no failure can escape into gameplay.
