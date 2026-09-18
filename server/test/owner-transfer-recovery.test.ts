@@ -94,6 +94,84 @@ test("owner transfer timer remains authoritative when wall clock does not advanc
   }
 });
 
+test("elapsed owner grace stays actionable until a late player joins", async () => {
+  const manager = new RoomManager({ ownerTransferGraceMs: 20 });
+  const owner = createNamedRoom(manager);
+  const room = manager.roomForTests(owner.code)!;
+
+  try {
+    manager.disconnect(owner.conn);
+    assert.equal(room.hostUid, owner.uid);
+    assert.equal(room.players.get(owner.uid)?.connected, false);
+
+    await waitForCondition(() => room.ownerTransferGraceElapsed === true);
+
+    assert.equal(room.hostUid, owner.uid, "no successor exists when the grace timer expires");
+    assert.equal(room.ownerTransferDeadline, undefined);
+    assert.equal(room.ownerTransferGraceElapsed, true);
+
+    const latePlayer = joinPlayer(manager, owner.code, 2);
+
+    assert.equal(room.hostUid, latePlayer.uid, "first eligible late participant receives ownership");
+    assert.equal(room.players.get(latePlayer.uid)?.isHost, true);
+    assert.equal(room.ownerTransferGraceElapsed, false);
+    assert.equal(lastMessage(latePlayer.socket, "STATE")?.view.self.isOwner, true);
+
+    const recoveredOwner = authenticatedConnection(manager, owner.uid);
+    const oldOwnerView = lastMessage(recoveredOwner.socket, "STATE")!.view;
+    assert.equal(room.hostUid, latePlayer.uid, "former owner reconnect must not reclaim transferred authority");
+    assert.equal(oldOwnerView.self.isOwner, false);
+    assert.equal(manager.handle(recoveredOwner.conn, { t: "SET_ADMISSION", locked: true }), false);
+    assert.equal(lastMessage(recoveredOwner.socket, "ERROR")?.code, "NOT_HOST");
+  } finally {
+    manager.dispose();
+  }
+});
+
+test("owner reconnect before grace callback cancels pending transfer eligibility", async () => {
+  const manager = new RoomManager({ ownerTransferGraceMs: 50 });
+  const owner = createNamedRoom(manager);
+  const second = joinPlayer(manager, owner.code, 2);
+  const room = manager.roomForTests(owner.code)!;
+
+  try {
+    manager.disconnect(owner.conn);
+    await wait(10);
+
+    const reconnected = authenticatedConnection(manager, owner.uid);
+    await wait(70);
+
+    assert.equal(room.hostUid, owner.uid);
+    assert.equal(room.ownerTransferDeadline, undefined);
+    assert.equal(room.ownerTransferGraceElapsed, false);
+    assert.equal(room.players.get(second.uid)?.isHost, false);
+    assert.equal(lastMessage(reconnected.socket, "STATE")?.view.self.isOwner, true);
+  } finally {
+    manager.dispose();
+  }
+});
+
+test("explicit owner leave with no successor transfers to the first later participant", () => {
+  const manager = new RoomManager();
+  const owner = createNamedRoom(manager);
+  const room = manager.roomForTests(owner.code)!;
+
+  try {
+    assert.equal(manager.handle(owner.conn, { t: "LEAVE_ROOM" }), true);
+    assert.equal(room.closed, false);
+    assert.equal(room.players.has(owner.uid), false);
+    assert.equal(room.ownerTransferGraceElapsed, true);
+
+    const latePlayer = joinPlayer(manager, owner.code, 2);
+    assert.equal(room.hostUid, latePlayer.uid);
+    assert.equal(room.players.get(latePlayer.uid)?.isHost, true);
+    assert.equal(room.ownerTransferGraceElapsed, false);
+    assert.equal(lastMessage(latePlayer.socket, "STATE")?.view.self.isOwner, true);
+  } finally {
+    manager.dispose();
+  }
+});
+
 test("explicit named-owner leave transfers authority immediately and keeps the room alive", () => {
   const manager = new RoomManager();
   const owner = createNamedRoom(manager);
