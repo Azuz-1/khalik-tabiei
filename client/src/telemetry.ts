@@ -8,6 +8,24 @@ type ClientEvent =
 type TelemetryValue = string | number | boolean;
 interface TelemetryItem { event: ClientEvent; props: Record<string, TelemetryValue> }
 
+const CLIENT_SESSION_STORAGE_KEY = "kt_analytics_client_session_v1";
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function loadClientSessionId(): string {
+  try {
+    const existing = sessionStorage.getItem(CLIENT_SESSION_STORAGE_KEY);
+    if (existing && UUID_RE.test(existing)) return existing;
+    const next = crypto.randomUUID();
+    sessionStorage.setItem(CLIENT_SESSION_STORAGE_KEY, next);
+    return next;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
+export const analyticsClientSessionId = loadClientSessionId();
+
 const queue: TelemetryItem[] = [];
 const MAX_QUEUE = 60;
 const BATCH_SIZE = 20;
@@ -28,9 +46,22 @@ function clamp(value: number, max = 1_000_000): number {
 
 function enqueue(event: ClientEvent, props: Record<string, TelemetryValue>): void {
   if (queue.length >= MAX_QUEUE) queue.shift();
-  queue.push({ event, props });
+  queue.push({
+    event,
+    props: {
+      ...props,
+      clientSessionId: analyticsClientSessionId,
+    },
+  });
   if (queue.length >= BATCH_SIZE) void flush();
   else scheduleFlush();
+}
+
+export function reportClientTelemetry(
+  event: ClientEvent,
+  props: Record<string, TelemetryValue>,
+): void {
+  enqueue(event, props);
 }
 
 function scheduleFlush(): void {
