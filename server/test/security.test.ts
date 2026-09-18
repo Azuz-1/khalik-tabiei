@@ -59,12 +59,13 @@ test("production session secret fails closed", () => {
     /SESSION_SECRET/,
   );
   assert.throws(
-    () => readConfig({ NODE_ENV: "production", SESSION_SECRET: SECRET, PUBLIC_ORIGIN: "http://good.example" }),
+    () => readConfig({ NODE_ENV: "production", SESSION_SECRET: SECRET, ANALYTICS_SECRET: "analytics-production-secret-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ", PUBLIC_ORIGIN: "http://good.example" }),
     /https/,
   );
   const config = readConfig({
     NODE_ENV: "production",
     SESSION_SECRET: SECRET,
+    ANALYTICS_SECRET: "analytics-production-secret-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     PUBLIC_ORIGIN: "https://good.example",
   });
   assert.equal(config.publicOrigin, "https://good.example");
