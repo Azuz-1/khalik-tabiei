@@ -116,7 +116,9 @@ jobs:
           npm run test:integration:multigroup
         env:
           NODE_ENV: production
-          PUBLIC_ORIGIN: http://localhost:8080
+          PUBLIC_ORIGIN: https://adversarial.example.invalid
+          ORIGIN: https://adversarial.example.invalid
+          HTTP_BASE: http://localhost:8080
           SESSION_SECRET: adversarial-test-secret-0123456789-abcdef
 
   browser:
