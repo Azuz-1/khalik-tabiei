@@ -30,18 +30,24 @@ export function createSupabaseAnalyticsSink(options: SupabaseAnalyticsOptions): 
   return async (records: readonly AnalyticsRecord[]) => {
     if (!records.length) return;
     const body = records.map((record) => ({
+      event_id: record.eventId,
+      schema_version: record.schemaVersion,
+      environment: record.environment,
       occurred_at: record.occurredAt,
       event_type: record.event,
       properties: record.props,
       deployment_sha: deploymentSha,
     }));
 
-    const response = await fetchImpl(`${baseUrl}/rest/v1/analytics_events`, {
+    const endpoint = new URL(`${baseUrl}/rest/v1/analytics_events`);
+    endpoint.searchParams.set("on_conflict", "event_id");
+
+    const response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
         apikey: secretKey,
         "Content-Type": "application/json",
-        Prefer: "return=minimal",
+        Prefer: "resolution=ignore-duplicates,return=minimal",
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(5_000),
