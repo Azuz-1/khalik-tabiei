@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useGame } from "../net/socket.js";
+import { reportClientTelemetry } from "../telemetry.js";
 
 let matchActive = false;
 
@@ -9,34 +10,20 @@ function routeBucket(): string {
 }
 
 function reportMatchParticipation(view: NonNullable<ReturnType<typeof useGame>["view"]>): void {
-  const body = {
-    events: [{
-      event: "client_session_summary",
-      props: {
-        summaryKind: "match_participation",
-        playedMatch: true,
-        phase: view.room.phase,
-        isOwner: view.self.isOwner === true,
-        playerCount: view.players.length,
-        targetChallenges: view.room.targetChallenges,
-        modeCount: view.room.selectedModes.length,
-        routeBucket: routeBucket(),
-      },
-    }],
-  };
-
-  void fetch("/api/telemetry", {
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-    keepalive: true,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }).catch(() => { /* analytics must never affect gameplay */ });
+  reportClientTelemetry("client_session_summary", {
+    summaryKind: "match_session_marker",
+    playedMatch: true,
+    phase: view.room.phase,
+    isOwner: view.self.isOwner === true,
+    playerCount: view.players.length,
+    targetChallenges: view.room.targetChallenges,
+    modeCount: view.room.selectedModes.length,
+    routeBucket: routeBucket(),
+  });
 }
 
 /**
- * Reports one match-participation marker per browser match lifecycle.
+ * Reports one best-effort match-session marker per browser match lifecycle.
  * The server adds a pseudonymous analytics id; this component never reads the
  * HttpOnly session token and never sends room codes, player names, prompts, or UIDs.
  */
