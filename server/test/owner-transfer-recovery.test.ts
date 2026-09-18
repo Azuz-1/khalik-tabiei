@@ -67,6 +67,33 @@ test("named owner disconnect transfers authority after grace without closing the
   }
 });
 
+test("owner transfer timer remains authoritative when wall clock does not advance", async () => {
+  const frozenNow = 1_000;
+  const manager = new RoomManager({
+    now: () => frozenNow,
+    ownerTransferGraceMs: 20,
+  });
+  const owner = createNamedRoom(manager);
+  const second = joinPlayer(manager, owner.code, 2);
+  joinPlayer(manager, owner.code, 3);
+  const room = manager.roomForTests(owner.code)!;
+
+  try {
+    manager.disconnect(owner.conn);
+    assert.equal(room.hostUid, owner.uid);
+    assert.equal(room.ownerTransferDeadline, frozenNow + 20);
+
+    await waitForCondition(() => room.hostUid === second.uid);
+
+    assert.equal(room.hostUid, second.uid, "elapsed timer must transfer authority even if Date.now-style wall clock is frozen");
+    assert.equal(room.ownerTransferDeadline, undefined);
+    assert.equal(room.players.get(owner.uid)?.connected, false);
+    assert.equal(room.players.get(second.uid)?.isHost, true);
+  } finally {
+    manager.dispose();
+  }
+});
+
 test("explicit named-owner leave transfers authority immediately and keeps the room alive", () => {
   const manager = new RoomManager();
   const owner = createNamedRoom(manager);
