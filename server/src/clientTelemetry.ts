@@ -24,6 +24,8 @@ const CLIENT_EVENTS = new Set<ClientTelemetryEvent>([
 
 const MAX_EVENTS_PER_BATCH = 20;
 const MAX_KEYS_PER_EVENT = 24;
+const CLIENT_SESSION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -54,6 +56,10 @@ export function parseClientTelemetryBatch(value: unknown): TelemetryEnvelope[] |
     const props: AnalyticsProps = {};
     for (const [key, rawValue] of Object.entries(raw.props)) {
       if (!/^[A-Za-z][A-Za-z0-9]{0,39}$/.test(key)) return null;
+      if (
+        key === "clientSessionId" &&
+        (typeof rawValue !== "string" || !CLIENT_SESSION_ID_RE.test(rawValue))
+      ) return null;
       const scalar = telemetryScalar(rawValue);
       if (scalar === undefined) return null;
       props[key] = scalar;
