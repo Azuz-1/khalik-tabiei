@@ -13,6 +13,7 @@ test("client telemetry accepts bounded scalar batches and rejects malformed enve
         browserFamily: "samsung",
         viewportBucket: "sm",
         touch: true,
+        clientSessionId: "11111111-1111-4111-8111-111111111111",
       },
     }],
   });
@@ -22,11 +23,18 @@ test("client telemetry accepts bounded scalar batches and rejects malformed enve
     browserFamily: "samsung",
     viewportBucket: "sm",
     touch: true,
+    clientSessionId: "11111111-1111-4111-8111-111111111111",
   });
 
   assert.equal(parseClientTelemetryBatch({ events: [] }), null);
   assert.equal(parseClientTelemetryBatch({ events: [{ event: "game_started", props: {} }] }), null);
   assert.equal(parseClientTelemetryBatch({ events: [{ event: "client_started", props: { nested: { nope: true } } }] }), null);
+  assert.equal(parseClientTelemetryBatch({
+    events: [{
+      event: "client_started",
+      props: { clientSessionId: "not-a-uuid" },
+    }],
+  }), null);
 });
 
 test("client telemetry strips raw identity and adds a separate pseudonymous analytics id", () => {
@@ -63,7 +71,7 @@ test("client telemetry strips raw identity and adds a separate pseudonymous anal
       routeBucket: "join",
     },
   });
-  assert.match(String(recorded[0]?.props.analyticsPlayerId), /^ap_[0-9a-f]{32}$/);
+  assert.match(String(recorded[0]?.props.analyticsPlayerId), /^ap2_[0-9a-f]{32}$/);
   assert.notEqual(recorded[0]?.props.analyticsPlayerId, identity);
   assert.equal(analyticsPlayerId(identity), analyticsPlayerId(identity));
   assert.notEqual(analyticsPlayerId(identity), analyticsPlayerId("u_other"));
