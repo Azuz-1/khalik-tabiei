@@ -1,7 +1,8 @@
 import { WebSocket } from "ws";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
-const ORIGIN = process.env.ORIGIN ?? URL.replace(/^ws/, "http").replace(/\/ws$/, "");
+const HTTP_BASE = process.env.HTTP_BASE ?? URL.replace(/^ws/, "http").replace(/\/ws$/, "");
+const ORIGIN = process.env.ORIGIN ?? HTTP_BASE;
 const TIMEOUT_MS = 40_000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -25,7 +26,7 @@ class Client {
 
   async connect() {
     if (!this.cookie) {
-      const response = await fetch(`${ORIGIN}/api/session`);
+      const response = await fetch(`${HTTP_BASE}/api/session`);
       check(response.ok, `${this.label}: session bootstrap succeeds`);
       this.cookie = response.headers.get("set-cookie")?.split(";", 1)[0] ?? null;
     }
