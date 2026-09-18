@@ -23,6 +23,29 @@ test("operational limits default to the shipped shared-NAT-safe values", () => {
   assert.equal(config.maxRequestsPerUid, 128);
 });
 
+test("production analytics requires an independent strong secret unless explicitly disabled", () => {
+  const productionBase = {
+    ...baseEnv,
+    NODE_ENV: "production",
+    PUBLIC_ORIGIN: "https://example.invalid",
+  };
+
+  assert.throws(
+    () => readConfig(productionBase),
+    /ANALYTICS_SECRET/,
+  );
+
+  assert.doesNotThrow(() => readConfig({
+    ...productionBase,
+    ANALYTICS_SECRET: "analytics-production-secret-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  }));
+
+  assert.doesNotThrow(() => readConfig({
+    ...productionBase,
+    ANALYTICS: "off",
+  }));
+});
+
 test("every new operational limit is overridable from the environment", () => {
   const config = readConfig({
     ...baseEnv,
