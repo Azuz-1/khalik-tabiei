@@ -953,7 +953,7 @@ export class RoomManager {
     const deadline = this.deps.now() + this.deps.ownerTransferGraceMs;
     room.ownerTransferDeadline = deadline;
 
-    const attemptTransfer = (): void => {
+    this.schedule(room, OWNER_TRANSFER_TIMER, this.deps.ownerTransferGraceMs, () => {
       const currentOwner = room.players.get(ownerUid);
       if (
         room.hostUid !== ownerUid ||
@@ -963,20 +963,14 @@ export class RoomManager {
         room.ownerTransferDeadline !== deadline
       ) return;
 
-      // Node timers are not guaranteed to wake at or after an exact wall-clock
-      // deadline. If the callback arrives a millisecond early, preserve the
-      // one-shot ownership transfer by waiting the remaining time instead of
-      // consuming the timer and leaving the room ownerless indefinitely.
-      const remainingMs = deadline - this.deps.now();
-      if (remainingMs > 0) {
-        this.schedule(room, OWNER_TRANSFER_TIMER, remainingMs, attemptTransfer);
-        return;
-      }
-
-      if (this.maybeTransferOwnership(room)) this.broadcast(room);
-    };
-
-    this.schedule(room, OWNER_TRANSFER_TIMER, this.deps.ownerTransferGraceMs, attemptTransfer);
+      // The timer itself is authoritative that the grace interval elapsed.
+      // Re-checking a wall-clock deadline here can lose the one-shot transfer
+      // if the callback wakes just before Date.now() crosses the computed
+      // deadline, or if the wall clock moves backward while the monotonic
+      // timer continues normally.
+      const successor = this.ownerCandidate(room, ownerUid);
+      if (successor && this.transferOwnership(room, successor.uid)) this.broadcast(room);
+    });
   }
 
   private refreshReadyRecoveryDeadline(room: RoomState): void {
