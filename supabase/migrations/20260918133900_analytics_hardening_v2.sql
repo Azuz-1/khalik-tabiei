@@ -36,6 +36,42 @@ create index if not exists analytics_events_environment_time_idx
 comment on table public.analytics_events is
   'Server-authored and allowlisted product telemetry. May contain a bounded pseudonymous browser analytics identity; does not contain player names, raw gameplay UIDs, room codes, raw IP addresses, prompt text, or voter-to-target mappings.';
 
+create or replace view public.analytics_room_participants
+with (security_invoker = on)
+as
+select
+  properties->>'roomSessionId' as room_session_id,
+  properties->>'analyticsPlayerId' as analytics_player_id,
+  bool_or(coalesce((properties->>'isOwner')::boolean, false)) as was_owner,
+  min(occurred_at) as first_seen_at,
+  max(occurred_at) as last_seen_at
+from public.analytics_events
+where event_type = 'room_participant_joined'
+  and properties ? 'roomSessionId'
+  and properties ? 'analyticsPlayerId'
+  and (schema_version = 1 or environment = 'production')
+group by 1, 2;
+
+create or replace view public.analytics_match_participants
+with (security_invoker = on)
+as
+select
+  properties->>'roomSessionId' as room_session_id,
+  properties->>'matchId' as match_id,
+  (properties->>'matchOrdinal')::int as match_ordinal,
+  properties->>'analyticsPlayerId' as analytics_player_id,
+  bool_or(coalesce((properties->>'isOwner')::boolean, false)) as was_owner,
+  max((properties->>'startingPlayerCount')::int) as starting_player_count,
+  max((properties->>'targetChallenges')::int) as target_challenges,
+  min(occurred_at) as first_seen_at
+from public.analytics_events
+where event_type = 'match_participant'
+  and properties ? 'roomSessionId'
+  and properties ? 'matchId'
+  and properties ? 'analyticsPlayerId'
+  and (schema_version = 1 or environment = 'production')
+group by 1, 2, 3, 4;
+
 create or replace view public.analytics_player_activity_daily
 with (security_invoker = on)
 as
@@ -164,9 +200,26 @@ select
       and (schema_version = 1 or environment = 'production')
   )::bigint as unique_visitors,
   count(distinct properties->>'analyticsPlayerId') filter (
-    where event_type = 'match_participant'
-      and properties ? 'analyticsPlayerId'
-      and (schema_version = 1 or environment = 'production')
+    where properties ? 'analyticsPlayerId'
+      and (
+        (
+          schema_version >= 2
+          and environment = 'production'
+          and event_type = 'match_participant'
+        )
+        or
+        (
+          schema_version = 1
+          and (
+            event_type = 'match_participant'
+            or (
+              event_type = 'client_session_summary'
+              and properties->>'summaryKind' = 'match_participation'
+              and properties->>'playedMatch' = 'true'
+            )
+          )
+        )
+      )
   )::bigint as unique_players,
   count(*) filter (
     where event_type = 'game_started'
@@ -228,9 +281,26 @@ select
       and (schema_version = 1 or environment = 'production')
   )::bigint as unique_visitors,
   count(distinct properties->>'analyticsPlayerId') filter (
-    where event_type = 'match_participant'
-      and properties ? 'analyticsPlayerId'
-      and (schema_version = 1 or environment = 'production')
+    where properties ? 'analyticsPlayerId'
+      and (
+        (
+          schema_version >= 2
+          and environment = 'production'
+          and event_type = 'match_participant'
+        )
+        or
+        (
+          schema_version = 1
+          and (
+            event_type = 'match_participant'
+            or (
+              event_type = 'client_session_summary'
+              and properties->>'summaryKind' = 'match_participation'
+              and properties->>'playedMatch' = 'true'
+            )
+          )
+        )
+      )
   )::bigint as unique_players,
   count(*) filter (
     where event_type = 'game_started'
@@ -344,6 +414,8 @@ where environment = 'production'
   and properties ? 'clientSessionId'
 group by properties->>'clientSessionId';
 
+revoke all on public.analytics_room_participants from anon, authenticated;
+revoke all on public.analytics_match_participants from anon, authenticated;
 revoke all on public.analytics_player_activity_daily from anon, authenticated;
 revoke all on public.analytics_player_journeys from anon, authenticated;
 revoke all on public.analytics_room_overlap from anon, authenticated;
@@ -352,6 +424,8 @@ revoke all on public.analytics_daily_overview from anon, authenticated;
 revoke all on public.analytics_retention_cohorts from anon, authenticated;
 revoke all on public.analytics_client_sessions from anon, authenticated;
 
+grant select on public.analytics_room_participants to service_role;
+grant select on public.analytics_match_participants to service_role;
 grant select on public.analytics_player_activity_daily to service_role;
 grant select on public.analytics_player_journeys to service_role;
 grant select on public.analytics_room_overlap to service_role;
