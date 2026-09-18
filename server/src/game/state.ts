@@ -79,8 +79,14 @@ export interface RoomState {
   hostUid: string;
   hostConnected: boolean;
   hostCloseDeadline?: number;
-  /** Named-owner authority transfer deadline; never pauses gameplay. */
+  /** Named-owner authority transfer deadline while the grace timer is pending; never pauses gameplay. */
   ownerTransferDeadline?: number;
+  /**
+   * True after the authoritative owner-transfer grace timer has elapsed.
+   * Remains true when no eligible successor exists yet so a later
+   * join/reconnect can complete the transfer without another wall-clock check.
+   */
+  ownerTransferGraceElapsed?: boolean;
   /** Earliest time the owner may use the role-blind QUESTION redeal recovery. */
   readyRecoveryDeadline?: number;
   pause?: PauseState;
@@ -132,6 +138,7 @@ export function createRoomState(code: string, hostUid: string, now: number): Roo
     code,
     hostUid,
     hostConnected: true,
+    ownerTransferGraceElapsed: false,
     phase: "LOBBY",
     createdAt: now,
     updatedAt: now,
