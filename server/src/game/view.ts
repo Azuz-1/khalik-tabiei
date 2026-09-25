@@ -1,7 +1,7 @@
 import type { ClientView, PublicPlayer, RevealedAnswer, Role, ScoreReason } from "../../../shared/types.js";
 import { CATEGORIES, GAME_MODES, MAX_CHALLENGES_PER_ROUND } from "../../../shared/constants.js";
 import { activePlayers, roundParticipants, type RoomState, type RoundState } from "./state.js";
-import { questionFor, ranking } from "./engine.js";
+import { maxChallengesForParticipantCount, questionFor, ranking } from "./engine.js";
 import { promptNoveltyToken } from "./promptNovelty.js";
 
 const SECRET_IMITATION_PHASES = new Set(["QUESTION", "COUNTDOWN", "ACTION", "HOLD"]);
@@ -66,6 +66,10 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   const isOwner = uid === room.hostUid;
   const self = room.players.get(uid);
   const round = room.round;
+  const activeCount = activePlayers(room).length;
+  const lobbyStintMax = activeCount >= room.minPlayers
+    ? maxChallengesForParticipantCount(activeCount)
+    : undefined;
   const roundMaxChallenges = round?.maxChallenges ?? MAX_CHALLENGES_PER_ROUND;
   const view: ClientView = {
     self: { uid, role, name: self?.name, connected: self?.connected ?? true, isOwner },
@@ -76,6 +80,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       totalRounds: room.totalRounds,
       targetChallenges: room.targetChallenges,
       completedChallenges: room.completedChallenges,
+      ...(lobbyStintMax !== undefined ? { impostorStintMax: lobbyStintMax } : {}),
       maxPlayers: room.maxPlayers,
       minPlayers: room.minPlayers,
       hostUid: room.hostUid,
