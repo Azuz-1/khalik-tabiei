@@ -44,12 +44,13 @@ function addPlayer(room: RoomState, uid: string, name: string): void {
   room.players.set(uid, player);
 }
 
-function roomWithFourPlayers(): RoomState {
+function roomWithFivePlayers(): RoomState {
   const room = createRoomState("ABCDE", "host", NOW());
   addPlayer(room, "p1", "لاعب1");
   addPlayer(room, "p2", "لاعب2");
   addPlayer(room, "p3", "لاعب3");
   addPlayer(room, "p4", "لاعب4");
+  addPlayer(room, "p5", "لاعب5");
   return room;
 }
 
@@ -158,7 +159,7 @@ test("the 570-prompt expansion has explicit family metadata and keeps Saudi copy
 });
 
 test("current-match prompt usage resets after exhaustion without clearing room-session freshness", () => {
-  const room = roomWithFourPlayers();
+  const room = roomWithFivePlayers();
   engine.setSettings(room, "host", { selectedModes: ["HANDS"] }, deps);
   engine.startGame(room, "host", deps);
 
