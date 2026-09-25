@@ -147,7 +147,11 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
             <span className="code-label">المباراة</span>
             <div className="manager-subcard card stack" style={{ gap: 8 }}>
               <strong>🏅 {view.room.targetChallenges} تحدّيات</strong>
-              <span className="helper">كل متخفي يستمر حتى ينمسك أو يكمل 3 تحدّيات كحد أقصى.</span>
+              <span className="helper">{view.room.impostorStintMax
+                ? view.room.impostorStintMax === 1
+                  ? "كل متخفي له تحدّي واحد."
+                  : `كل متخفي يستمر حتى ينمسك أو يكمل ${view.room.impostorStintMax} تحدّيات كحد أقصى.`
+                : "مدة دور المتخفي تعتمد على عدد اللاعبين."}</span>
               <span className="helper">المباراة تنتهي عند عدد التحدّيات المختار بالضبط.</span>
               <span className="helper">كل لاعب يجمع نقاطه، وأغلبية الأصوات اللي انرسلت هي اللي تمسك المتخفي.</span>
             </div>
