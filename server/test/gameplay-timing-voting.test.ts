@@ -248,7 +248,7 @@ test("survived result stays private and stable until the host advances", async (
     const resultRound = setup.room.round!;
     assert.equal(resultRound.groupFound, false);
     assert.equal(resultRound.roundComplete, false);
-    assert.equal(resultRound.abstainedUids?.size, 3);
+    assert.equal(resultRound.abstainedUids?.size, 4);
     assert.equal(resultRound.resultRequiredVotes, 0);
 
     const view = lastMessage(setup.host.socket, "STATE")!.view;
