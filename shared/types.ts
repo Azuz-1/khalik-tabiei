@@ -165,6 +165,8 @@ export interface ClientView {
     totalRounds: number;
     targetChallenges: number;
     completedChallenges: number;
+    /** Server-authoritative impostor-stint cap for the current active lobby group, when enough players are present. */
+    impostorStintMax?: number;
     maxPlayers: number;
     minPlayers: number;
     hostUid: string;
