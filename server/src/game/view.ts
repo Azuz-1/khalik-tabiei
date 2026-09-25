@@ -202,10 +202,10 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
     const caughtRounds = room.roundOutcomes.filter((outcome) => outcome.caught).length;
     const escapedRounds = room.roundOutcomes.filter((outcome) => !outcome.caught).length;
     const completedEscapeRounds = room.roundOutcomes.filter(
-      (outcome) => !outcome.caught && outcome.challengeIndex >= MAX_CHALLENGES_PER_ROUND,
+      (outcome) => !outcome.caught && outcome.challengeIndex >= outcome.maxChallenges,
     ).length;
     const matchEndedUncaughtRounds = room.roundOutcomes.filter(
-      (outcome) => !outcome.caught && outcome.challengeIndex < MAX_CHALLENGES_PER_ROUND,
+      (outcome) => !outcome.caught && outcome.challengeIndex < outcome.maxChallenges,
     ).length;
     view.gameOver = {
       totalRounds: room.roundOutcomes.length,
