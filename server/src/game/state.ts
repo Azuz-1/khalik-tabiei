@@ -72,6 +72,8 @@ export interface RoundOutcome {
   roundIndex: number;
   caught: boolean;
   challengeIndex: number;
+  /** Maximum challenge count that applied to this historical impostor stint. */
+  maxChallenges: number;
 }
 
 export interface RoomState {
