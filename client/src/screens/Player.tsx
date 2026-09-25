@@ -58,7 +58,11 @@ function PlayerLobby({ view }: { view: ClientView }) {
         <h1 className="title" style={{ fontSize: "clamp(30px,9vw,44px)" }}>أنت داخل 🎉</h1>
         <span className="pill-note" style={{ direction: "ltr", marginInline: "auto" }}>غرفة {view.room.code}</span>
         <span className="chip">🏅 منافسة بالنقاط</span>
-        <p className="subtitle">{view.room.targetChallenges} تحدّيات بالضبط. كل متخفي حدّه 3 تحدّيات، وأغلبية الأصوات اللي انرسلت هي اللي تمسكه.</p>
+        <p className="subtitle">{view.room.targetChallenges} تحدّيات بالضبط. {view.room.impostorStintMax
+          ? view.room.impostorStintMax === 1
+            ? "كل متخفي له تحدّي واحد."
+            : `كل متخفي حدّه ${view.room.impostorStintMax} تحدّيات.`
+          : "مدة دور المتخفي تعتمد على عدد اللاعبين."} وأغلبية الأصوات اللي انرسلت هي اللي تمسكه.</p>
         <div className="players">{selectedModes.map((mode) => <span className="chip" key={mode.id}>{mode.icon} {mode.label}</span>)}</div>
       </div>
       <div className="card stack quick-points-card">
