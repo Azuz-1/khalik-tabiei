@@ -23,10 +23,10 @@ export const ROUND_OPTIONS = CHALLENGE_OPTIONS;
 export const DEFAULT_ROUNDS = 9;
 /** Default competitive match target when the Host does not change the Challenge count. */
 export const BASE_CHALLENGES = 9;
-/** Every impostor stint can last at most three Challenges, for every supported player count. */
+/** Maximum impostor-stint length for groups of five or more. */
 export const MAX_CHALLENGES_PER_ROUND = 3;
-/** Compatibility alias retained for older imports/tests; three-player stints now also use three Challenges. */
-export const MAX_CHALLENGES_THREE_PLAYERS = MAX_CHALLENGES_PER_ROUND;
+/** Compatibility alias for the three-player stint cap. */
+export const MAX_CHALLENGES_THREE_PLAYERS = 1;
 
 export const GAME_MODES: GameModeInfo[] = [
   {
