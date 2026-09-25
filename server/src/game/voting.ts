@@ -190,6 +190,7 @@ export function computeResult(room: RoomState, deps: VotingDeps): void {
       roundIndex: round.index,
       caught: found,
       challengeIndex: round.challengeIndex,
+      maxChallenges: resolvedMaxChallenges(round),
     });
   }
 
