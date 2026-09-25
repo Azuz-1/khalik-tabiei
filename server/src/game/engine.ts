@@ -4,7 +4,6 @@ import {
   BASE_CHALLENGES,
   GAME_MODE_IDS,
   MAX_CHALLENGES_PER_ROUND,
-  MAX_CHALLENGES_THREE_PLAYERS,
   ROUND_OPTIONS,
 } from "../../../shared/constants.js";
 import { GameError } from "./errors.js";
@@ -133,22 +132,10 @@ export function selectImpostor(room: RoomState, deps: EngineDeps = defaultDeps):
   const active = activePlayers(room);
   if (!active.length) throw new GameError("NOT_ENOUGH_PLAYERS");
 
-  const counts = new Map(active.map((player) => [player.uid, 0]));
-  for (const uid of room.impostorHistory) {
-    if (counts.has(uid)) counts.set(uid, (counts.get(uid) ?? 0) + 1);
-  }
-
-  const minimum = Math.min(...counts.values());
-  const weights = active.map(
-    (player) => 1 / (1 + (counts.get(player.uid) ?? 0) - minimum),
-  );
-  let ticket = deps.rng() * weights.reduce((sum, weight) => sum + weight, 0);
-
-  for (let index = 0; index < active.length; index += 1) {
-    ticket -= weights[index]!;
-    if (ticket < 0) return active[index]!.uid;
-  }
-  return active[active.length - 1]!.uid;
+  // Every active player is equally eligible at the start of every new stint,
+  // including the player who was the impostor in the previous stint.
+  const normalizedRng = Math.max(0, Math.min(deps.rng(), 1 - Number.EPSILON));
+  return active[Math.floor(normalizedRng * active.length)]!.uid;
 }
 
 function shuffle<T>(items: T[], rng: () => number): T[] {
@@ -247,8 +234,9 @@ function pickPrompt(
   return prompt;
 }
 
-function maxChallengesForParticipantCount(participantCount: number): number {
-  return participantCount === 3 ? MAX_CHALLENGES_THREE_PLAYERS : MAX_CHALLENGES_PER_ROUND;
+export function maxChallengesForParticipantCount(participantCount: number): number {
+  if (participantCount < 3) throw new GameError("NOT_ENOUGH_PLAYERS");
+  return Math.min(participantCount - 2, MAX_CHALLENGES_PER_ROUND);
 }
 
 function resolvedMaxChallenges(round: RoundState): number {
