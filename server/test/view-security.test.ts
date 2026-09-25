@@ -196,16 +196,17 @@ test("votes remain private through RESULT and no voter-to-target mapping is seri
 });
 
 test("survived challenge 1/2 result hides identity and tally but keeps already-public prompt public", () => {
-  const room = startedRoom();
+  const room = startedRoom(4);
   const round = room.round!;
   const prompt = round.prompt;
   const promptId = round.promptId;
   advanceToVoting(room);
 
-  const [a, b, c] = round.participantUids;
+  const [a, b, c, d] = round.participantUids;
   engine.submitVote(room, a, b, deps);
   engine.submitVote(room, b, c, deps);
-  engine.submitVote(room, c, a, deps);
+  engine.submitVote(room, c, d, deps);
+  engine.submitVote(room, d, a, deps);
   engine.computeResult(room, deps);
 
   assert.equal(round.groupFound, false);
@@ -266,9 +267,9 @@ test("active-stint client views expose no score, scoreboard, ranking, points, or
 test("game over exposes challenge summary and final scoreboard without vote mapping", () => {
   const room = startedRoom();
   room.roundOutcomes = [
-    { roundIndex: 1, caught: true, challengeIndex: 1 },
-    { roundIndex: 2, caught: false, challengeIndex: 2 },
-    { roundIndex: 3, caught: true, challengeIndex: 1 },
+    { roundIndex: 1, caught: true, challengeIndex: 1, maxChallenges: 1 },
+    { roundIndex: 2, caught: false, challengeIndex: 2, maxChallenges: 3 },
+    { roundIndex: 3, caught: true, challengeIndex: 1, maxChallenges: 1 },
   ];
   room.completedChallenges = 10;
   room.players.get(testUid(1))!.score = 4;
