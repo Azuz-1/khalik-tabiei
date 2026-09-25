@@ -1,4 +1,4 @@
-/** Real WebSocket E2E for four-player 3/2/1 streak scoring and secrecy. */
+/** Real WebSocket E2E for five-player 3/2/1 streak scoring and secrecy. */
 import { WebSocket } from "ws";
 
 const URL = process.env.URL ?? "ws://localhost:8080/ws";
@@ -91,8 +91,8 @@ async function waitForAll(clients, predicate, label, timeout = TIMEOUT_MS) {
 function roles(players) {
   const impostors = players.filter((player) => player.view?.isImpostor === true);
   const normals = players.filter((player) => player.view?.isImpostor === false);
-  ok(impostors.length === 1, "four-player stint has exactly one private impostor");
-  ok(normals.length === 3, "four-player stint has three normals");
+  ok(impostors.length === 1, "five-player stint has exactly one private impostor");
+  ok(normals.length === 4, "five-player stint has four normals");
   return { impostor: impostors[0], normals };
 }
 
@@ -159,23 +159,23 @@ async function nextChallenge(host, players, expectedIndex) {
 }
 
 async function main() {
-  console.log("Connecting four-player competitive scoring E2E…");
+  console.log("Connecting five-player competitive scoring E2E…");
   const host = new Client("HOST-SCORING");
-  const players = [new Client("سلمان"), new Client("ناصر"), new Client("فيصل"), new Client("خالد")];
+  const players = [new Client("سلمان"), new Client("ناصر"), new Client("فيصل"), new Client("خالد"), new Client("تركي")];
   await Promise.all([host.ready, ...players.map((player) => player.ready)]);
 
   host.send({ t: "CREATE_ROOM" });
   await waitFor(host, (client) => client.phase() === "LOBBY", "scoring lobby");
   const code = host.view.room.code;
   for (const player of players) player.send({ t: "JOIN_ROOM", code, name: player.label });
-  await waitFor(host, (client) => client.view?.players?.length === 4, "four players joined");
+  await waitFor(host, (client) => client.view?.players?.length === 5, "five players joined");
 
   host.send({ t: "SET_SETTINGS", selectedModes: ["HANDS", "POINT", "NUMBER"] });
   await waitFor(host, (client) => client.view?.room?.selectedModes?.length === 3, "mode settings");
   host.send({ t: "START_GAME" });
   await waitForAll([host, ...players], (client) => client.phase() === "QUESTION", "Challenge 1 QUESTION");
   ok(host.view?.room?.playStyle === "INDIVIDUAL", "one competitive ruleset is active");
-  ok(host.view?.challenge?.max === 3, "four-player stint allows three Challenges");
+  ok(host.view?.challenge?.max === 3, "five-player stint allows three Challenges");
 
   let current = await physical(host, players, "C1");
   const impostorUid = current.impostor.uid;
@@ -202,8 +202,8 @@ async function main() {
 
   ok(host.view?.result?.groupFound === true, "three correct normals catch the impostor in C3");
   ok(host.view?.result?.roundComplete === true, "C3 catch completes the stint");
-  ok(host.view?.result?.voteTally?.length === 4, "stint-end aggregate tally lists all four participants");
-  ok(Array.isArray(host.view?.scoreboard) && host.view.scoreboard.length === 4, "stint end exposes scoreboard");
+  ok(host.view?.result?.voteTally?.length === 5, "stint-end aggregate tally lists all five participants");
+  ok(Array.isArray(host.view?.scoreboard) && host.view.scoreboard.length === 5, "stint end exposes scoreboard");
 
   const byUid = new Map(host.view.scoreboard.map((row) => [row.uid, row]));
   ok(byUid.get(normalUids[0])?.roundDelta === 3, "normal correct continuously from C1 gets +3");
@@ -220,11 +220,11 @@ async function main() {
   await sleep(150);
   for (const client of [host, ...players]) client.close();
 
-  console.log(`\n${failures === 0 ? "4P SCORING E2E ALL PASSED ✅" : `${failures} 4P SCORING E2E FAILED ❌`}`);
+  console.log(`\n${failures === 0 ? "5P SCORING E2E ALL PASSED ✅" : `${failures} 5P SCORING E2E FAILED ❌`}`);
   process.exit(failures === 0 ? 0 : 1);
 }
 
 main().catch((error) => {
-  console.error("4P SCORING E2E FATAL", error);
+  console.error("5P SCORING E2E FATAL", error);
   process.exit(1);
 });
