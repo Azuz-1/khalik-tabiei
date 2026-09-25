@@ -146,8 +146,44 @@ test("majority threshold is floor(n / 2) + 1 for 3-10 players", () => {
   }
 });
 
-test("one selected mode repeats across challenges and new impostor stints", () => {
+
+test("impostor stint cap is 1 for three players, 2 for four, and 3 for five through ten", () => {
+  assert.equal(engine.maxChallengesForParticipantCount(3), 1);
+  assert.equal(engine.maxChallengesForParticipantCount(4), 2);
+  assert.equal(engine.maxChallengesForParticipantCount(5), 3);
+  assert.equal(engine.maxChallengesForParticipantCount(6), 3);
+  assert.equal(engine.maxChallengesForParticipantCount(10), 3);
+});
+
+test("previous impostor remains immediately eligible and history does not bias selection", () => {
   const room = roomWith(3);
+  room.impostorHistory = ["p1", "p1", "p1", "p1"];
+  const selected = engine.selectImpostor(room, { rng: () => 0.2, now: NOW });
+  assert.equal(selected, "p1");
+});
+
+test("four-player stint survives at most two Challenges", () => {
+  const room = roomWith(4);
+  engine.startGame(room, "host", deps);
+  const impostorUid = room.round!.impostorUid;
+  assert.equal(room.round!.maxChallenges, 2);
+
+  readyToVote(room);
+  voteNoMajority(room);
+  assert.equal(room.round!.roundComplete, false);
+  engine.nextRound(room, "host", deps);
+
+  assert.equal(room.round!.challengeIndex, 2);
+  assert.equal(room.round!.impostorUid, impostorUid);
+  readyToVote(room);
+  voteNoMajority(room);
+
+  assert.equal(room.round!.roundComplete, true);
+  assert.equal(room.players.get(impostorUid)?.score, 2);
+});
+
+test("one selected mode repeats across challenges and new impostor stints", () => {
+  const room = roomWith(5);
   engine.setSettings(room, "host", { selectedModes: ["POINT"] }, deps);
   engine.startGame(room, "host", deps);
   const impostorUid = room.round!.impostorUid;
@@ -169,7 +205,7 @@ test("one selected mode repeats across challenges and new impostor stints", () =
 });
 
 test("same impostor stays through a three-Challenge stint while mode can change", () => {
-  const room = roomWith(4);
+  const room = roomWith(5);
   engine.startGame(room, "host", deps);
 
   const impostorUid = room.round!.impostorUid;
@@ -194,7 +230,7 @@ test("same impostor stays through a three-Challenge stint while mode can change"
 });
 
 test("balanced mode bag is consumed per challenge and refills only after all selected modes", () => {
-  const room = roomWith(4);
+  const room = roomWith(5);
   engine.startGame(room, "host", deps);
   const sequence: GameMode[] = [];
 
@@ -331,8 +367,8 @@ test("impostor majority catches them, ends the stint immediately, but the match 
   assert.ok(room.round!.participantUids.includes(room.round!.impostorUid));
 });
 
-test("surviving all three Challenges completes a four-player stint and awards three survival points", () => {
-  const room = roomWith(4);
+test("surviving all three Challenges completes a five-player stint and awards three survival points", () => {
+  const room = roomWith(5);
   engine.startGame(room, "host", deps);
   const impostorUid = room.round!.impostorUid;
 
