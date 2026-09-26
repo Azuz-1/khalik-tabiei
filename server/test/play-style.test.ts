@@ -77,7 +77,7 @@ test("single product ruleset starts as competitive INDIVIDUAL scoring", () => {
   engine.startGame(room, "host", deps);
   assert.equal(room.playStyle, "INDIVIDUAL");
   assert.equal(room.targetChallenges, 9);
-  assert.equal(room.round?.maxChallenges, 3);
+  assert.equal(room.round?.maxChallenges, 2);
 
   toVoting(room);
   const round = room.round!;
@@ -143,8 +143,8 @@ test("GAME_OVER exposes final ranking with shared ranks and no vote mapping", ()
   room.players.get("p3")!.score = 2;
   room.completedChallenges = 10;
   room.roundOutcomes = [
-    { roundIndex: 1, caught: true, challengeIndex: 1 },
-    { roundIndex: 2, caught: false, challengeIndex: 2 },
+    { roundIndex: 1, caught: true, challengeIndex: 1, maxChallenges: 1 },
+    { roundIndex: 2, caught: false, challengeIndex: 1, maxChallenges: 1 },
   ];
 
   const view = buildView(room, "host", "http://game/join/ABCDE");

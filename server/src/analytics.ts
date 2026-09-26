@@ -32,8 +32,8 @@ export interface AnalyticsRecord {
 }
 export type AnalyticsSink = (records: readonly AnalyticsRecord[]) => void | Promise<void>;
 
-/** Catch threshold changed to a strict majority of ballots actually cast. */
-export const ANALYTICS_RULES_VERSION = "competitive-cast-vote-majority-v3";
+/** v4: player-count stint caps plus uniform fresh-stint impostor selection. */
+export const ANALYTICS_RULES_VERSION = "competitive-cast-vote-majority-v4";
 export const ANALYTICS_CONTENT_VERSION = "imitation-900-novelty-v1";
 
 export const ANALYTICS_SCHEMA_VERSION = 2;

@@ -2,8 +2,8 @@
  * Real WebSocket E2E for the one competitive «خلك طبيعي» ruleset.
  *
  * Host + three player phones run through the production timers, secrecy boundary,
- * three-Challenge impostor stint cap, score reveal, repeated weighted role
- * selection and the exact nine-Challenge default GAME_OVER condition.
+ * one-Challenge impostor stint cap, score reveal, fresh uniform role selection
+ * and the exact nine-Challenge default GAME_OVER condition.
  */
 import { WebSocket } from "ws";
 
@@ -190,7 +190,7 @@ async function submitAndWait(host, voter, targetUid, expectedSubmitted, label) {
   ok(host.view?.liveVoteTally === undefined, `${label}: target totals remain hidden after vote ${expectedSubmitted}`);
 }
 
-async function surviveFirstChallenge(host, players, current, label) {
+async function surviveSingleChallengeStint(host, players, current, label) {
   await startVoting(host, players, label);
   const [firstNormal, secondNormal] = current.normals;
   await submitAndWait(host, firstNormal, current.impostor.uid, 1, label);
@@ -199,10 +199,10 @@ async function surviveFirstChallenge(host, players, current, label) {
   await waitForAll([host, ...players], (client) => client.phase() === "RESULT", `${label} result`);
 
   ok(host.view?.result?.groupFound === false, `${label}: one correct normal is below majority`);
-  ok(host.view?.result?.roundComplete === false, `${label}: impostor stint continues`);
-  ok(host.view?.result?.impostorUid === undefined, `${label}: intermediate result hides impostor identity`);
-  ok(host.view?.result?.voteTally === undefined, `${label}: intermediate result hides vote distribution`);
-  ok(host.view?.scoreboard === undefined, `${label}: intermediate result hides scoreboard`);
+  ok(host.view?.result?.roundComplete === true, `${label}: three-player stint completes after one Challenge`);
+  ok(host.view?.result?.impostorUid === current.impostor.uid, `${label}: completed one-Challenge stint reveals impostor identity`);
+  ok(host.view?.result?.voteTally?.length === 3, `${label}: completed stint reveals aggregate vote distribution`);
+  ok(Array.isArray(host.view?.scoreboard), `${label}: completed stint reveals scoreboard`);
   ok(host.view?.room?.phaseEndsAt === undefined, `${label}: result has no auto-advance deadline`);
   for (const client of [host, ...players]) assertNoMapping(client, `${client.label} ${label}`);
 }
@@ -252,27 +252,24 @@ async function main() {
 
   ok(host.view?.room?.playStyle === "INDIVIDUAL", "single product ruleset is competitive scoring");
   ok(host.view?.room?.targetChallenges === 9, "match advertises exact nine-Challenge default");
-  ok(host.view?.challenge?.max === 3, "three-player impostor stint has three-Challenge maximum");
+  ok(host.view?.challenge?.max === 1, "three-player impostor stint has one-Challenge maximum");
 
-  console.log("\n[first stint] C1 survival then C2 catch tests trailing 2/1 scoring + survival point:");
+  console.log("\n[first stint] C1 survival completes the three-player stint and scores immediately:");
   let current = await physical(host, players, "C1", players[0]);
   const firstImpostorUid = current.impostor.uid;
-  await surviveFirstChallenge(host, players, current, "C1");
+  await surviveSingleChallengeStint(host, players, current, "C1");
   ok(host.view?.room?.completedChallenges === 1, "C1 increments completed Challenge count");
+  const firstStintScores = host.view.scoreboard;
+  const firstCorrect = firstStintScores?.find((row) => row.uid === current.normals[0].uid);
+  const firstHidden = firstStintScores?.find((row) => row.uid === firstImpostorUid);
+  ok(firstCorrect?.roundDelta === 1, "one correct vote in a one-Challenge stint gets +1");
+  ok(firstHidden?.roundDelta === 1, "impostor gets +1 for surviving the one-Challenge stint");
 
   await nextQuestion(host, players, 1);
-  ok(host.view?.challenge?.index === 2, "same stint advances to Challenge 2");
+  ok(host.view?.challenge?.index === 1, "a new three-player stint restarts at Challenge 1");
+  ok(host.view?.challenge?.max === 1, "the new stint keeps the one-Challenge cap");
   current = await physical(host, players, "C2");
-  ok(current.impostor.uid === firstImpostorUid, "same impostor stays for the second Challenge");
   await catchCurrent(host, players, current, "C2");
-
-  const firstStintScores = host.view.scoreboard;
-  const early = firstStintScores?.find((row) => row.uid === current.normals[0].uid);
-  const late = firstStintScores?.find((row) => row.uid === current.normals[1].uid);
-  const hidden = firstStintScores?.find((row) => row.uid === current.impostor.uid);
-  ok(early?.roundDelta === 2, "normal correct continuously from C1 gets +2");
-  ok(late?.roundDelta === 1, "normal whose correct streak begins in C2 gets +1");
-  ok(hidden?.roundDelta === 1, "impostor gets +1 for surviving C1 before being caught");
 
   let completed = 2;
   while (completed < 9) {

@@ -90,7 +90,7 @@ function RulesTabs() {
           <p className="subtitle" style={{ margin: 0 }}>1. كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</p>
           <p className="subtitle" style={{ margin: 0 }}>2. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
           <p className="subtitle" style={{ margin: 0 }}>3. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
-          <p className="subtitle" style={{ margin: 0 }}>4. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل نفس المتخفي، وبحد أقصى 3 تحدّيات في دوره.</p>
+          <p className="subtitle" style={{ margin: 0 }}>4. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل دوره حسب عدد اللاعبين: تحدّي واحد مع 3 لاعبين، تحدّيين مع 4، و3 تحدّيات مع 5 أو أكثر.</p>
           <p className="helper" style={{ margin: 0 }}>مالك الغرفة يلعب معكم ويختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
         </div>
       </div>

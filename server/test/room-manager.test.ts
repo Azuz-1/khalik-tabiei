@@ -241,7 +241,7 @@ test("survived challenge advances with same impostor and next balanced challenge
     holdMs: 2,
     promptRevealMs: 2,
   });
-  const { host, players, room } = await toDiscussion(manager);
+  const { host, players, room } = await toDiscussion(manager, 4);
   const firstRound = room.round!;
   const firstImpostor = firstRound.impostorUid;
   const firstMode = firstRound.mode;
@@ -251,7 +251,8 @@ test("survived challenge advances with same impostor and next balanced challenge
   manager.handle(host.conn, { t: "START_VOTING" });
   manager.handle(players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: players[1]!.uid });
   manager.handle(players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[2]!.uid });
-  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
+  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[3]!.uid });
+  manager.handle(players[3]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round?.roundComplete, false);
 

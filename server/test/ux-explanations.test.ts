@@ -109,7 +109,7 @@ test("exact match boundary distinguishes a partial final stint from a full three
   assert.equal(partialGameOver.completedEscapeRounds, 0);
   assert.equal(partialGameOver.matchEndedUncaughtRounds, 1);
 
-  const full = roomWithPlayers(4);
+  const full = roomWithPlayers(5);
   engine.setSettings(full, "host", { totalRounds: 3 }, deps);
   engine.startGame(full, "host", deps);
   for (let challenge = 1; challenge <= 3; challenge += 1) {

@@ -55,11 +55,11 @@ function advance(room: RoomState): void {
   engine.nextRound(room, "host", deps);
 }
 
-test("three-player stints also allow three Challenges", () => {
+test("three-player stints allow one Challenge only", () => {
   const room = roomWithPlayers(3);
   engine.startGame(room, "host", deps);
-  assert.equal(room.round?.maxChallenges, 3);
-  assert.equal(buildView(room, "host", "http://game/join/PTS01").challenge?.max, 3);
+  assert.equal(room.round?.maxChallenges, 1);
+  assert.equal(buildView(room, "host", "http://game/join/PTS01").challenge?.max, 1);
 });
 
 test("catching the impostor on Challenge 1 awards correct voters one point only", () => {
@@ -75,8 +75,8 @@ test("catching the impostor on Challenge 1 awards correct voters one point only"
   assert.equal(room.players.get(impostor)?.score, 0);
 });
 
-test("trailing correct streaks award 3/2/1 when a stint reaches Challenge 3", () => {
-  const room = roomWithPlayers(4);
+test("trailing correct streaks award 3/2/1 when a five-player stint reaches Challenge 3", () => {
+  const room = roomWithPlayers(5);
   engine.startGame(room, "host", deps);
   const impostor = room.round!.impostorUid;
   const normals = room.round!.participantUids.filter((uid) => uid !== impostor);
@@ -99,7 +99,7 @@ test("trailing correct streaks award 3/2/1 when a stint reaches Challenge 3", ()
 });
 
 test("correct then wrong then correct restarts the streak at one point", () => {
-  const room = roomWithPlayers(4);
+  const room = roomWithPlayers(5);
   engine.startGame(room, "host", deps);
   const impostor = room.round!.impostorUid;
   const normals = room.round!.participantUids.filter((uid) => uid !== impostor);
@@ -116,7 +116,7 @@ test("correct then wrong then correct restarts the streak at one point", () => {
 });
 
 test("a normal whose final vote is wrong earns zero for the stint", () => {
-  const room = roomWithPlayers(4);
+  const room = roomWithPlayers(5);
   engine.startGame(room, "host", deps);
   const impostor = room.round!.impostorUid;
   const normals = room.round!.participantUids.filter((uid) => uid !== impostor);

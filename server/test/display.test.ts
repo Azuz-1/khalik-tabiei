@@ -73,10 +73,16 @@ test("display projection is public-only and never serializes real participant UI
   assert.equal(displayView.nextRoundWarning, undefined);
   assert.equal(displayView.readyRecovery, undefined);
   assert.deepEqual(displayView.readyProgress, { submitted: 0, total: 3 });
+  assert.equal(displayView.room.impostorStintMax, undefined, "lobby-only cap must not contradict an active stint");
   assert.deepEqual(displayView.players.map((player) => player.seatNumber), [1, 2, 3]);
   for (const uid of UIDS) assert.equal(json.includes(uid), false, `display leaked real uid ${uid}`);
   assert.match(displayView.room.hostUid, /^d_[A-Za-z0-9_-]{16}$/);
   assert.ok(displayView.players.every((player) => /^d_[A-Za-z0-9_-]{16}$/.test(player.uid)));
+});
+
+test("display lobby carries the server-authoritative impostor stint cap", () => {
+  const view = buildDisplayView(seededRoom(), "https://game.test/join/ABCDE", "display-alias-secret");
+  assert.equal(view.room.impostorStintMax, 1);
 });
 
 test("same participant receives different display aliases in different room incarnations", () => {

@@ -141,7 +141,7 @@ export interface GameOverInfo {
   totalRounds: number;
   caughtRounds: number;
   escapedRounds: number;
-  /** Full three-Challenge impostor stints that ended without a capture. */
+  /** Full impostor stints that reached their configured cap without a capture. */
   completedEscapeRounds?: number;
   /** Final partial stint(s) that ended only because the selected match total was reached. */
   matchEndedUncaughtRounds?: number;
@@ -165,6 +165,8 @@ export interface ClientView {
     totalRounds: number;
     targetChallenges: number;
     completedChallenges: number;
+    /** Server-authoritative impostor-stint cap for the current active lobby group, when enough players are present. */
+    impostorStintMax?: number;
     maxPlayers: number;
     minPlayers: number;
     hostUid: string;
