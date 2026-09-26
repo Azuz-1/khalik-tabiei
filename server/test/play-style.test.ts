@@ -255,7 +255,9 @@ test("kicking a missing normal preserves committed ballots and never creates a g
 });
 
 test("competitive UI uses challenge-based progress, hidden live tally, and phone countdown", async () => {
-  const host = await readFile(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8");
+  const host = await readFile(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8")
+    + await readFile(new URL("../../client/src/components/TvStage.tsx", import.meta.url), "utf8")
+    + await readFile(new URL("../../client/src/ui/Meters.tsx", import.meta.url), "utf8");
   const player = await readFile(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8");
 
   assert.ok(host.includes("completedChallenges"));

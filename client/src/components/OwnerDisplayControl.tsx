@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ClientView } from "../../../shared/types.js";
 import "../tv-pairing.css";
+import { Icon } from "../ui/Icon.js";
+import { useModalFocus } from "../ui/useModalFocus.js";
 import { Qr } from "./Qr.js";
 
 export function normalizePairingInput(value: string): string {
@@ -20,6 +23,21 @@ export function OwnerDisplayControl({ view }: { view: ClientView }) {
   const [directBusy, setDirectBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [directMessage, setDirectMessage] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useModalFocus(panelRef, open, { initialFocus: inputRef });
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   if (view.self.isOwner !== true || view.room.phase === "CLOSED") return null;
 
@@ -124,45 +142,42 @@ export function OwnerDisplayControl({ view }: { view: ClientView }) {
     <>
       <button
         type="button"
-        className="btn btn-ghost btn-sm"
+        className="btn btn-secondary btn-sm utility-tv"
         data-testid="owner-display-control"
         onClick={() => setOpen(true)}
-        style={{
-          position: "fixed",
-          top: "max(16px, env(safe-area-inset-top))",
-          insetInlineStart: 18,
-          zIndex: 40,
-        }}
       >
         📺 العب على التلفزيون
       </button>
 
-      {open ? (
-        <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+      {open ? createPortal(
+        <div className="sheet-backdrop owner-display-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
           <div
-            className="card stack"
+            ref={panelRef}
+            className="sheet-panel owner-display-panel"
             role="dialog"
             aria-modal="true"
             aria-label="إدارة شاشة العرض"
             data-testid="owner-display-panel"
-            style={{ width: "min(92vw, 500px)", maxHeight: "88vh", overflowY: "auto" }}
+            tabIndex={-1}
           >
-            <div className="row between">
+            <div className="sheet-handle" aria-hidden="true" />
+            <div className="sheet-header">
               <div>
-                <strong>📺 اربط التلفزيون</strong>
-                <div className="helper">اختياري · التلفزيون ما ينحسب لاعب وما يتحكم بالغرفة</div>
+                <h2>📺 اربط التلفزيون</h2>
+                <p className="helper">اختياري · التلفزيون ما ينحسب لاعب وما يتحكم بالغرفة</p>
               </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>إغلاق</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(false)}>إغلاق</button>
             </div>
 
-            <ol className="helper" style={{ margin: 0, paddingInlineStart: 24 }}>
-              <li>افتح <span dir="ltr">{tvAddress}</span> على التلفزيون.</li>
+            <ol className="pairing-steps">
+              <li>افتح <span dir="ltr" className="num-ltr">{tvAddress}</span> على التلفزيون.</li>
               <li>اكتب الرقم الظاهر على التلفزيون.</li>
             </ol>
 
             <form className="owner-tv-pairing-form" onSubmit={(event) => void claimPairing(event)}>
-              <label htmlFor="tv-pairing-code"><strong>رمز التلفزيون</strong></label>
+              <label htmlFor="tv-pairing-code" className="setting-label">رمز التلفزيون</label>
               <input
+                ref={inputRef}
                 id="tv-pairing-code"
                 className="owner-tv-pairing-input"
                 inputMode="numeric"
@@ -189,13 +204,13 @@ export function OwnerDisplayControl({ view }: { view: ClientView }) {
 
             <div id="tv-pairing-message" role="status" aria-live="polite">
               {pairingMessage ? (
-                <p className="helper" style={{ margin: 0, color: pairingMessage.error ? "var(--bad)" : undefined }}>
+                <p className={`pairing-message${pairingMessage.error ? " is-error" : " is-success"}`}>
                   {pairingMessage.text}
                 </p>
               ) : null}
             </div>
 
-            <button type="button" className="btn btn-ghost" disabled={directBusy} onClick={() => void revokeDisplay()}>
+            <button type="button" className="btn btn-danger-quiet btn-md" disabled={directBusy} onClick={() => void revokeDisplay()}>
               {directBusy ? "جاري الإيقاف…" : "إيقاف شاشة العرض الحالية"}
             </button>
 
@@ -207,15 +222,15 @@ export function OwnerDisplayControl({ view }: { view: ClientView }) {
                   <p className="helper" style={{ marginBlock: 4 }}>استخدم الرابط المباشر إذا بتفتح شاشة العرض على لابتوب أو تابلت أو جهاز إضافي.</p>
                 </div>
                 {!displayUrl ? (
-                  <button type="button" className="btn btn-ghost" disabled={directBusy} onClick={() => void prepareDisplay()}>
+                  <button type="button" className="btn btn-secondary btn-md" disabled={directBusy} onClick={() => void prepareDisplay()}>
                     {directBusy ? "جاري تجهيز الرابط…" : "جهّز رابط شاشة العرض"}
                   </button>
                 ) : (
                   <div className="stack" style={{ gap: 12 }}>
-                    <div className="center"><Qr url={displayUrl} /></div>
+                    <div className="center owner-display-qr"><Qr url={displayUrl} /></div>
                     <div className="row" style={{ flexWrap: "wrap" }}>
-                      <a className="btn btn-ghost" href={displayUrl} target="_blank" rel="noopener noreferrer" data-testid="active-display-link">فتح شاشة العرض</a>
-                      <button type="button" className="btn btn-ghost" onClick={() => void copyDisplay()}>{copied ? "تم النسخ ✓" : "نسخ الرابط"}</button>
+                      <a className="btn btn-secondary btn-md" href={displayUrl} target="_blank" rel="noopener noreferrer" data-testid="active-display-link"><Icon name="tv" /> فتح شاشة العرض</a>
+                      <button type="button" className="btn btn-secondary btn-md" onClick={() => void copyDisplay()}>{copied ? "تم النسخ ✓" : "نسخ الرابط"}</button>
                     </div>
                   </div>
                 )}
@@ -223,7 +238,8 @@ export function OwnerDisplayControl({ view }: { view: ClientView }) {
               </div>
             </details>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

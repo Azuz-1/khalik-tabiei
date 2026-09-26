@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { inertOutside } from "../ui/inert.js";
 
 type SuggestionCategory = "idea" | "content" | "bug" | "other";
 
@@ -26,18 +27,15 @@ export function SuggestionDialog({
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const background = document.querySelector<HTMLElement>("[data-app-content]");
     const previousOverflow = document.body.style.overflow;
 
-    background?.setAttribute("inert", "");
-    background?.setAttribute("aria-hidden", "true");
+    const releaseBackground = inertOutside(panelRef.current);
     document.body.style.overflow = "hidden";
     const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 0);
 
     return () => {
       window.clearTimeout(focusTimer);
-      background?.removeAttribute("inert");
-      background?.removeAttribute("aria-hidden");
+      releaseBackground();
       document.body.style.overflow = previousOverflow;
       if (previous?.isConnected) previous.focus();
     };
@@ -124,7 +122,7 @@ export function SuggestionDialog({
     >
       <div
         ref={panelRef}
-        className="card suggestion-dialog stack"
+        className="sheet-panel suggestion-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -136,7 +134,7 @@ export function SuggestionDialog({
         <div className="suggestion-dialog-header">
           <div className="stack" style={{ gap: 5 }}>
             <div className="eyebrow">ساعدنا نحسنها</div>
-            <h2 className="title" id={titleId}>عندك فكرة أو ملاحظة؟</h2>
+            <h2 className="title suggestion-title" id={titleId}>عندك فكرة أو ملاحظة؟</h2>
           </div>
           <button
             ref={closeRef}

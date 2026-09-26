@@ -48,22 +48,27 @@ test("phase 3 styles load after the HUD so gameplay stage rules win the cascade"
   const main = source("../../client/src/main.tsx");
   const hudImport = main.indexOf('import "./game-hud.css"');
   const playerStageImport = main.indexOf('import "./game-stage.css"');
-  const hostStageImport = main.indexOf('import "./game-stage-host.css"');
+  const hostStageImport = main.indexOf('import "./tv-stage.css"');
   assert.ok(hudImport >= 0);
   assert.ok(playerStageImport > hudImport, "player stage CSS must load after the gameplay HUD");
-  assert.ok(hostStageImport > playerStageImport, "host stage polish must load after the shared player stage CSS");
+  assert.ok(hostStageImport > playerStageImport, "shared-screen stage CSS must load after the shared player stage CSS");
 });
 
-test("host challenge and voting keep the same logic while dropping the dashboard-card look", () => {
+test("shared-screen challenge and voting keep the same logic while dropping the dashboard-card look", () => {
   const host = source("../../client/src/screens/Host.tsx");
-  const css = source("../../client/src/game-stage-host.css");
-  assert.ok(host.includes("function HostPromptReveal"));
-  assert.ok(host.includes("function HostDiscussion"));
-  assert.ok(host.includes("function HostVoting"));
-  assert.ok(host.includes("<PhaseCountdown endsAt={view.room.phaseEndsAt}"), "phase 3 must not remove authoritative gameplay timers");
-  assert.ok(host.includes("الأصوات مخفية للحين"), "vote privacy copy must remain intact");
-  assert.ok(css.includes(".host-voting-stage .card"));
-  assert.ok(css.includes("background: transparent"));
+  const stage = source("../../client/src/components/TvStage.tsx");
+  const css = source("../../client/src/tv-stage.css");
+  assert.ok(host.includes("<TvStage view={view} />"), "legacy host screen must reuse the shared stage");
+  assert.ok(stage.includes("function TvPromptReveal"));
+  assert.ok(stage.includes("function TvDiscussion"));
+  assert.ok(stage.includes("function TvVoting"));
+  assert.ok(stage.includes("<PhaseCountdown endsAt={view.room.phaseEndsAt}"), "the stage must not remove authoritative gameplay timers");
+  assert.ok(stage.includes("الأصوات مخفية للحين"), "vote privacy copy must remain intact");
+  assert.equal(stage.includes('from "../net/socket.js"'), false, "the shared stage must never bootstrap participant actions");
+  assert.equal(stage.includes("actions."), false, "the shared stage must not perform gameplay or owner actions");
+  // Voting privacy note is supporting text, not a nested card.
+  assert.ok(css.includes(".tv-privacy"));
   assert.ok(css.includes("border-top: 1px solid"));
-  assert.ok(css.includes("@media (max-height: 720px)"), "host stage must keep a compact treatment for short screens");
+  assert.ok(css.includes("--tv-margin-y"), "the stage must keep TV safe margins");
+  assert.ok(/clamp\([^)]*vh/.test(css), "TV type must scale with viewport height for short screens");
 });

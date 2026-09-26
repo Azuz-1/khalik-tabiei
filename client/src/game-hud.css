@@ -1,3 +1,8 @@
+/*
+ * Gameplay HUD: one quiet rail. Progress is metadata — it must never compete
+ * with the current moment. Room utilities move behind the ⋯ sheet.
+ */
+
 html.game-hud-active .floating-players,
 html.game-hud-active .floating-exit,
 html.game-hud-active [data-testid="owner-display-control"],
@@ -6,97 +11,135 @@ html.game-hud-active .offline-player-banner:not([role="status"]) {
 }
 
 html.game-hud-active .screen {
-  padding-top: calc(72px + env(safe-area-inset-top));
+  padding-top: calc(var(--hud-height) + 18px + env(safe-area-inset-top));
+}
+
+/* Owner-only notices move below the rail. */
+html.game-hud-active .offline-player-banner[role="status"],
+html.game-hud-active .host-disconnect-banner {
+  top: calc(var(--hud-height) + 16px + env(safe-area-inset-top));
 }
 
 .game-hud-wrap {
   position: fixed;
   z-index: 70;
-  top: max(8px, env(safe-area-inset-top));
+  top: 0;
   left: 50%;
-  width: min(calc(100% - 24px), 560px);
+  width: min(100%, 580px);
   transform: translateX(-50%);
+  padding: calc(8px + env(safe-area-inset-top)) 10px 10px;
+  background: linear-gradient(180deg, rgb(7 5 13 / 0.92) 60%, transparent);
   pointer-events: none;
 }
 
 .game-hud {
   min-width: 0;
-  min-height: 46px;
+  height: var(--hud-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 7px 8px 7px 14px;
-  border: 1px solid rgba(196, 181, 253, 0.16);
-  border-radius: 18px;
-  background: rgba(16, 10, 31, 0.84);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28), 0 0 30px rgba(124, 58, 237, 0.10);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  gap: 8px;
   pointer-events: auto;
 }
 
+html.game-hud-owner .game-hud { padding-inline-end: 52px; }
+
 .game-hud-status {
+  flex: 1;
   min-width: 0;
+  height: 100%;
   display: flex;
   align-items: center;
-  gap: 7px;
-  overflow: hidden;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.84);
-  font-size: clamp(12px, 3.2vw, 14px);
-  font-weight: 800;
-}
-
-.game-hud-status > span:not(.game-hud-separator) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.game-hud-separator {
-  flex: 0 0 auto;
-  opacity: 0.38;
+  padding-inline: 16px;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-pill);
+  background: rgb(22 15 41 / 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .game-hud-offline {
   flex: 0 0 auto;
-  color: #fbbf24;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding-inline: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--warning-tint);
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 800;
 }
+.game-hud-offline svg { width: 16px; height: 16px; }
 
-.game-hud-menu {
+.game-hud-menu { width: 48px; height: 48px; }
+
+/* ---- match progress (shared by HUD and TV rail) ------------------------- */
+.match-progress {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.mp-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.mp-challenge { flex: 1 1 0; }
+.mp-stint {
   flex: 0 0 auto;
-  width: 38px;
-  height: 34px;
-  border: 0;
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.07);
-  color: #fff;
-  font: inherit;
-  font-size: 22px;
-  font-weight: 900;
-  line-height: 1;
-  cursor: pointer;
+  padding-inline-start: 14px;
+  border-inline-start: 1px solid var(--edge-subtle);
 }
-
-.game-hud-menu:focus-visible {
-  outline: 2px solid rgba(196, 181, 253, 0.9);
-  outline-offset: 2px;
+.mp-label {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
+.mp-label b { color: var(--ink-strong); font-weight: 900; }
 
+.mp-rail {
+  display: flex;
+  gap: 3px;
+  height: 4px;
+  direction: rtl;
+}
+.mp-rail i {
+  flex: 1;
+  min-width: 3px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.12);
+}
+.mp-rail i.done { background: var(--violet-400); }
+.mp-rail i.now { background: var(--ink-strong); }
+
+.mp-pips {
+  display: inline-flex;
+  gap: 5px;
+  direction: rtl;
+}
+.mp-pips i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid rgb(236 132 251 / 0.55);
+  background: transparent;
+}
+.mp-pips i.done { background: rgb(236 132 251 / 0.55); border-color: transparent; }
+.mp-pips i.now { background: var(--magenta-300); border-color: var(--magenta-300); }
+
+/* ---- reconnect pill (replaces the large banner during gameplay) ---------- */
 html.game-hud-active .conn {
-  position: fixed;
   z-index: 72;
-  top: calc(max(8px, env(safe-area-inset-top)) + 54px);
-  left: 50%;
-  width: max-content;
-  max-width: calc(100% - 32px);
-  transform: translateX(-50%);
-  padding: 8px 13px;
-  border: 1px solid rgba(251, 191, 36, 0.28);
-  border-radius: 999px;
-  background: rgba(50, 31, 5, 0.92);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  top: calc(var(--hud-height) + 18px + env(safe-area-inset-top));
+  padding: 7px 14px;
   color: transparent;
   font-size: 0;
   line-height: 1;
@@ -104,7 +147,7 @@ html.game-hud-active .conn {
 
 html.game-hud-active .conn::after {
   content: "جاري إعادة الاتصال…";
-  color: #fde68a;
+  color: #fde7b0;
   font-size: 13px;
   font-weight: 800;
 }
@@ -112,146 +155,86 @@ html.game-hud-active .conn::after {
 .connection-restored-toast {
   width: max-content;
   max-width: calc(100% - 24px);
-  margin: 7px auto 0;
-  padding: 7px 12px;
-  border: 1px solid rgba(134, 239, 172, 0.2);
-  border-radius: 999px;
-  background: rgba(8, 39, 24, 0.92);
-  color: #bbf7d0;
+  margin: 8px auto 0;
+  padding: 7px 14px;
+  border: 1px solid rgb(110 231 168 / 0.25);
+  border-radius: var(--radius-pill);
+  background: #0b2a1c;
+  color: #c8f7dd;
   font-size: 13px;
   font-weight: 800;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-raise);
   pointer-events: none;
+  animation: rise-in var(--dur-base) var(--ease-out) both;
 }
 
-.game-sheet-backdrop {
-  position: fixed;
-  z-index: 110;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 12px;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-  background: rgba(4, 2, 10, 0.62);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
+/* ---- options sheet ------------------------------------------------------ */
 .game-sheet {
-  direction: rtl;
-  width: min(100%, 560px);
   max-height: min(72dvh, 660px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 10px 14px 16px;
-  border: 1px solid rgba(196, 181, 253, 0.16);
-  border-radius: 26px 26px 20px 20px;
-  background: rgba(18, 11, 34, 0.98);
-  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.38), 0 0 36px rgba(124, 58, 237, 0.09);
-}
-
-.game-sheet-handle {
-  width: 42px;
-  height: 4px;
-  margin: 1px auto 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.game-sheet-heading {
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.game-sheet-heading strong {
-  font-size: 20px;
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
 }
 
 .game-sheet-players {
-  display: grid;
-  gap: 2px;
-  margin: 4px 0 14px;
-  border-block: 1px solid rgba(255, 255, 255, 0.07);
-  padding-block: 5px;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .game-sheet-player {
   min-width: 0;
-  min-height: 42px;
+  min-height: 48px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 7px 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--edge-subtle);
 }
+.game-sheet-player:last-child { border-bottom: 0; }
 
 .game-sheet-player-name {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 800;
+  color: var(--ink-strong);
+  font-weight: 700;
 }
 
 .game-sheet-presence {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
-
-.game-sheet-presence.online {
-  color: #86efac;
-}
-
-.game-sheet-presence.offline {
-  color: #fbbf24;
-}
+.game-sheet-presence.online { color: var(--success); }
+.game-sheet-presence.offline { color: var(--warning); }
 
 .game-sheet-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
+.game-sheet-actions .btn { min-width: 0; padding-inline: 10px; white-space: normal; font-size: 15px; }
+.game-sheet-actions .btn svg { width: 18px; height: 18px; }
 
-.game-sheet-actions .btn {
-  min-width: 0;
-  min-height: 48px;
-  padding-inline: 10px;
-  white-space: normal;
-}
+.game-sheet-danger { width: 100%; }
 
-.game-sheet-message {
-  margin-top: 10px;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.game-sheet-danger {
-  width: 100%;
-  margin-top: 14px;
-  border-color: rgba(248, 113, 113, 0.18) !important;
-  color: #fecaca !important;
+/* Owner audio lives in the rail during gameplay. */
+html.game-hud-owner .host-audio-toggle {
+  z-index: 71;
+  top: calc(8px + env(safe-area-inset-top) + (var(--hud-height) - 44px) / 2);
+  left: calc(max(0px, 50% - 290px) + 12px);
+  right: auto;
+  width: 44px;
+  height: 44px;
 }
 
 @media (max-width: 380px) {
-  .game-hud-wrap {
-    width: calc(100% - 16px);
-  }
-
-  .game-hud {
-    gap: 6px;
-    padding-inline-start: 10px;
-  }
-
-  .game-hud-status {
-    gap: 5px;
-    font-size: 11px;
-  }
-
-  .game-sheet-actions {
-    grid-template-columns: 1fr;
-  }
+  .game-hud-status { padding-inline: 12px; }
+  .match-progress { gap: 10px; }
+  .mp-stint { padding-inline-start: 10px; }
+  .mp-label { font-size: 12px; }
+  .game-sheet-actions { grid-template-columns: 1fr; }
 }

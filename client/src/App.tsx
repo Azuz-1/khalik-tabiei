@@ -14,6 +14,11 @@ import { ConfirmDialog, type ConfirmDialogState } from "./components/ConfirmDial
 import { Home } from "./screens/Home.js";
 import { Host, type ConfirmActionRequest } from "./screens/Host.js";
 import { Player } from "./screens/Player.js";
+import { Avatar, colorSlotLookup } from "./ui/Avatar.js";
+import { EyesMark } from "./ui/EyesMark.js";
+import { Icon } from "./ui/Icon.js";
+import { inertOutside } from "./ui/inert.js";
+import { useModalFocus } from "./ui/useModalFocus.js";
 
 interface RecoveryConfirmActionRequest {
   title: string;
@@ -201,7 +206,7 @@ export function App() {
         {showConn ? <div className="conn" role="status">الاتصال انقطع، قاعدين نحاول نرجعك…</div> : null}
 
         {showOwnerDisconnected ? (
-          <div className="card host-disconnect-banner" role="status">
+          <div className="notice warning host-disconnect-banner" role="status">
             <strong>مالك الغرفة انقطع… ننتظره يرجع</strong>
             {hostDeadline ? <div className="helper">إذا ما رجع قبل {hostDeadline} بتنقفل الغرفة.</div> : null}
           </div>
@@ -222,10 +227,10 @@ export function App() {
         ) : null}
 
         {canManageRoom && activeRoom && offlinePlayers.length > 0 ? (
-          <div className="card offline-player-banner">
+          <div className="notice warning offline-player-banner">
             <strong>اتصال {offlinePlayers.map((player) => player.name).join("، ")} منقطع</strong>
             <div className="helper">مكانه محفوظ وما راح نغيّر المتخفي تلقائيًا بسبب نوم الجوال أو انقطاع الشبكة.</div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowHostPlayers(true)}>إدارة اللاعبين</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowHostPlayers(true)}>إدارة اللاعبين</button>
           </div>
         ) : null}
 
@@ -238,7 +243,7 @@ export function App() {
           {renderRoomSurface()}
 
           {canManageRoom && view?.room.phase !== "CLOSED" ? (
-            <button type="button" className="btn btn-ghost btn-sm floating-players" onClick={() => setShowHostPlayers(true)}>اللاعبين</button>
+            <button type="button" className="icon-btn floating-players" aria-label="إدارة اللاعبين" title="إدارة اللاعبين" onClick={() => setShowHostPlayers(true)}><Icon name="users" /></button>
           ) : null}
 
           {canManageRoom && view && !managementSurfaceHasClose ? (
@@ -276,12 +281,7 @@ export function App() {
         {toast ? <div className="toast" role="status">{toast.text}</div> : null}
 
         {notice ? (
-          <div className="overlay" role="dialog" aria-modal="true" aria-label="تنبيه الغرفة">
-            <div className="card center stack" style={{ maxWidth: 420 }}>
-              <h2 className="title">{notice}</h2>
-              <button className="btn btn-primary" onClick={() => { clearNotice(); resetToHome(); }}>الرئيسية</button>
-            </div>
-          </div>
+          <RoomNotice text={notice} />
         ) : null}
       </div>
 
@@ -322,11 +322,11 @@ function ReadyRecoveryBanner({
   const available = remainingMs <= 0;
   const seconds = Math.max(1, Math.ceil(remainingMs / 1_000));
   return (
-    <div className="card offline-player-banner" role="status">
+    <div className="notice warning offline-player-banner" role="status">
       <strong>لاعب انقطع قبل ما يجهز</strong>
       <div className="helper">ننتظر رجوعه بدون أي تغيير تلقائي في دور المتخفي.</div>
       {available ? (
-        <button type="button" className="btn btn-ghost btn-sm" disabled={!online} onClick={onRecover}>إعادة توزيع التحدي</button>
+        <button type="button" className="btn btn-secondary btn-sm" disabled={!online} onClick={onRecover}>إعادة توزيع التحدي</button>
       ) : (
         <div className="helper">إعادة التوزيع تتاح بعد {seconds} ث.</div>
       )}
@@ -358,6 +358,7 @@ function HostPlayerManager({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const slotOf = colorSlotLookup(players);
   const orderedPlayers = useMemo(
     () => [...players].sort((a, b) => Number(a.connected) - Number(b.connected) || a.seatNumber - b.seatNumber),
     [players],
@@ -365,14 +366,12 @@ function HostPlayerManager({
 
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const surface = document.querySelector<HTMLElement>("[data-game-surface]");
-    surface?.setAttribute("inert", "");
-    surface?.setAttribute("aria-hidden", "true");
+    // The game surface, gameplay chrome and every other sibling layer go inert.
+    const releaseBackground = inertOutside(panelRef.current);
     const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 0);
     return () => {
       window.clearTimeout(focusTimer);
-      surface?.removeAttribute("inert");
-      surface?.removeAttribute("aria-hidden");
+      releaseBackground();
       if (previous?.isConnected) previous.focus();
     };
   }, []);
@@ -404,39 +403,44 @@ function HostPlayerManager({
   };
 
   return (
-    <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div
         ref={panelRef}
-        className="card stack player-manager-panel"
+        className="player-manager-panel"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        <div className="row between">
+        <div className="sheet-handle" aria-hidden="true" />
+        <div className="sheet-header">
           <div>
-            <h2 id={titleId} className="title" style={{ marginBottom: 4 }}>اللاعبين</h2>
+            <h2 id={titleId}>اللاعبين</h2>
             <p className="helper">المنقطعين يظهرون أول عشان يسهل التعامل معهم.</p>
           </div>
-          <button ref={closeRef} type="button" className="btn btn-ghost btn-sm" onClick={onClose}>إغلاق</button>
+          <button ref={closeRef} type="button" className="btn btn-secondary btn-sm" onClick={onClose}>إغلاق</button>
         </div>
 
         {lobby ? (
-          <div className="card stack manager-subcard">
+          <div className="manager-subcard">
             <div className="row between">
               <div><strong>دخول لاعبين جدد</strong><div className="helper">{admissionLocked ? "موقوف مؤقتًا" : "مفتوح"}</div></div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.setAdmission(!admissionLocked)}>{admissionLocked ? "فتح الدخول" : "إيقاف الدخول"}</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => actions.setAdmission(!admissionLocked)}><Icon name={admissionLocked ? "unlock" : "lock"} /> {admissionLocked ? "فتح الدخول" : "إيقاف الدخول"}</button>
             </div>
             <p className="helper">إيقاف الدخول يمنع لاعبين جدد. اللي له مكان محفوظ يقدر يرجع.</p>
           </div>
         ) : null}
 
+        <div className="manager-list">
         {orderedPlayers.map((player) => (
-          <div key={player.uid} className="row between card manager-player-row">
-            <div>
-              <strong>مقعد {player.seatNumber} · {player.name}{player.isHost ? " · مالك الغرفة" : ""}</strong>
-              <div className="helper">{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div>
+          <div key={player.uid} className="manager-player-row">
+            <div className="manager-player-main">
+              <Avatar name={player.name} colorSlot={slotOf(player.uid)} size="md" offline={!player.connected} />
+              <div className="manager-player-text">
+                <strong dir="auto">{player.name}{player.isHost ? " · مالك الغرفة" : ""}</strong>
+                <div className={`helper${player.connected ? "" : " is-offline"}`}>{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div>
+              </div>
             </div>
             {player.isHost ? (
               <span className="pill-note">أنت</span>
@@ -445,7 +449,7 @@ function HostPlayerManager({
             ) : (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="btn btn-danger-quiet btn-sm"
                 onClick={() => onConfirm({
                   title: `إخراج ${player.name}؟`,
                   description: active
@@ -462,24 +466,25 @@ function HostPlayerManager({
             )}
           </div>
         ))}
+        </div>
 
         {players.length === 0 ? <p className="subtitle center">ما فيه لاعبين الحين.</p> : null}
 
         {onOwnerLeave ? (
-          <div className="card stack manager-subcard">
+          <div className="manager-subcard">
             <strong>مالك الغرفة</strong>
             <p className="helper">إذا بتطلع، نسلّم الإدارة تلقائيًا لأقدم لاعب متصل مؤهل بدل ما نقفل الغرفة على الكل.</p>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onOwnerLeave}>خروج وتسليم الإدارة</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onOwnerLeave}><Icon name="door" /> خروج وتسليم الإدارة</button>
           </div>
         ) : null}
 
         {blockedPlayers.length > 0 ? (
-          <div className="card stack manager-subcard">
+          <div className="manager-subcard">
             <strong>لاعبون ممنوعون من الرجوع</strong>
             {blockedPlayers.map((player) => (
               <div key={player.uid} className="row between">
                 <span>{player.name}</span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>السماح له يرجع</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => actions.unblockPlayer(player.uid)}>السماح له يرجع</button>
               </div>
             ))}
             <p className="helper">هذي القائمة تمنع رجوع نفس هوية اللعبة. مالك الغرفة يقدر يسمح للاعب يرجع من هنا.</p>
@@ -490,18 +495,37 @@ function HostPlayerManager({
   );
 }
 
+/** Terminal room notice (closed, kicked…): a real modal with focus on its only action. */
+function RoomNotice({ text }: { text: string }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const homeRef = useRef<HTMLButtonElement>(null);
+  useModalFocus(panelRef, true, { initialFocus: homeRef });
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="تنبيه الغرفة">
+      <div ref={panelRef} className="notice-card stack" tabIndex={-1}>
+        <EyesMark size={72} glance={false} className="notice-mark" />
+        <h2 className="title">{text}</h2>
+        <button ref={homeRef} className="btn btn-primary" onClick={() => { clearNotice(); resetToHome(); }}>الرئيسية</button>
+      </div>
+    </div>
+  );
+}
+
 function RoomExitButton({ label, ariaLabel, onClick }: { label: string; ariaLabel?: string; onClick: () => void }) {
-  return <button type="button" aria-label={ariaLabel} className="btn btn-ghost btn-sm floating-exit" onClick={onClick}>{label}</button>;
+  return <button type="button" aria-label={ariaLabel} className="btn btn-secondary btn-sm floating-exit" onClick={onClick}>{label}</button>;
 }
 
 function Spectator() {
   return (
-    <div className="screen center stack">
+    <div className="screen spectator-screen">
       <div className="spacer" />
-      <h2 className="title">اللعبة شغّالة الحين</h2>
-      <p className="subtitle">ما تقدر تدخل لين يخلص دور المتخفي الحالي. انتظر لين يرجعون لشاشة الانتظار.</p>
-      <button className="btn btn-ghost" onClick={() => resetToHome()}>الرئيسية</button>
+      <div className="spectator-body">
+        <EyesMark size={96} />
+        <h2 className="title">اللعبة شغّالة الحين</h2>
+        <p className="subtitle">ما تقدر تدخل لين يخلص دور المتخفي الحالي. انتظر لين يرجعون لشاشة الانتظار.</p>
+      </div>
       <div className="spacer" />
+      <button className="btn btn-secondary" onClick={() => resetToHome()}>الرئيسية</button>
     </div>
   );
 }

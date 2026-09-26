@@ -21,7 +21,7 @@ test("Home keeps rules in the primary flow and suggestions in a secondary dialog
   assert.ok(dialog.includes("بدون أسماء أو أكواد غرف أو معرفة مين صوّت لمين"));
   assert.ok(dialog.includes('role="dialog"'));
   assert.ok(dialog.includes('aria-modal="true"'));
-  assert.ok(dialog.includes('background?.setAttribute("inert", "")'));
+  assert.ok(dialog.includes("inertOutside(panelRef.current)"), "suggestion dialog locks everything outside itself");
   assert.ok(dialog.includes('event.key === "Escape"'));
 
   assert.ok(styles.includes(".suggestion-trigger"));

@@ -74,10 +74,18 @@ async function ownerSeatFor(ownerPage, name) {
   return (await chip.locator(".seat-badge").textContent())?.trim();
 }
 
+/** Every challenge opens behind a role-neutral privacy curtain on the phone. */
+async function revealPrivateRole(page, timeout) {
+  const reveal = page.getByRole("button", { name: "اعرض دوري", exact: true });
+  await expect(reveal).toBeVisible({ timeout });
+  await reveal.click();
+  await expect(page.locator(".player-stage-main")).toBeVisible();
+}
+
 async function identifyRoles(players) {
   const seen = [];
   for (const player of players) {
-    await expect(player.page.locator(".player-stage-main")).toBeVisible({ timeout: PHASE_TIMEOUT });
+    await revealPrivateRole(player.page, PHASE_TIMEOUT);
     const isImpostor = await player.page.getByText("أنت المتخفي").isVisible();
     seen.push({ ...player, isImpostor });
   }
@@ -213,8 +221,14 @@ async function playCaughtChallenge(owner, players, globalChallenge) {
   await expect(owner.page.locator(".result-impostor-name")).toHaveText(impostor.name);
   await expect(owner.page.getByText("النقاط بعد دور المتخفي")).toBeVisible();
   await expect(owner.page.locator(".score-reason")).toHaveCount(3);
-  await expect(owner.page.getByText("انمسك قبل ما ينجو من أي تحدّي · 0")).toBeVisible();
-  await expect(owner.page.getByText("صح في آخر تصويت · +1")).toHaveCount(2);
+  const impostorRow = owner.page.locator(".score-row", { hasText: impostor.name });
+  await expect(impostorRow.locator(".score-reason")).toHaveText("انمسك قبل ما ينجو من أي تحدّي");
+  await expect(impostorRow.locator(".score-delta")).toHaveText("0");
+  for (const normal of normals) {
+    const row = owner.page.locator(".score-row", { hasText: normal.name });
+    await expect(row.locator(".score-reason")).toHaveText("صح في آخر تصويت");
+    await expect(row.locator(".score-delta")).toHaveText("+1");
+  }
   await expect(owner.page.getByRole("button", { name: "التالي", exact: true })).toBeVisible();
 
   return { impostor, normals };
@@ -284,6 +298,23 @@ test("three-person full game: owner plays, reconnect survives, kick preserves mi
       const rendered = await client.page.locator("body").innerText();
       expect(rendered).not.toMatch(/صوّت\s+(على|لـ)\s*\S+\s*→/);
     }
+
+    // Rematch reuses the room code and resets every match counter. Each phone
+    // revealed a private role nine times above, so the first private deal of the
+    // new match must still open behind the privacy curtain on every phone.
+    await owner.page.getByRole("button", { name: "العبوا مرة ثانية", exact: true }).click();
+    const restart = owner.page.getByRole("button", { name: "ابدأ اللعبة", exact: true });
+    await expect(restart).toBeEnabled({ timeout: PHASE_TIMEOUT });
+    await restart.click();
+    for (const player of players) {
+      await expect(player.page.getByRole("button", { name: "اعرض دوري", exact: true })).toBeVisible({
+        timeout: PHASE_TIMEOUT,
+      });
+      await expect(player.page.locator(".player-stage-main")).toHaveCount(0);
+      await expect(player.page.getByText("أنت المتخفي")).toHaveCount(0);
+      await expect(player.page.getByRole("button", { name: "جاهز", exact: true })).toHaveCount(0);
+    }
+    await revealPrivateRole(owner.page, PHASE_TIMEOUT);
 
     test.info().annotations.push({
       type: "journey-duration-ms",

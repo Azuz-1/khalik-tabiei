@@ -133,14 +133,17 @@ test("user-facing source locks the explainability and Arabic copy improvements",
   const player = readFileSync(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8");
   const errors = readFileSync(new URL("../../client/src/i18n/errors.ts", import.meta.url), "utf8");
   const counts = readFileSync(new URL("../../client/src/i18n/counts.ts", import.meta.url), "utf8");
+  const bits = readFileSync(new URL("../../client/src/components/Bits.tsx", import.meta.url), "utf8");
 
   assert.match(home, /points-table/);
   assert.match(home, /آخر تصويتين ورا بعض صح/);
   assert.match(player, /كيف تجمع نقاط/);
   assert.match(player, /أكّد التصويت على \$\{pickedName\}/);
   assert.match(player, /vote-confirm-bar/);
-  assert.match(host, /scoreReasonText/);
-  assert.match(player, /scoreReasonText/);
+  // Score reasons render through the shared Scoreboard on every result surface.
+  assert.match(bits, /scoreReasonText\(row\.roundReason\)/);
+  assert.match(host, /PhoneResultDetails/);
+  assert.match(player, /<Scoreboard rows=\{view\.scoreboard\}[^>]* round \/>/);
   assert.match(counts, /count === 2.*صوتين/s);
   assert.match(counts, /count === 2.*ننتظر لاعبين/s);
   assert.match(errors, /بين 2 و16 حرف/);

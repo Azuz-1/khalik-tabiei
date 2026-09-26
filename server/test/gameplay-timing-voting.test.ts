@@ -388,18 +388,22 @@ test("new aggregate analytics keys are allowlisted while vote identity remains f
 });
 
 test("client source has no manual START_VOTING action and no live quorum copy", async () => {
-  const [host, player, socket] = await Promise.all([
+  const [hostScreen, stage, player, socket] = await Promise.all([
     readFile(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../client/src/components/TvStage.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/net/socket.ts", import.meta.url), "utf8"),
   ]);
+  // Shared-screen phases (discussion/voting) render through the TV stage.
+  const host = hostScreen + stage;
   assert.equal(host.includes("actions.startVoting"), false);
   assert.equal(player.includes("requiredVotesText"), false);
   assert.equal(host.includes("requiredVotesText"), false);
   assert.equal(socket.includes("startVoting:"), false);
   assert.ok(host.includes("استعدوا للتصويت"));
   assert.ok(player.includes("استعدوا للتصويت"));
-  assert.ok(host.includes("صوّت {progress.submitted} من {progress.total}"));
+  assert.ok(host.includes("صوّت ${progress.submitted} من ${progress.total}"));
+  assert.ok(stage.includes("SlotMeter filled={progress.submitted} total={progress.total}"));
 });
 
 test("no voter-to-target mapping is serialized to host or players", () => {

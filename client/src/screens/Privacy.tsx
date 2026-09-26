@@ -4,6 +4,7 @@ export function PrivacyLink() {
   return (
     <a
       href="/privacy"
+      className="privacy-link"
       style={{
         position: "fixed",
         insetInlineEnd: 12,

@@ -39,6 +39,9 @@ test("owner can attach, refresh, and revoke a direct-link public Display after t
     await expect(start).toBeEnabled();
     await start.click();
 
+    const reveal = owner.page.getByRole("button", { name: "اعرض دوري", exact: true });
+    await expect(reveal).toBeVisible();
+    await reveal.click();
     await expect(owner.page.getByRole("button", { name: "جاهز", exact: true })).toBeVisible();
     await owner.page.getByRole("button", { name: "المزيد", exact: true }).click();
     const gameOptions = owner.page.getByRole("dialog", { name: "خيارات اللعبة" });
@@ -70,8 +73,11 @@ test("owner can attach, refresh, and revoke a direct-link public Display after t
 
     await displayPanel.getByRole("button", { name: "إيقاف شاشة العرض الحالية", exact: true }).click();
     await expect(displayPage.getByText("تم إيقاف رابط شاشة العرض من مالك الغرفة.", { exact: true })).toBeVisible();
-    await expect(owner.page.getByRole("button", { name: "جاهز", exact: true })).toBeVisible();
     await expect(displayPanel.getByRole("button", { name: "جهّز رابط شاشة العرض", exact: true })).toBeVisible();
+    // The pairing panel is modal (background inert); closing it returns the untouched private challenge.
+    await displayPanel.getByRole("button", { name: "إغلاق", exact: true }).click();
+    await expect(displayPanel).toBeHidden();
+    await expect(owner.page.getByRole("button", { name: "جاهز", exact: true })).toBeVisible();
   } finally {
     await displayContext?.close();
     await second.context.close();

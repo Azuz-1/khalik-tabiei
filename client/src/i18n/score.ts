@@ -1,7 +1,7 @@
 import type { ScoreReason } from "../../../shared/types.js";
 
 function streakText(count: number): string {
-  if (count <= 0) return "ما عنده سلسلة تصويت صحيحة في النهاية";
+  if (count <= 0) return "ما صوّت صح في آخر تصويت";
   if (count === 1) return "صح في آخر تصويت";
   if (count === 2) return "صح في آخر تصويتين";
   return `صح في آخر ${count} تصويتات`;
