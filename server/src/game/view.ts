@@ -67,7 +67,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
   const self = room.players.get(uid);
   const round = room.round;
   const activeCount = activePlayers(room).length;
-  const lobbyStintMax = activeCount >= room.minPlayers
+  const lobbyStintMax = room.phase === "LOBBY" && activeCount >= room.minPlayers
     ? maxChallengesForParticipantCount(activeCount)
     : undefined;
   const roundMaxChallenges = round?.maxChallenges ?? MAX_CHALLENGES_PER_ROUND;
