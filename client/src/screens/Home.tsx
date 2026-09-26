@@ -3,6 +3,8 @@ import { unlockAudio } from "../audio/gameAudio.js";
 import { SuggestionDialog } from "../components/SuggestionDialog.js";
 import { actions, useGame } from "../net/socket.js";
 import { errorText } from "../i18n/errors.js";
+import { EyesMark } from "../ui/EyesMark.js";
+import { Icon } from "../ui/Icon.js";
 import {
   CHALLENGE_OPTIONS,
   GAME_MODES,
@@ -61,10 +63,10 @@ function RulesTabs() {
   };
 
   return (
-    <section className="card stack home-rules" aria-labelledby="home-rules-title">
-      <div className="center stack" style={{ gap: 6 }}>
+    <section className="home-rules" aria-labelledby="home-rules-title">
+      <div className="home-rules-head">
         <div className="eyebrow">اعرفها بسرعة</div>
-        <h2 className="title" id="home-rules-title">كل اللي تحتاجه قبل تبدأ</h2>
+        <h2 className="section-heading" id="home-rules-title">كل اللي تحتاجه قبل تبدأ</h2>
       </div>
       <div className="home-tabs" role="tablist" aria-label="شرح اللعبة">
         {tabs.map((item, index) => (
@@ -86,13 +88,13 @@ function RulesTabs() {
       </div>
 
       <div id="home-panel-how" role="tabpanel" aria-labelledby="home-tab-how" className="home-tab-panel" hidden={tab !== "how"} tabIndex={0}>
-        <div className="stack" style={{ gap: 10 }}>
-          <p className="subtitle" style={{ margin: 0 }}>1. كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</p>
-          <p className="subtitle" style={{ margin: 0 }}>2. وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</p>
-          <p className="subtitle" style={{ margin: 0 }}>3. بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</p>
-          <p className="subtitle" style={{ margin: 0 }}>4. الأغلبية تمسك المتخفي. إذا ما انمسك يكمل دوره حسب عدد اللاعبين: تحدّي واحد مع 3 لاعبين، تحدّيين مع 4، و3 تحدّيات مع 5 أو أكثر.</p>
-          <p className="helper" style={{ margin: 0 }}>مالك الغرفة يلعب معكم ويختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
-        </div>
+        <ol className="rule-steps">
+          <li>كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</li>
+          <li>وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</li>
+          <li>بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</li>
+          <li>الأغلبية تمسك المتخفي. إذا ما انمسك يكمل دوره حسب عدد اللاعبين: تحدّي واحد مع 3 لاعبين، تحدّيين مع 4، و3 تحدّيات مع 5 أو أكثر.</li>
+        </ol>
+        <p className="helper home-rules-foot">مالك الغرفة يلعب معكم ويختار {CHALLENGE_OPTIONS.join(" / ")} تحدّي، والمباراة تنتهي بالعدد المختار بالضبط.</p>
       </div>
 
       <div id="home-panel-modes" role="tabpanel" aria-labelledby="home-tab-modes" className="home-tab-panel" hidden={tab !== "modes"} tabIndex={0}>
@@ -102,7 +104,7 @@ function RulesTabs() {
               <span className="mode-explainer-icon" aria-hidden="true">{mode.icon}</span>
               <div>
                 <strong>{mode.fullLabel}</strong>
-                <p className="helper" style={{ margin: 0 }}>{mode.description}</p>
+                <p className="helper">{mode.description}</p>
               </div>
             </div>
           ))}
@@ -110,8 +112,8 @@ function RulesTabs() {
       </div>
 
       <div id="home-panel-points" role="tabpanel" aria-labelledby="home-tab-points" className="home-tab-panel" hidden={tab !== "points"} tabIndex={0}>
-        <div className="stack home-points-copy" style={{ gap: 14 }}>
-          <div>
+        <div className="home-points-copy">
+          <div className="points-group">
             <strong>إذا أنت طبيعي</strong>
             <table className="points-table">
               <tbody>
@@ -121,9 +123,9 @@ function RulesTabs() {
                 <tr><td>آخر تصويت غلط</td><td>0</td></tr>
               </tbody>
             </table>
-            <p className="helper" style={{ margin: "8px 0 0" }}>كل ما قفطته بدري واستمريت مصوّت عليه صح، تكسب أكثر. مو لازم الأغلبية توافقك.</p>
+            <p className="helper home-rules-foot">كل ما قفطته بدري واستمريت مصوّت عليه صح، تكسب أكثر. مو لازم الأغلبية توافقك.</p>
           </div>
-          <div>
+          <div className="points-group">
             <strong>إذا أنت المتخفي</strong>
             <table className="points-table">
               <tbody>
@@ -170,14 +172,14 @@ export function Home() {
           💡 اقتراح
         </button>
 
-        <div className="spacer" />
-        <div className="center stack home-hero">
+        <header className="home-hero">
+          <EyesMark size={108} />
           <h1 className="brand">خلك طبيعي</h1>
-          <p className="subtitle">واحد منكم متخفي وما يعرف المطلوب. اكتشفه بدري واجمع نقاط أكثر.</p>
-          <span className="pill-note">3–10 لاعبين · جوال لكل لاعب</span>
-        </div>
+          <p className="home-tagline">واحد منكم متخفي وما يعرف المطلوب. اكتشفوه بدري واجمعوا نقاط أكثر.</p>
+          <p className="home-meta"><span dir="ltr" className="num-ltr">3–10</span> لاعبين · جوال لكل لاعب · بدون تحميل ولا تسجيل</p>
+        </header>
 
-        <div className="stack home-actions">
+        <div className="home-actions">
           <button
             className="btn btn-primary"
             disabled={offline || creating}
@@ -190,14 +192,18 @@ export function Home() {
           >
             سوّ غرفة والعب معنا
           </button>
-          <button className="btn btn-ghost" disabled={offline} onClick={() => { setLocalErr(null); setStep("code"); }}>
+          <button className="btn btn-secondary" disabled={offline} onClick={() => { setLocalErr(null); setStep("code"); }}>
             ادخل غرفة
           </button>
-          <p className="helper" style={{ margin: 0 }}>صاحب الغرفة لاعب مثل الباقين · بدون تحميل ولا تسجيل</p>
+          <p className="helper home-actions-note">صاحب الغرفة لاعب مثل الباقين</p>
         </div>
 
         <RulesTabs />
-        <div className="spacer" />
+
+        <p className="home-tv-hint">
+          <Icon name="tv" />
+          <span>عندكم تلفزيون؟ افتحوا <span dir="ltr" className="num-ltr">{location.host}/tv</span> عليه، واربطوه من جوال مالك الغرفة.</span>
+        </p>
 
         <SuggestionDialog
           open={suggestionOpen}
@@ -211,28 +217,40 @@ export function Home() {
   if (step === "code") {
     const ok = code.length === ROOM_CODE_LENGTH;
     return (
-      <div className="screen">
-        <button className="link-btn" onClick={() => setStep("home")}>← رجوع</button>
-        <div className="spacer" />
-        <div className="center stack"><h2 className="title">اكتب كود الغرفة</h2><p className="subtitle">الكود مكوّن من 5 حروف وأرقام</p></div>
-        <input
-          className="input code"
-          aria-label="كود الغرفة"
-          value={code}
-          inputMode="text"
-          autoCapitalize="characters"
-          autoFocus
-          maxLength={ROOM_CODE_LENGTH}
-          placeholder="•••••"
-          onChange={(event) => {
-            const value = event.target.value.toUpperCase().split("").filter((char) => ROOM_CODE_ALPHABET.includes(char)).join("").slice(0, ROOM_CODE_LENGTH);
-            setCode(value);
-            setLocalErr(null);
-          }}
-        />
-        {localErr ? <p className="helper" role="alert" style={{ color: "var(--bad)" }}>{localErr}</p> : null}
-        <button className="btn btn-primary" disabled={!ok} onClick={() => { setName(""); setStep("join-name"); }}>التالي</button>
-        <div className="spacer" />
+      <div className="screen join-screen">
+        <button className="link-btn back-btn" onClick={() => setStep("home")}><Icon name="back" /> رجوع</button>
+        <div className="join-body">
+          <div className="join-head">
+            <h2 className="title">اكتب كود الغرفة</h2>
+            <p className="subtitle">الكود 5 حروف وأرقام، تلقاه على جوال مالك الغرفة أو التلفزيون.</p>
+          </div>
+          <input
+            className="input code"
+            aria-label="كود الغرفة"
+            value={code}
+            inputMode="text"
+            autoCapitalize="characters"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            autoFocus
+            maxLength={ROOM_CODE_LENGTH}
+            placeholder="•••••"
+            onChange={(event) => {
+              const value = event.target.value.toUpperCase().split("").filter((char) => ROOM_CODE_ALPHABET.includes(char)).join("").slice(0, ROOM_CODE_LENGTH);
+              setCode(value);
+              setLocalErr(null);
+            }}
+            onKeyDown={(event) => { if (event.key === "Enter" && ok) { setName(""); setStep("join-name"); } }}
+          />
+          <div className="code-slots" aria-hidden="true">
+            {Array.from({ length: ROOM_CODE_LENGTH }, (_, index) => <i key={index} className={index < code.length ? "filled" : undefined} />)}
+          </div>
+          {localErr ? <p className="form-error" role="alert">{localErr}</p> : null}
+        </div>
+        <div className="join-dock">
+          <button className="btn btn-primary" disabled={!ok} onClick={() => { setName(""); setStep("join-name"); }}>التالي</button>
+        </div>
       </div>
     );
   }
@@ -250,31 +268,35 @@ export function Home() {
   };
 
   return (
-    <div className="screen">
-      <button className="link-btn" onClick={() => setStep(creatingOwner || deepCode ? "home" : "code")}>← رجوع</button>
-      <div className="spacer" />
-      <div className="center stack">
-        <h2 className="title">وش نناديك؟</h2>
-        {creatingOwner
-          ? <span className="pill-note">أنت مالك الغرفة وبتكون لاعب</span>
-          : <span className="pill-note" style={{ direction: "ltr" }}>غرفة {code}</span>}
+    <div className="screen join-screen">
+      <button className="link-btn back-btn" onClick={() => setStep(creatingOwner || deepCode ? "home" : "code")}><Icon name="back" /> رجوع</button>
+      <div className="join-body">
+        <div className="join-head">
+          {creatingOwner
+            ? <span className="pill-note">أنت مالك الغرفة وبتلعب معهم</span>
+            : <span className="pill-note">غرفة <span dir="ltr" className="num-ltr">{code}</span></span>}
+          <h2 className="title">وش نناديك؟</h2>
+          <p className="subtitle">{creatingOwner ? <>ينحسب اسمك ضمن <span dir="ltr" className="num-ltr">3–10</span> لاعبين، وبيوصلك دورك وتصويتك على نفس الجوال.</> : "اسمك بيظهر للاعبين وعلى الشاشة."}</p>
+        </div>
+        <input
+          className="input"
+          aria-label="اسمك"
+          value={name}
+          autoFocus
+          autoComplete="nickname"
+          enterKeyHint="go"
+          placeholder="اسمك"
+          onChange={(event) => { setName(event.target.value); setLocalErr(null); }}
+          onKeyDown={(event) => { if (event.key === "Enter") submitName(); }}
+        />
+        <p className="helper field-hint" aria-live="polite">اسمك من {NAME_MIN} إلى {NAME_MAX} حرف.</p>
+        {localErr ? <p className="form-error" role="alert">{localErr}</p> : null}
       </div>
-      <input
-        className="input"
-        aria-label="اسمك"
-        value={name}
-        autoFocus
-        placeholder="اسمك"
-        onChange={(event) => { setName(event.target.value); setLocalErr(null); }}
-        onKeyDown={(event) => { if (event.key === "Enter") submitName(); }}
-      />
-      <p className="helper" aria-live="polite">اسمك من {NAME_MIN} إلى {NAME_MAX} حرف.</p>
-      {creatingOwner ? <p className="helper center">ينحسب اسمك ضمن 3–10 لاعبين، وبيوصلك دورك وتصويتك على نفس الجوال.</p> : null}
-      {localErr ? <p className="helper" role="alert" style={{ color: "var(--bad)" }}>{localErr}</p> : null}
-      <button className="btn btn-primary" disabled={!ok || offline || pending} onClick={submitName}>
-        {pending ? (creatingOwner ? "جاري إنشاء الغرفة…" : "جاري الدخول…") : (creatingOwner ? "إنشاء الغرفة" : "دخول الغرفة")}
-      </button>
-      <div className="spacer" />
+      <div className="join-dock">
+        <button className="btn btn-primary" disabled={!ok || offline || pending} onClick={submitName}>
+          {pending ? (creatingOwner ? "جاري إنشاء الغرفة…" : "جاري الدخول…") : (creatingOwner ? "إنشاء الغرفة" : "دخول الغرفة")}
+        </button>
+      </div>
     </div>
   );
 }

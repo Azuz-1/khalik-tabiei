@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { ClientMessage, ClientView, GameModeInfo, ScoreEntry, ServerMessage } from "../../../shared/types.js";
-import { PhaseCountdown, ResultBody, roundLabel } from "../components/Bits.js";
-import { Players, Progress } from "../components/Players.js";
-import { Qr } from "../components/Qr.js";
-import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
-import { estimatedServerNow, serverClock } from "../net/clock.js";
+import { useEffect, useMemo, useState } from "react";
+import type { ClientMessage, ClientView, ServerMessage } from "../../../shared/types.js";
+import { TvStage } from "../components/TvStage.js";
+import { EyesMark } from "../ui/EyesMark.js";
+import { serverClock } from "../net/clock.js";
 
 interface DisplayRoute {
   code: string;
@@ -171,180 +169,23 @@ function useDisplayFeed(route: DisplayRoute | null) {
   return { view, status, message };
 }
 
-function DisplayStage({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={`screen host host-stage display-stage ${className}`.trim()}>
-      <div className="host-stage-content">{children}</div>
-      <div className="pill-note" style={{ position: "fixed", insetInlineEnd: 16, bottom: 16 }}>شاشة عرض · بدون تحكم</div>
-    </div>
-  );
-}
-
-function modeInfo(view: ClientView): GameModeInfo | undefined {
-  return view.room.availableModes.find((mode) => mode.id === view.challenge?.mode);
-}
-
-function countdownInstruction(mode?: GameModeInfo): string {
-  switch (mode?.id) {
-    case "HANDS": return "إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!».";
-    case "POINT": return "عند «أشروا!»، أشر على شخص واحد.";
-    case "NUMBER": return "عند «ارفعوا أصابعكم!»، ارفع من 0 إلى 5 أصابع.";
-    default: return "عند انتهاء العد، نفّذ الحركة.";
-  }
-}
-
-function DisplayScoreboard({ rows, title }: { rows: ScoreEntry[]; title: string }) {
-  return (
-    <div className="card stack score-explain-board" style={{ width: "min(100%, 760px)" }}>
-      <div className="code-label">{title}</div>
-      {rows.map((row) => (
-        <div key={row.uid} className="row between host-summary-row">
-          <span>#{row.rank} {row.name}</span>
-          <strong>{row.score} نقطة</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DisplayLobby({ view }: { view: ClientView }) {
-  const active = view.players.filter((player) => player.connected).length;
-  return (
-    <div className="screen host host-lobby-screen display-lobby">
-      <div className="center stack">
-        <div className="pill-note">شاشة العرض الاختيارية</div>
-        <h1 className="brand">خلك طبيعي</h1>
-        <p className="subtitle">كل لاعب يستخدم جواله. هذي الشاشة للعرض العام فقط.</p>
-      </div>
-      <div className="host-grid">
-        <div className="card codebox">
-          <span className="code-label">كود الغرفة</span>
-          <span className="code-value">{view.room.code}</span>
-          <div style={{ marginTop: 18 }}><Qr url={view.room.joinUrl} /></div>
-          <span className="helper">امسح الرمز عشان تدخل كلاعب</span>
-        </div>
-        <div className="card stack">
-          <div className="row between">
-            <span className="code-label">اللاعبين</span>
-            <span className="count-pill">{active} <small>/ {view.room.maxPlayers}</small></span>
-          </div>
-          <Players players={view.players} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DisplayCountdown({ view }: { view: ClientView }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const timer = window.setInterval(() => tick((value) => value + 1), 100);
-    return () => window.clearInterval(timer);
-  }, []);
-  const seconds = visibleCountdownSecond(view.room.phaseEndsAt, estimatedServerNow()) ?? 1;
-  return (
-    <DisplayStage className="host-countdown-stage">
-      <div className="eyebrow">استعدوا…</div>
-      <div className="host-countdown-number">{seconds}</div>
-      <div className="host-countdown-instruction">{countdownInstruction(modeInfo(view))}</div>
-    </DisplayStage>
-  );
-}
-
-function DisplayRoom({ view }: { view: ClientView }) {
-  const mode = modeInfo(view);
-  switch (view.room.phase) {
-    case "LOBBY":
-      return <DisplayLobby view={view} />;
-    case "QUESTION": {
-      const progress = view.readyProgress ?? { submitted: 0, total: view.players.length };
-      return (
-        <DisplayStage>
-          <div className="eyebrow">{roundLabel(view)}</div>
-          <div className="host-mode-mark">{mode ? `${mode.icon} ${mode.label}` : "استعدوا"}</div>
-          <h1 className="title host-stage-heading">شوفوا جوالاتكم</h1>
-          <p className="subtitle">كل واحد يشوف دوره سرًا ويضغط جاهز</p>
-          <div className="card host-progress-card"><Progress submitted={progress.submitted} total={progress.total} verb="جاهزين" /></div>
-        </DisplayStage>
-      );
-    }
-    case "COUNTDOWN":
-      return <DisplayCountdown view={view} />;
-    case "ACTION":
-      return <DisplayStage className="host-action-stage"><h1 className="host-action-title">{mode?.actionLabel ?? "الحين!"}</h1></DisplayStage>;
-    case "HOLD":
-      return (
-        <DisplayStage className="host-hold-stage">
-          <div className="eyebrow">خذوا نظرة 👀</div>
-          <h1 className="host-hold-title">طالعوا بعض</h1>
-          <p className="subtitle host-hold-subtitle">خلكم على وضعكم لين يطلع المطلوب.</p>
-          <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-        </DisplayStage>
-      );
-    case "PROMPT_REVEAL":
-      return <DisplayStage><div className="eyebrow host-prompt-eyebrow">المطلوب كان…</div><h1 className="host-prompt host-prompt-reveal">{view.publicPrompt?.text ?? "…"}</h1></DisplayStage>;
-    case "DISCUSSION":
-      return (
-        <DisplayStage className="host-discussion-stage">
-          <div className="eyebrow">{roundLabel(view)}</div>
-          <div className="eyebrow host-prompt-eyebrow">المطلوب كان</div>
-          <div className="host-prompt host-prompt-discussion">{view.publicPrompt?.text ?? "…"}</div>
-          <h1 className="title host-discussion-question">مين تصرفه مو طبيعي؟</h1>
-          <PhaseCountdown endsAt={view.room.phaseEndsAt} warningAtSeconds={10} warningText="استعدوا للتصويت" />
-        </DisplayStage>
-      );
-    case "VOTING": {
-      const progress = view.votesProgress ?? { submitted: 0, total: view.players.length };
-      return (
-        <DisplayStage className="host-voting-stage">
-          <div className="eyebrow">{roundLabel(view)}</div>
-          <h1 className="title host-voting-title">صوّتوا من جوالاتكم</h1>
-          <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-          <div className="card center stack">
-            <strong>صوّت {progress.submitted} من {progress.total}</strong>
-            <span className="helper">اتجاه الأصوات مخفي لين تنتهي النتيجة.</span>
-          </div>
-        </DisplayStage>
-      );
-    }
-    case "RESULT": {
-      const fullReveal = view.result?.roundComplete === true;
-      return (
-        <DisplayStage className="host-result-stage">
-          <div className="card host-result-panel">{view.result ? <ResultBody result={view.result} /> : null}</div>
-          {fullReveal && view.scoreboard ? <DisplayScoreboard rows={view.scoreboard} title="النقاط بعد دور المتخفي" /> : null}
-          <div className="pill-note">بانتظار المضيف…</div>
-          <p className="subtitle">النتيجة تبقى على الشاشة لين ينتقل المضيف للمرحلة الجاية.</p>
-        </DisplayStage>
-      );
-    }
-    case "GAME_OVER":
-      return (
-        <DisplayStage className="host-game-over-stage">
-          <h1 className="brand">خلصت اللعبة 🎉</h1>
-          {view.gameOver ? <p className="subtitle">لعبتوا {view.gameOver.completedChallenges} تحدّيات · انمسك المتخفي في {view.gameOver.caughtRounds} من {view.gameOver.totalRounds} أدوار</p> : null}
-          {view.scoreboard ? <DisplayScoreboard rows={view.scoreboard} title="الترتيب النهائي" /> : null}
-          <p className="helper">التحكم بالمباراة يبقى عند مالك الغرفة على جواله.</p>
-        </DisplayStage>
-      );
-    default:
-      return <DisplayStage><h1 className="title">اللعبة شغّالة</h1></DisplayStage>;
-  }
-}
-
 export function DisplayApp() {
   const route = useMemo(routeFromLocation, []);
   const { view, status, message } = useDisplayFeed(route);
 
   if (!view) {
     return (
-      <div className="screen center stack">
-        <div className="spacer" />
-        <div className="pill-note">شاشة العرض</div>
-        <h1 className="brand">خلك طبيعي</h1>
-        <p className="subtitle">{message ?? (status === "offline" ? "انقطع الاتصال، نحاول نرجع شاشة العرض…" : "جاري ربط شاشة العرض…")}</p>
-        {status === "closed" ? <a className="btn btn-ghost" href="/">الرئيسية</a> : null}
-        <div className="spacer" />
+      <div className="tv tv-standby" data-phase="STANDBY">
+        <div className="tv-backdrop" aria-hidden="true" />
+        <main className="tv-stage">
+          <div className="tv-moment">
+            <EyesMark size={140} />
+            <div className="pill-note">شاشة العرض</div>
+            <h1 className="brand tv-standby-title">خلك طبيعي</h1>
+            <p className="tv-lede" role="status">{message ?? (status === "offline" ? "انقطع الاتصال، نحاول نرجع شاشة العرض…" : "جاري ربط شاشة العرض…")}</p>
+            {status === "closed" ? <a className="btn btn-secondary tv-standby-home" href="/">الرئيسية</a> : null}
+          </div>
+        </main>
       </div>
     );
   }
@@ -352,7 +193,14 @@ export function DisplayApp() {
   return (
     <>
       {status !== "online" ? <div className="conn" role="status">اتصال شاشة العرض انقطع، نحاول نرجعه…</div> : null}
-      <DisplayRoom view={view} />
+      <TvStage
+        view={view}
+        badge="شاشة عرض · بدون تحكم"
+        lobbyEyebrow="شاشة العرض الاختيارية"
+        waitingNote={view.room.phase === "GAME_OVER"
+          ? "التحكم بالمباراة يبقى عند مالك الغرفة على جواله."
+          : "بانتظار مالك الغرفة ينقلكم للمرحلة الجاية…"}
+      />
     </>
   );
 }

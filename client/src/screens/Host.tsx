@@ -1,14 +1,15 @@
-import { useEffect, useState, type ReactNode } from "react";
-import type { ClientView, GameMode, GameModeInfo, ScoreEntry } from "../../../shared/types.js";
+import { useState } from "react";
+import type { ClientView, GameMode } from "../../../shared/types.js";
 import { CHALLENGE_OPTIONS, MIN_PLAYERS } from "../../../shared/constants.js";
-import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
-import { estimatedServerNow } from "../net/clock.js";
 import { actions } from "../net/socket.js";
 import { Qr } from "../components/Qr.js";
-import { Players, Progress } from "../components/Players.js";
-import { PhaseCountdown, ResultBody, roundLabel } from "../components/Bits.js";
-import { waitForPlayersText } from "../i18n/counts.js";
-import { roundDeltaText, scoreReasonText } from "../i18n/score.js";
+import { Players } from "../components/Players.js";
+import { GameOverStats, ResultBody, Scoreboard, Winners } from "../components/Bits.js";
+import { TvStage } from "../components/TvStage.js";
+import { stintRuleText, waitForPlayersText } from "../i18n/counts.js";
+import { EyesMark } from "../ui/EyesMark.js";
+import { Icon } from "../ui/Icon.js";
+import { PhoneResultDetails } from "./Player.js";
 
 export interface ConfirmActionRequest {
   title: string;
@@ -21,41 +22,18 @@ export interface ConfirmActionRequest {
 
 type ConfirmAction = (request: ConfirmActionRequest) => void;
 
+/**
+ * Management surfaces. A room owner is a player, so LOBBY / RESULT / GAME_OVER
+ * here are phone-first. A legacy external host screen reuses the shared TV
+ * stage for the challenge flow.
+ */
 export function Host({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
   switch (view.room.phase) {
     case "LOBBY": return <HostLobby view={view} confirmAction={confirmAction} />;
-    case "QUESTION": return <HostReady view={view} />;
-    case "COUNTDOWN": return <HostCountdown view={view} />;
-    case "ACTION": return <HostAction view={view} />;
-    case "HOLD": return <HostHold view={view} />;
-    case "PROMPT_REVEAL": return <HostPromptReveal view={view} />;
-    case "DISCUSSION": return <HostDiscussion view={view} confirmAction={confirmAction} />;
-    case "VOTING": return <HostVoting view={view} />;
     case "RESULT": return <HostResult view={view} confirmAction={confirmAction} />;
     case "GAME_OVER": return <HostGameOver view={view} confirmAction={confirmAction} />;
-    default: return <HostReady view={view} />;
+    default: return <TvStage view={view} />;
   }
-}
-
-function modeInfo(view: ClientView): GameModeInfo | undefined {
-  return view.room.availableModes.find((mode) => mode.id === view.challenge?.mode);
-}
-
-function countdownInstruction(mode?: GameModeInfo): { main: string; detail?: string } {
-  switch (mode?.id) {
-    case "HANDS": return { main: "إذا المطلوب ينطبق عليك، ارفع يدك عند «ارفعوا!»." };
-    case "POINT": return { main: "عند «أشروا!»، أشر على شخص واحد." };
-    case "NUMBER": return { main: "عند «ارفعوا أصابعكم!»، ارفع أصابعك بالعدد اللي اخترته.", detail: "من 0 إلى 5" };
-    default: return { main: "عند انتهاء العد، نفّذ الحركة." };
-  }
-}
-
-function HostStage({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={`screen host host-stage ${className}`.trim()}>
-      <div className="host-stage-content">{children}</div>
-    </div>
-  );
 }
 
 function requestClose(confirmAction: ConfirmAction, description = "بتنقفل الغرفة على الكل وتنتهي اللعبة الحالية.") {
@@ -68,22 +46,13 @@ function requestClose(confirmAction: ConfirmAction, description = "بتنقفل 
   });
 }
 
-function CloseRoom({ confirmAction }: { confirmAction: ConfirmAction }) {
-  return (
-    <div className="footer-note">
-      <button className="link-btn" onClick={() => requestClose(confirmAction)}>
-        إغلاق الغرفة
-      </button>
-    </div>
-  );
-}
-
 function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const active = view.players.filter((player) => player.connected).length;
   const modes = new Set(view.room.selectedModes);
   const canStart = active >= MIN_PLAYERS && modes.size > 0;
   const missingPlayers = Math.max(0, MIN_PLAYERS - active);
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   const toggleMode = (id: GameMode) => {
     const next = new Set(modes);
@@ -99,6 +68,20 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
     : "طرق اللعب تتغيّر بين التحدّيات حسب اختياراتك.";
   const startLabel = waitForPlayersText(missingPlayers);
 
+  const copy = async (value: string, kind: "code" | "link") => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(kind);
+      window.setTimeout(() => setCopied((current) => current === kind ? null : current), 1_500);
+    } catch { /* Clipboard can be unavailable on local non-secure origins. */ }
+  };
+
+  const share = async () => {
+    try {
+      await navigator.share({ title: "خلك طبيعي", text: `ادخل غرفتنا في خلك طبيعي: ${view.room.code}`, url: view.room.joinUrl });
+    } catch { /* Share sheet dismissed. */ }
+  };
+
   const confirmKick = (uid: string) => {
     const player = view.players.find((candidate) => candidate.uid === uid);
     if (!player) return;
@@ -113,196 +96,118 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
   };
 
   return (
-    <div className="screen host host-lobby-screen">
-      <div className="center" style={{ marginBottom: 8 }}><h1 className="brand">خلك طبيعي</h1></div>
-      <div className="host-grid">
-        <div className="card codebox">
-          <span className="code-label">كود الغرفة</span>
-          <span className="code-value">{view.room.code}</span>
-          <button className="btn btn-ghost btn-sm" onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(view.room.code);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1_500);
-            } catch { /* Clipboard can be unavailable on local non-secure origins. */ }
-          }}>
-            {copied ? "تم النسخ ✓" : "نسخ الكود"}
-          </button>
-          <div style={{ marginTop: 18 }}><Qr url={view.room.joinUrl} /></div>
-          <span className="helper" style={{ direction: "ltr" }}>{view.room.joinUrl}</span>
-        </div>
-
-        <div className="stack host-lobby-controls">
-          <div className="card">
-            <div className="row between" style={{ marginBottom: 12 }}>
-              <span className="code-label">اللاعبين</span>
-              <span className="count-pill">{active} <small>/ {view.room.maxPlayers}</small></span>
+    <div className="screen host host-lobby-screen owner-lobby has-utility-bar">
+      <div className="owner-lobby-grid">
+        <section className="invite-panel" aria-labelledby="owner-invite-title">
+          <div className="invite-head">
+            <EyesMark size={40} glance={false} />
+            <div>
+              <h1 className="invite-title" id="owner-invite-title">خلّ الكل يدخل</h1>
+              <p className="invite-lede">يمسحون الرمز، أو يكتبون الكود في اللعبة.</p>
             </div>
+          </div>
+          <div className="invite-body">
+            <Qr url={view.room.joinUrl} size={480} />
+            <div className="invite-code">
+              <span className="code-label">كود الغرفة</span>
+              <span className="code-value" aria-label={`كود الغرفة ${view.room.code.split("").join(" ")}`}>
+                {view.room.code.split("").map((char, index) => <span className="code-char" key={index}>{char}</span>)}
+              </span>
+              <div className="invite-actions">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copy(view.room.code, "code")}>
+                  <Icon name={copied === "code" ? "check" : "copy"} /> {copied === "code" ? "تم النسخ ✓" : "نسخ الكود"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => canShare ? void share() : void copy(view.room.joinUrl, "link")}
+                >
+                  <Icon name={canShare ? "share" : copied === "link" ? "check" : "copy"} /> {canShare ? "مشاركة الرابط" : copied === "link" ? "تم النسخ ✓" : "نسخ الرابط"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="owner-lobby-side">
+          <section className="lobby-section" aria-labelledby="owner-roster-title">
+            <header className="lobby-section-head">
+              <h2 className="section-title" id="owner-roster-title">اللاعبين</h2>
+              <span className="count-pill">{active} <small>/ {view.room.maxPlayers}</small></span>
+            </header>
             {view.players.length === 0
               ? <p className="subtitle">امسحوا الرمز بالجوال عشان تدخلون…</p>
-              : <Players players={view.players} canKick onKick={confirmKick} />}
-          </div>
+              : <Players players={view.players} selfUid={view.self.uid} canKick onKick={confirmKick} />}
+            {missingPlayers > 0 ? <p className="lobby-hint">نحتاج {MIN_PLAYERS} لاعبين على الأقل عشان نبدأ.</p> : null}
+          </section>
 
-          <div className="card stack">
-            <span className="code-label">المباراة</span>
-            <div className="manager-subcard card stack" style={{ gap: 8 }}>
-              <strong>🏅 {view.room.targetChallenges} تحدّيات</strong>
-              <span className="helper">{view.room.impostorStintMax
-                ? view.room.impostorStintMax === 1
-                  ? "كل متخفي له تحدّي واحد."
-                  : `كل متخفي يستمر حتى ينمسك أو يكمل ${view.room.impostorStintMax} تحدّيات كحد أقصى.`
-                : "مدة دور المتخفي تعتمد على عدد اللاعبين."}</span>
-              <span className="helper">المباراة تنتهي عند عدد التحدّيات المختار بالضبط.</span>
-              <span className="helper">كل لاعب يجمع نقاطه، وأغلبية الأصوات اللي انرسلت هي اللي تمسك المتخفي.</span>
+          <section className="lobby-section settings-panel" aria-labelledby="owner-settings-title">
+            <h2 className="section-title" id="owner-settings-title">إعدادات المباراة</h2>
+
+            <div className="setting">
+              <div className="setting-head">
+                <span className="setting-label" id="owner-challenges-label">عدد التحدّيات</span>
+                <strong className="setting-value">🏅 {view.room.targetChallenges} تحدّيات</strong>
+              </div>
+              <div role="radiogroup" aria-label="عدد التحدّيات" className="segmented">
+                {CHALLENGE_OPTIONS.map((count) => {
+                  const selected = view.room.targetChallenges === count;
+                  return (
+                    <button
+                      key={count}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className="segment"
+                      onClick={() => actions.setSettings({ totalRounds: count })}
+                    >
+                      {count}
+                    </button>
+                  );
+                })}
+              </div>
+              <ul className="setting-notes">
+                <li>المباراة تنتهي عند عدد التحدّيات المختار بالضبط.</li>
+                <li>{stintRuleText(view.room.impostorStintMax)}</li>
+                <li>كل لاعب يجمع نقاطه، وأغلبية الأصوات اللي انرسلت هي اللي تمسك المتخفي.</li>
+              </ul>
             </div>
 
-            <span className="code-label" style={{ marginTop: 8 }}>اختر عدد التحدّيات</span>
-            <div role="radiogroup" aria-label="عدد التحدّيات" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-              {CHALLENGE_OPTIONS.map((count) => {
-                const selected = view.room.targetChallenges === count;
-                return (
-                  <button
-                    key={count}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    className={`home-tab${selected ? " active" : ""}`}
-                    onClick={() => actions.setSettings({ totalRounds: count })}
-                  >
-                    {count}
-                  </button>
-                );
-              })}
+            <div className="setting">
+              <span className="setting-label">طرق اللعب</span>
+              <div className="mode-switches">
+                {view.room.availableModes.map((mode) => {
+                  const selected = modes.has(mode.id);
+                  const locked = selected && modes.size === 1;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      className="switch-row mode-select-card"
+                      aria-pressed={selected}
+                      aria-disabled={locked || undefined}
+                      onClick={() => toggleMode(mode.id)}
+                    >
+                      <span className="switch-row-icon" aria-hidden="true">{mode.icon}</span>
+                      <span className="switch-row-text">
+                        <strong>{mode.fullLabel}</strong>
+                        <span>{mode.description}</span>
+                      </span>
+                      <span className="switch" aria-hidden="true" />
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="setting-foot mode-summary">{modeSummary}</p>
             </div>
-            <p className="helper center" style={{ margin: 0 }}>9 هو الافتراضي.</p>
-
-            <span className="code-label" style={{ marginTop: 8 }}>اختر طرق اللعب</span>
-            <div className="mode-select-grid">
-              {view.room.availableModes.map((mode) => {
-                const selected = modes.has(mode.id);
-                return (
-                  <button key={mode.id} className={`mode-select-card${selected ? " selected" : ""}`} aria-pressed={selected} onClick={() => toggleMode(mode.id)}>
-                    <span className="mode-select-icon" aria-hidden="true">{mode.icon}</span>
-                    <strong>{mode.fullLabel}</strong>
-                    <span className="mode-select-description">{mode.description}</span>
-                    <span className="mode-select-state">{selected ? "مختار ✓" : "اضغط للاختيار"}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="helper center mode-summary">{modeSummary}</p>
-          </div>
-
-          <button className="btn btn-primary" disabled={!canStart} onClick={() => actions.startGame()}>{startLabel}</button>
+          </section>
         </div>
       </div>
-      <CloseRoom confirmAction={confirmAction} />
-    </div>
-  );
-}
 
-function HostReady({ view }: { view: ClientView }) {
-  const progress = view.readyProgress ?? { submitted: 0, total: view.players.length };
-  const mode = modeInfo(view);
-  return (
-    <HostStage>
-      <div className="eyebrow">{roundLabel(view)}</div>
-      <div className="host-mode-mark">{mode ? `${mode.icon} ${mode.label}` : "استعدوا"}</div>
-      <h1 className="title host-stage-heading">شوفوا جوالاتكم</h1>
-      <p className="subtitle">كل واحد يشوف المطلوب منه بجواله ويضغط جاهز</p>
-      <div className="card host-progress-card"><Progress submitted={progress.submitted} total={progress.total} verb="جاهزين" /></div>
-    </HostStage>
-  );
-}
-
-function HostCountdown({ view }: { view: ClientView }) {
-  const [, tick] = useState(0);
-  const instruction = countdownInstruction(modeInfo(view));
-  useEffect(() => {
-    const id = window.setInterval(() => tick((value) => value + 1), 100);
-    return () => clearInterval(id);
-  }, []);
-  const seconds = visibleCountdownSecond(view.room.phaseEndsAt, estimatedServerNow()) ?? 1;
-  return (
-    <HostStage className="host-countdown-stage">
-      <div className="eyebrow">استعدوا…</div>
-      <div className="host-countdown-number">{seconds}</div>
-      <div className="host-countdown-instruction" style={{ width: "min(100%, 760px)", fontSize: "clamp(22px, 2.8vw, 34px)", fontWeight: 800, lineHeight: 1.45 }}>
-        <div>{instruction.main}</div>
-        {instruction.detail ? <div style={{ marginTop: 4, color: "var(--muted)", fontSize: "clamp(16px, 1.7vw, 22px)", fontWeight: 700 }}>{instruction.detail}</div> : null}
+      <div className="owner-dock lobby-dock">
+        <button className="btn btn-primary" disabled={!canStart} onClick={() => actions.startGame()}>{startLabel}</button>
+        <button type="button" className="link-btn danger" onClick={() => requestClose(confirmAction)}>إغلاق الغرفة</button>
       </div>
-    </HostStage>
-  );
-}
-
-function HostAction({ view }: { view: ClientView }) {
-  return <HostStage className="host-action-stage"><h1 className="host-action-title">{modeInfo(view)?.actionLabel ?? "الحين!"}</h1></HostStage>;
-}
-
-function HostHold({ view }: { view: ClientView }) {
-  return (
-    <HostStage className="host-hold-stage">
-      <div className="eyebrow">خذوا نظرة 👀</div>
-      <h1 className="host-hold-title">طالعوا بعض</h1>
-      <p className="subtitle host-hold-subtitle">خلكم على وضعكم لين يطلع المطلوب.</p>
-      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-    </HostStage>
-  );
-}
-
-function HostPromptReveal({ view }: { view: ClientView }) {
-  return <HostStage><div className="eyebrow host-prompt-eyebrow">المطلوب كان…</div><h1 className="host-prompt host-prompt-reveal">{view.publicPrompt?.text ?? "…"}</h1></HostStage>;
-}
-
-function HostDiscussion({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
-  return (
-    <HostStage className="host-discussion-stage">
-      <div className="eyebrow">{roundLabel(view)}</div>
-      <div className="eyebrow host-prompt-eyebrow">المطلوب كان</div>
-      <div className="host-prompt host-prompt-discussion">{view.publicPrompt?.text ?? "…"}</div>
-      <h1 className="title host-discussion-question">مين تصرفه مو طبيعي؟</h1>
-      <PhaseCountdown endsAt={view.room.phaseEndsAt} warningAtSeconds={10} warningText="استعدوا للتصويت" />
-      <p className="subtitle">التصويت يبدأ تلقائيًا بعد انتهاء النقاش.</p>
-      <CloseRoom confirmAction={confirmAction} />
-    </HostStage>
-  );
-}
-
-function HostVoting({ view }: { view: ClientView }) {
-  const progress = view.votesProgress ?? { submitted: 0, total: 0 };
-  const percent = progress.total ? (progress.submitted / progress.total) * 100 : 0;
-  return (
-    <HostStage className="host-voting-stage">
-      <div className="eyebrow">{roundLabel(view)}</div>
-      <h1 className="title host-voting-title">صوّتوا</h1>
-      <PhaseCountdown endsAt={view.room.phaseEndsAt} />
-      <div className="vote-progress-summary">
-        <strong>صوّت {progress.submitted} من {progress.total}</strong>
-        <div className="vote-progress-bar" aria-label={`تقدم التصويت ${progress.submitted} من ${progress.total}`} role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.submitted}>
-          <i style={{ width: `${percent}%` }} />
-        </div>
-      </div>
-      <div className="card center stack" style={{ width: "min(100%, 680px)" }}>
-        <strong>الأصوات مخفية للحين</strong>
-        <p className="subtitle" style={{ margin: 0 }}>ما يظهر اتجاه التصويت ولا أسماء اللي ما صوّتوا.</p>
-      </div>
-    </HostStage>
-  );
-}
-
-function Scoreboard({ rows, round }: { rows: ScoreEntry[]; round?: boolean }) {
-  return (
-    <div className="card stack score-explain-board" style={{ width: "min(100%, 760px)" }}>
-      <div className="code-label">{round ? "النقاط بعد دور المتخفي" : "الترتيب النهائي"}</div>
-      {rows.map((row) => (
-        <div key={row.uid} className="score-explain-row">
-          <div className="row between host-summary-row">
-            <span>#{row.rank} {row.name}</span>
-            <strong>{row.score} نقطة</strong>
-          </div>
-          {round ? <div className="score-reason">{scoreReasonText(row.roundReason)} · {roundDeltaText(row.roundDelta)}</div> : null}
-        </div>
-      ))}
     </div>
   );
 }
@@ -324,35 +229,35 @@ function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: 
     });
   };
   return (
-    <HostStage className="host-result-stage">
-      <div className="card host-result-panel">{result ? <ResultBody result={result} /> : null}</div>
-      {fullReveal && view.scoreboard ? <Scoreboard rows={view.scoreboard} round /> : null}
-      <button className="btn btn-primary" onClick={advance}>{fullReveal ? "التالي" : "التحدّي التالي"}</button>
-      <p className="helper center" style={{ margin: 0 }}>النتيجة تبقى قدامكم لين تضغط التالي.</p>
-    </HostStage>
+    <div className={`screen host-result-stage player-result-screen${fullReveal ? " is-full" : " is-light"}`} data-moment="result">
+      {result ? <ResultBody result={result} players={view.players} showTally={false} /> : null}
+      <PhoneResultDetails view={view} />
+      <div className="spacer" />
+      <div className="owner-dock">
+        <button className="btn btn-primary" onClick={advance}>{fullReveal ? "التالي" : "التحدّي التالي"}</button>
+        <p className="helper">النتيجة تبقى قدامكم لين تضغط التالي.</p>
+      </div>
+    </div>
   );
 }
 
 function HostGameOver({ view, confirmAction }: { view: ClientView; confirmAction: ConfirmAction }) {
   const gameOver = view.gameOver;
   return (
-    <HostStage className="host-game-over-stage">
-      <h1 className="brand">خلصت اللعبة 🎉</h1>
-      {gameOver ? (
-        <>
-          <p className="subtitle host-game-over-summary">لعبتوا {gameOver.completedChallenges} تحدّيات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار متخفي</p>
-          <div className="card stack host-game-over-card">
-            <div className="row between host-summary-row"><span>انمسك</span><span>{gameOver.caughtRounds}</span></div>
-            <div className="row between host-summary-row"><span>نجا من 3 تحدّيات</span><span>{gameOver.completedEscapeRounds ?? gameOver.escapedRounds}</span></div>
-            {(gameOver.matchEndedUncaughtRounds ?? 0) > 0 ? <div className="row between host-summary-row"><span>انتهت المباراة وهو ما انمسك</span><span>{gameOver.matchEndedUncaughtRounds}</span></div> : null}
-          </div>
-        </>
-      ) : null}
-      {view.scoreboard ? <Scoreboard rows={view.scoreboard} /> : null}
-      <div className="row host-game-over-actions">
-        <button className="btn btn-primary" onClick={() => actions.rematch()}>العبوا مرة ثانية</button>
-        <button className="btn btn-ghost" onClick={() => requestClose(confirmAction, "بتقفل الغرفة الحالية وترجع الكل للرئيسية.")}>إغلاق الغرفة</button>
+    <div className="screen gameover-screen host-game-over-stage has-utility-bar" data-moment="gameover">
+      <header className="gameover-hero">
+        <h1 className="gameover-title"><span className="brand">خلصت اللعبة</span> 🎉</h1>
+        {view.scoreboard ? <Winners rows={view.scoreboard} players={view.players} /> : null}
+      </header>
+      {gameOver ? <GameOverStats gameOver={gameOver} /> : null}
+      {view.scoreboard ? <Scoreboard rows={view.scoreboard} players={view.players} selfUid={view.self.uid} /> : null}
+      <div className="spacer" />
+      <div className="owner-dock">
+        <div className="owner-dock-row">
+          <button className="btn btn-primary" onClick={() => actions.rematch()}>العبوا مرة ثانية</button>
+          <button className="btn btn-secondary" onClick={() => requestClose(confirmAction, "بتقفل الغرفة الحالية وترجع الكل للرئيسية.")}>إغلاق الغرفة</button>
+        </div>
       </div>
-    </HostStage>
+    </div>
   );
 }

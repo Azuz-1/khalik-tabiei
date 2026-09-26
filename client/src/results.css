@@ -1,0 +1,309 @@
+/*
+ * Results, scores and the final moment (phone base; the TV stage scales these
+ * up in tv-stage.css). A result is a game moment first, data second.
+ */
+
+.player-result-screen,
+.gameover-screen { gap: var(--space-6); }
+
+.result {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.result-kicker {
+  color: var(--ink-subtle);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.result-title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: clamp(34px, 10vw, 52px);
+  font-weight: 900;
+  line-height: 1.12;
+  text-wrap: balance;
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
+}
+.result-complete.is-caught .result-title { color: var(--ink-strong); text-shadow: var(--glow-text); }
+.result-complete.is-escaped .result-title,
+.result-complete.is-match-end .result-title { color: var(--ink-impostor); }
+
+.result-subtitle {
+  max-width: 30ch;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+/* Intermediate survival: lighter, anonymous. */
+.result-survived { gap: var(--space-3); padding-block: var(--space-4); }
+.result-survived-mark {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--impostor-tint);
+  color: var(--magenta-300);
+}
+.result-survived-mark svg { width: 36px; height: 36px; }
+.result-stint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--space-2);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* Full reveal: the person is the payoff. */
+.result-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-4);
+}
+.result-avatar {
+  position: relative;
+  display: inline-flex;
+  margin-bottom: var(--space-3);
+  animation: reveal-avatar var(--dur-stage) var(--ease-spring) 180ms both;
+}
+.result-avatar::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(217 70 239 / 0.35), transparent 70%);
+  z-index: -1;
+}
+.result-complete.is-caught .result-avatar::before { background: radial-gradient(circle, rgb(167 139 250 / 0.45), transparent 70%); }
+.result-avatar-mask {
+  position: absolute;
+  inset-block-end: -6px;
+  inset-inline-start: -6px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid var(--canvas);
+  background: var(--magenta-600);
+  color: #fff;
+}
+.result-avatar-mask svg { width: 22px; height: 22px; }
+
+@keyframes reveal-avatar {
+  from { opacity: 0; transform: scale(0.5) rotate(-8deg); }
+  to { opacity: 1; transform: none; }
+}
+
+.result-impostor-label { color: var(--ink-subtle); font-size: 14px; font-weight: 800; }
+.result-impostor-name {
+  max-width: 100%;
+  color: var(--ink-strong);
+  font-size: clamp(30px, 9vw, 44px);
+  font-weight: 900;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  animation: rise-in var(--dur-slow) var(--ease-out) 320ms both;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--space-3);
+}
+.result-meta .tag { color: var(--ink-muted); }
+
+/* ---- settled vote aggregate --------------------------------------------- */
+.result-vote-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.result-vote-board {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.result-vote-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(48px, 30%) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.result-vote-row .vote-card-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: start;
+}
+.vote-bar { height: 6px; border-radius: var(--radius-pill); background: rgb(255 255 255 / 0.06); overflow: hidden; }
+.vote-bar i { display: block; height: 100%; border-radius: inherit; background: var(--violet-400); }
+.result-vote-row .vote-card-count { color: var(--ink-muted); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.result-vote-row.is-zero .vote-card-name,
+.result-vote-row.is-zero .vote-card-count { color: var(--ink-subtle); }
+
+/* ---- my score (phone) -------------------------------------------------- */
+.my-score {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--edge-subtle);
+  background: var(--surface);
+}
+.my-score.is-positive { border-color: rgb(110 231 168 / 0.28); background: var(--success-tint); }
+.my-score-delta {
+  flex: 0 0 auto;
+  min-width: 64px;
+  color: var(--ink-subtle);
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+.my-score.is-positive .my-score-delta { color: var(--success); }
+.my-score-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: start; }
+.my-score-text strong { color: var(--ink-strong); font-size: 16px; }
+.my-score-text span { color: var(--ink-muted); font-size: 14px; line-height: 1.5; }
+.my-score-total { flex: 0 0 auto; color: var(--ink-subtle); font-size: 13px; font-weight: 700; text-align: center; }
+.my-score-total b { display: block; color: var(--ink-strong); font-size: 20px; }
+
+/* ---- scoreboard ------------------------------------------------------------ */
+.scoreboard { width: 100%; display: flex; flex-direction: column; gap: var(--space-2); }
+.score-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--edge-subtle);
+}
+.score-row:last-child { border-bottom: 0; }
+.score-row.self {
+  margin-inline: -8px;
+  padding-inline: 12px;
+  border-radius: var(--radius-md);
+  border-bottom-color: transparent;
+  background: var(--surface-selected);
+}
+.score-rank {
+  flex: 0 0 22px;
+  color: var(--ink-subtle);
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+}
+.score-row.is-first .score-rank { color: var(--warning); }
+.score-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: start; }
+.score-name {
+  overflow: hidden;
+  color: var(--ink-strong);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.score-self { color: var(--ink-accent); font-weight: 700; }
+.score-reason { color: var(--ink-muted); font-size: 13px; font-weight: 600; line-height: 1.45; }
+.score-delta {
+  flex: 0 0 auto;
+  min-width: 42px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--success-tint);
+  color: var(--success);
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+  direction: ltr;
+}
+.score-delta.is-zero { background: var(--surface); color: var(--ink-subtle); }
+.score-total { flex: 0 0 auto; min-width: 56px; color: var(--ink-subtle); font-size: 13px; font-weight: 700; text-align: end; }
+.score-total b { color: var(--ink-strong); font-size: 18px; font-weight: 900; }
+
+/* ---- game over ------------------------------------------------------------- */
+.gameover-hero { display: flex; flex-direction: column; align-items: center; gap: var(--space-5); text-align: center; }
+.gameover-title { font-size: clamp(32px, 10vw, 52px); white-space: nowrap; }
+.gameover-summary { margin: 0; color: var(--ink-muted); font-size: 16px; font-weight: 600; line-height: 1.7; text-align: center; }
+.gameover-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.gameover-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-align: center;
+}
+.gameover-stats dt { color: var(--ink-muted); font-size: 13px; font-weight: 700; line-height: 1.4; }
+.gameover-stats dd { margin: 0; color: var(--ink-strong); font-size: 28px; font-weight: 900; line-height: 1.1; }
+
+.winners { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); }
+.winners-label { display: inline-flex; align-items: center; gap: 6px; color: var(--warning); font-size: 14px; font-weight: 800; }
+.winners-label svg { width: 18px; height: 18px; }
+.winners-list { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-5); }
+.winner { display: flex; flex-direction: column; align-items: center; gap: 4px; animation: pop-in var(--dur-slow) var(--ease-spring) both; }
+.winner .avatar { box-shadow: 0 0 0 3px var(--canvas), 0 0 0 5px rgb(251 199 90 / 0.7), 0 12px 40px -12px rgb(251 199 90 / 0.6); }
+.winner-name { color: var(--ink-strong); font-size: 20px; font-weight: 900; overflow-wrap: anywhere; }
+.winner-score { color: var(--ink-muted); font-size: 14px; font-weight: 700; }
+.winner-score b { color: var(--ink-strong); }
+
+/* ---- owner result / game over (owner phone and legacy shared host) -------- */
+.owner-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-inline: calc(-1 * var(--phone-gutter));
+  padding: var(--space-4) var(--phone-gutter) max(var(--space-2), env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgb(7 5 13 / 0), var(--canvas) 30%);
+}
+.owner-dock .helper { margin: 0; text-align: center; }
+.owner-dock-row { display: flex; gap: var(--space-2); }
+.owner-dock-row .btn { flex: 1; }
+
+.player-result-screen.is-light { justify-content: center; }
+.player-result-screen.is-light .spacer { display: none; }
+.player-result-screen.is-light .waiting-note { margin-top: var(--space-6); }
+.gameover-title,
+.tv-gameover-title { margin: 0; line-height: 1.1; }
+.gameover-title .brand { font-size: inherit; }

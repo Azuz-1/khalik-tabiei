@@ -1,6 +1,8 @@
 import type { PublicPlayer } from "../../../shared/types.js";
+import { Avatar, seatLookup } from "../ui/Avatar.js";
+import { Icon } from "../ui/Icon.js";
 
-/** Live player chips. Seat number is visible; connection color is supplementary. */
+/** Live roster chips. The name carries identity; colour and presence dot are supplementary, and «منقطع» is spelled out. */
 export function Players({
   players,
   selfUid,
@@ -12,43 +14,33 @@ export function Players({
   canKick?: boolean;
   onKick?: (uid: string) => void;
 }) {
+  const slotOf = seatLookup(players);
   return (
     <div className="players">
-      {players.map((player) => (
-        <span key={player.uid} className={`chip${player.connected ? "" : " off"}`}>
-          <span className="seat-badge" aria-label={`مقعد ${player.seatNumber}`}>{player.seatNumber}</span>
-          <span className="dot" aria-hidden="true" />
-          <span>
-            {player.name}
-            {player.uid === selfUid ? " (أنت)" : ""}
-            {player.isHost ? " · مالك الغرفة" : ""}
+      {players.map((player) => {
+        const self = player.uid === selfUid;
+        return (
+          <span key={player.uid} className={`chip${player.connected ? "" : " off"}${self ? " is-self" : ""}`}>
+            <Avatar name={player.name} seat={slotOf(player.uid)} size="sm" offline={!player.connected} />
+            <span className="chip-name" dir="auto">{player.name}{self ? " (أنت)" : ""}</span>
+            {player.isHost ? <span className="chip-meta">· مالك الغرفة</span> : null}
+            {!player.connected ? <span className="chip-status-off">منقطع</span> : null}
+            {/* Stable seat identity stays in the DOM for room tooling; it is a long
+                opaque number on phones, so it is not shown as visible chrome. */}
+            <span className="seat-badge" hidden>{player.seatNumber}</span>
+            {canKick && onKick && !player.isHost ? (
+              <button
+                type="button"
+                className="kick"
+                aria-label={`إخراج ${player.name}`}
+                onClick={() => onKick(player.uid)}
+              >
+                <Icon name="close" />
+              </button>
+            ) : null}
           </span>
-          <span className="sr-only">{player.connected ? "متصل" : "منقطع"}</span>
-          {canKick && onKick && !player.isHost ? (
-            <button
-              type="button"
-              className="kick"
-              aria-label={`إخراج ${player.name} من مقعد ${player.seatNumber}`}
-              onClick={() => onKick(player.uid)}
-            >
-              ✕
-            </button>
-          ) : null}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-export function Progress({ submitted, total, verb }: { submitted: number; total: number; verb: string }) {
-  const pct = total > 0 ? Math.round((submitted / total) * 100) : 0;
-  return (
-    <div className="progress-big stack">
-      <div className="num">{submitted} <span style={{ color: "var(--muted)" }}>/ {total}</span></div>
-      <div className="subtitle center">{verb}</div>
-      <div className="bar" role="progressbar" aria-label={verb} aria-valuemin={0} aria-valuemax={total} aria-valuenow={submitted}>
-        <i style={{ width: `${pct}%` }} />
-      </div>
+        );
+      })}
     </div>
   );
 }

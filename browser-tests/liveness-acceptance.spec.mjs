@@ -50,10 +50,18 @@ async function joinPlayer(browser, code, name) {
   return { ...phone, name };
 }
 
+/** Every challenge opens behind a role-neutral privacy curtain on the phone. */
+async function revealPrivateRole(page, timeout) {
+  const reveal = page.getByRole("button", { name: "اعرض دوري", exact: true });
+  await expect(reveal).toBeVisible({ timeout });
+  await reveal.click();
+  await expect(page.locator(".player-stage-main")).toBeVisible();
+}
+
 async function identifyRoles(players) {
   const rows = [];
   for (const player of players) {
-    await expect(player.page.locator(".player-stage-main")).toBeVisible({ timeout: PHASE_TIMEOUT });
+    await revealPrivateRole(player.page, PHASE_TIMEOUT);
     rows.push({ player, isImpostor: await player.page.getByText("أنت المتخفي").isVisible() });
   }
   const impostors = rows.filter((row) => row.isImpostor);

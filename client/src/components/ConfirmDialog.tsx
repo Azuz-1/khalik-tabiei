@@ -82,7 +82,7 @@ export function ConfirmDialog({
     }}>
       <div
         ref={panelRef}
-        className="card confirm-dialog stack"
+        className="confirm-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -91,11 +91,12 @@ export function ConfirmDialog({
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
+        <div className="sheet-handle" aria-hidden="true" />
         <h2 id={titleId} className="title">{state.title}</h2>
         <p id={descriptionId} className="subtitle">{state.description}</p>
         {state.error ? <p id={errorId} className="confirm-error" role="status">{state.error}</p> : null}
         <div className="confirm-actions">
-          <button ref={cancelRef} type="button" className="btn btn-ghost" disabled={state.pending} onClick={onCancel}>إلغاء</button>
+          <button ref={cancelRef} type="button" className="btn btn-secondary" disabled={state.pending} onClick={onCancel}>إلغاء</button>
           <button type="button" className="btn btn-danger" disabled={state.pending} onClick={onConfirm}>
             {state.pending ? "جارٍ التنفيذ…" : state.confirmLabel}
           </button>

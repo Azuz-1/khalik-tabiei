@@ -10,7 +10,9 @@ import "./styles.css";
 import "./c-ux.css";
 import "./game-hud.css";
 import "./game-stage.css";
-import "./game-stage-host.css";
+import "./results.css";
+import "./lobby.css";
+import "./tv-stage.css";
 import "./home-suggestion-dialog.css";
 
 async function loadRoot(): Promise<ComponentType> {

@@ -72,7 +72,8 @@ test("current player-facing copy excludes retired or unclear wording", () => {
 });
 
 test("TV and player phone both carry synchronized countdown/action/look-around cues", () => {
-  const host = source("client/src/screens/Host.tsx");
+  // The shared-screen stage (TV display + legacy host screen) lives in TvStage.
+  const host = source("client/src/screens/Host.tsx") + source("client/src/components/TvStage.tsx");
   const player = source("client/src/screens/Player.tsx");
 
   assert.ok(host.includes('className="host-countdown-instruction"'));

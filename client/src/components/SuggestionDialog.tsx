@@ -124,7 +124,7 @@ export function SuggestionDialog({
     >
       <div
         ref={panelRef}
-        className="card suggestion-dialog stack"
+        className="sheet-panel suggestion-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -136,7 +136,7 @@ export function SuggestionDialog({
         <div className="suggestion-dialog-header">
           <div className="stack" style={{ gap: 5 }}>
             <div className="eyebrow">ساعدنا نحسنها</div>
-            <h2 className="title" id={titleId}>عندك فكرة أو ملاحظة؟</h2>
+            <h2 className="title suggestion-title" id={titleId}>عندك فكرة أو ملاحظة؟</h2>
           </div>
           <button
             ref={closeRef}

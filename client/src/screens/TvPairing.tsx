@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "../tv-pairing.css";
+import { EyesMark } from "../ui/EyesMark.js";
 
 interface PairingSession {
   id: string;
@@ -220,7 +221,7 @@ export function TvPairing() {
   return (
     <main className="tv-pairing" dir="rtl">
       <section className="tv-pairing-stage" aria-labelledby="tv-pairing-title">
-        <div className="tv-pairing-brand">خلك طبيعي</div>
+        <div className="tv-pairing-brand"><EyesMark size={64} /><span>خلك طبيعي</span></div>
         <h1 id="tv-pairing-title">اربط التلفزيون</h1>
 
         {status === "expired" ? (
@@ -234,7 +235,7 @@ export function TvPairing() {
         ) : pairing ? (
           <>
             <p className="tv-pairing-instruction">
-              افتح اللعبة من جوال المضيف واضغط <strong>«العب على التلفزيون»</strong>، ثم أدخل:
+              من جوال مالك الغرفة اضغط <strong>«📺 العب على التلفزيون»</strong> واكتب الرقم:
             </p>
             <div className="tv-pairing-code" dir="ltr" aria-label={`رمز الربط ${pairing.code.split("").join(" ")}`}>
               {formatCode(pairing.code)}

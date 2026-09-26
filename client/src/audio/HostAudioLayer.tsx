@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ClientView } from "../../../shared/types.js";
 import { OwnerDisplayControl } from "../components/OwnerDisplayControl.js";
+import { Icon } from "../ui/Icon.js";
 import { useHostGameAudio } from "./useHostGameAudio.js";
 import "./hostAudio.css";
 
@@ -22,7 +23,7 @@ export function HostAudioLayer({
         aria-label={muted ? "تشغيل صوت اللعبة" : "كتم صوت اللعبة"}
         title={muted ? "تشغيل الصوت" : "كتم الصوت"}
       >
-        <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span>
+        <Icon name={muted ? "mute" : "sound"} />
       </button>
       {view.self.isOwner === true ? <OwnerDisplayControl view={view} /> : null}
       {children}
