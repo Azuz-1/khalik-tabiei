@@ -297,7 +297,7 @@ function PlayerGameOver({ view }: { view: ClientView }) {
             <p className="subtitle">لعبتوا {gameOver.completedChallenges} تحدّيات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار متخفي</p>
             <div className="card stack" style={{ width: "100%" }}>
               <div className="row between" style={{ fontWeight: 900 }}><span>انمسك</span><span>{gameOver.caughtRounds}</span></div>
-              <div className="row between" style={{ fontWeight: 900 }}><span>نجا من دوره كامل</span><span>{gameOver.completedEscapeRounds ?? gameOver.escapedRounds}</span></div>
+              <div className="row between" style={{ fontWeight: 900 }}><span>نجا من 3 تحدّيات</span><span>{gameOver.completedEscapeRounds ?? gameOver.escapedRounds}</span></div>
               {(gameOver.matchEndedUncaughtRounds ?? 0) > 0 ? <div className="row between" style={{ fontWeight: 900 }}><span>انتهت المباراة وهو ما انمسك</span><span>{gameOver.matchEndedUncaughtRounds}</span></div> : null}
             </div>
           </>
