@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from "react";
+import { inertOutside } from "../ui/inert.js";
 
 export interface ConfirmDialogState {
   title: string;
@@ -26,15 +27,14 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!state) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const background = document.querySelector<HTMLElement>("[data-app-content]");
-    background?.setAttribute("inert", "");
-    background?.setAttribute("aria-hidden", "true");
+    // Everything outside the dialog (app content, gameplay chrome, portals)
+    // becomes inert; locks are shared-counted so an underlying sheet stays locked.
+    const releaseBackground = inertOutside(panelRef.current);
     const focusTimer = window.setTimeout(() => cancelRef.current?.focus(), 0);
 
     return () => {
       window.clearTimeout(focusTimer);
-      background?.removeAttribute("inert");
-      background?.removeAttribute("aria-hidden");
+      releaseBackground();
       if (previous?.isConnected) {
         previous.focus();
         return;

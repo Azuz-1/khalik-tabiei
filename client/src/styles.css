@@ -143,11 +143,11 @@ h1.brand { font-size: var(--text-hero); }
 .btn:disabled { cursor: not-allowed; }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--action-primary-hi), var(--action-primary));
+  background: linear-gradient(180deg, var(--action-primary), var(--action-primary-deep));
   color: var(--ink-on-action);
   box-shadow: var(--glow-primary);
 }
-.btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #a177ff, var(--action-primary-hi)); }
+.btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, var(--action-primary-hover), var(--action-primary)); }
 .btn-primary:active:not(:disabled) { background: var(--action-primary-pressed); }
 .btn-primary:disabled {
   background: var(--surface);
@@ -175,10 +175,10 @@ h1.brand { font-size: var(--text-hero); }
 .btn-quiet:hover:not(:disabled) { background: var(--surface); color: var(--ink-strong); }
 
 .btn-danger {
-  background: #c9353b;
-  color: #fff;
+  background: var(--action-danger-fill);
+  color: var(--ink-on-action);
 }
-.btn-danger:hover:not(:disabled) { background: #d6434a; }
+.btn-danger:hover:not(:disabled) { background: var(--action-danger-fill-hover); }
 .btn-danger:disabled { background: var(--surface); color: var(--ink-disabled); }
 
 .btn-danger-quiet {
@@ -275,7 +275,7 @@ select.input { font-size: 17px; }
 /* ---- avatars & player chips ---------------------------------------------- */
 .avatar {
   --avatar-size: 40px;
-  --seat-color: var(--seat-1);
+  --person-color: var(--person-1);
   position: relative;
   flex: 0 0 auto;
   display: inline-grid;
@@ -285,8 +285,8 @@ select.input { font-size: 17px; }
   border-radius: 50%;
   background:
     radial-gradient(circle at 30% 25%, rgb(255 255 255 / 0.28), transparent 55%),
-    var(--seat-color);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2), 0 6px 18px -10px var(--seat-color);
+    var(--person-color);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2), 0 6px 18px -10px var(--person-color);
   color: #fff;
   font-size: calc(var(--avatar-size) * 0.46);
   font-weight: 800;

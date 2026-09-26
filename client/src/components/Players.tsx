@@ -1,8 +1,8 @@
 import type { PublicPlayer } from "../../../shared/types.js";
-import { Avatar, seatLookup } from "../ui/Avatar.js";
+import { Avatar, colorSlotLookup } from "../ui/Avatar.js";
 import { Icon } from "../ui/Icon.js";
 
-/** Live roster chips. The name carries identity; colour and presence dot are supplementary, and «منقطع» is spelled out. */
+/** Live roster chips. The name carries identity; colour is supplementary and «منقطع» is spelled out. */
 export function Players({
   players,
   selfUid,
@@ -14,14 +14,14 @@ export function Players({
   canKick?: boolean;
   onKick?: (uid: string) => void;
 }) {
-  const slotOf = seatLookup(players);
+  const slotOf = colorSlotLookup(players);
   return (
     <div className="players">
       {players.map((player) => {
         const self = player.uid === selfUid;
         return (
           <span key={player.uid} className={`chip${player.connected ? "" : " off"}${self ? " is-self" : ""}`}>
-            <Avatar name={player.name} seat={slotOf(player.uid)} size="sm" offline={!player.connected} />
+            <Avatar name={player.name} colorSlot={slotOf(player.uid)} size="sm" offline={!player.connected} />
             <span className="chip-name" dir="auto">{player.name}{self ? " (أنت)" : ""}</span>
             {player.isHost ? <span className="chip-meta">· مالك الغرفة</span> : null}
             {!player.connected ? <span className="chip-status-off">منقطع</span> : null}

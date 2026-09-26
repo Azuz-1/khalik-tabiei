@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-const SEAT_COLORS = 10;
+const PERSON_COLORS = 10;
 
 function firstGrapheme(value: string): string {
   if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
@@ -21,21 +21,21 @@ export function monogram(name: string): string {
   return glyph.toLocaleUpperCase("en");
 }
 
-/** Colour is supplementary identity only; the name always stays visible. */
-export function seatColor(seatNumber: number | undefined): string {
-  const seat = seatNumber && seatNumber > 0 ? ((seatNumber - 1) % SEAT_COLORS) + 1 : 1;
-  return `var(--seat-${seat})`;
+/** CSS colour for a 1-based colour slot. Colour is supplementary; the name is always shown. */
+export function colorSlotVar(colorSlot: number | undefined): string {
+  const slot = colorSlot && colorSlot > 0 ? ((colorSlot - 1) % PERSON_COLORS) + 1 : 1;
+  return `var(--person-${slot})`;
 }
 
 export function Avatar({
   name,
-  seat,
+  colorSlot,
   size = "md",
   offline = false,
   className = "",
 }: {
   name: string;
-  seat?: number;
+  colorSlot?: number;
   size?: "sm" | "md" | "lg" | "xl";
   offline?: boolean;
   className?: string;
@@ -43,7 +43,7 @@ export function Avatar({
   return (
     <span
       className={`avatar avatar-${size}${offline ? " is-offline" : ""}${className ? ` ${className}` : ""}`}
-      style={{ "--seat-color": seatColor(seat) } as CSSProperties}
+      style={{ "--person-color": colorSlotVar(colorSlot) } as CSSProperties}
       aria-hidden="true"
     >
       <span className="avatar-glyph">{monogram(name)}</span>
@@ -52,12 +52,21 @@ export function Avatar({
 }
 
 /**
- * Colour slot for each player: their position in the server's player list.
- * Phones and the TV receive players in the same order (phones see a hashed
- * seat number, the TV a local 1…n), so position is the one value that keeps a
- * person's colour identical on every screen and unique for up to ten players.
+ * Colour slot for each player: their 1-based position in the server's current
+ * player list (join order).
+ *
+ * Why position and not `seatNumber`: phones receive an opaque hashed seat
+ * number while the TV receives a room-local 1…n, so no seat value is shared by
+ * every screen. The list order is identical everywhere, so at any moment a
+ * person has the same colour on every phone and the TV, and no two of up to
+ * ten players collide.
+ *
+ * Accepted trade-off: when someone leaves or is removed, the players after
+ * them move up one slot and their colour changes. Colour is therefore never
+ * the only identifier; every avatar sits next to the player's name. A colour
+ * that survives departures would need a stable shared slot from the server.
  */
-export function seatLookup(players: Array<{ uid: string }>): (uid: string) => number | undefined {
+export function colorSlotLookup(players: Array<{ uid: string }>): (uid: string) => number | undefined {
   const slots = new Map(players.map((player, index) => [player.uid, index + 1]));
   return (uid: string) => slots.get(uid);
 }

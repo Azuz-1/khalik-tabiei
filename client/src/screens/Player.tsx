@@ -3,14 +3,15 @@ import type { ClientView, GameModeInfo } from "../../../shared/types.js";
 import { TIMERS } from "../../../shared/constants.js";
 import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { estimatedServerNow } from "../net/clock.js";
-import { actions } from "../net/socket.js";
+import { actions, useGame } from "../net/socket.js";
 import { GameOverStats, MyScoreCallout, PhaseCountdown, ResultBody, Scoreboard, VoteBoard, Winners } from "../components/Bits.js";
 import { Players } from "../components/Players.js";
 import { stintRuleText } from "../i18n/counts.js";
-import { Avatar, seatLookup } from "../ui/Avatar.js";
+import { Avatar, colorSlotLookup } from "../ui/Avatar.js";
 import { EyesMark } from "../ui/EyesMark.js";
 import { Icon } from "../ui/Icon.js";
 import { SlotMeter } from "../ui/Meters.js";
+import { advanceCurtain, coverCurtain, initialCurtain, privateDealKey, revealCurtain } from "../ui/privacyCurtain.js";
 
 export function Player({ view }: { view: ClientView }) {
   switch (view.room.phase) {
@@ -89,13 +90,6 @@ function PlayerLobby({ view }: { view: ClientView }) {
 
 /* ---- private role --------------------------------------------------------- */
 
-/** Challenges already uncovered on this device (survives remounts, not reloads). */
-const revealedChallenges = new Set<string>();
-
-function challengeKey(view: ClientView): string {
-  return `${view.room.code}:${view.room.currentRound}:${view.room.completedChallenges}:${view.challenge?.index ?? 0}`;
-}
-
 /**
  * Presentation-only privacy curtain. It is identical for every role so a
  * glance at a covered phone reveals nothing; the server's per-recipient
@@ -120,9 +114,16 @@ function PrivacyCurtain({ mode, onReveal }: { mode?: GameModeInfo; onReveal: () 
 }
 
 function PlayerPrompt({ view }: { view: ClientView }) {
-  const key = challengeKey(view);
-  const [revealed, setRevealed] = useState(() => revealedChallenges.has(key));
-  useEffect(() => { setRevealed(revealedChallenges.has(key)); }, [key]);
+  const { status } = useGame();
+  const dealKey = privateDealKey(view);
+  const submitted = view.readyProgress?.submitted ?? 0;
+  const online = status === "online";
+  // Component-local on purpose: a new mount (next challenge, new match) always
+  // starts covered. Derived during render so a new deal never paints uncovered.
+  const [curtain, setCurtain] = useState(() => initialCurtain(dealKey, submitted, online));
+  const current = advanceCurtain(curtain, dealKey, submitted, online);
+  if (current !== curtain) setCurtain(current);
+  const revealed = current.revealed;
 
   if (view.myReady === undefined) return <PlayerWaitNext />;
   const ready = view.myReady === true;
@@ -130,10 +131,10 @@ function PlayerPrompt({ view }: { view: ClientView }) {
   if (ready) return <PlayerReadyWaiting view={view} />;
 
   if (!revealed) {
-    return <PrivacyCurtain mode={mode} onReveal={() => { revealedChallenges.add(key); setRevealed(true); }} />;
+    return <PrivacyCurtain mode={mode} onReveal={() => setCurtain(revealCurtain(current))} />;
   }
 
-  const cover = () => { revealedChallenges.delete(key); setRevealed(false); };
+  const cover = () => setCurtain(coverCurtain(current));
 
   return (
     <div className="screen player-stage-screen" data-moment="prompt">
@@ -297,7 +298,7 @@ function PlayerVote({ view }: { view: ClientView }) {
   const targets = view.voteTargets ?? [];
   const progress = view.votesProgress ?? { submitted: 0, total: 0 };
   const pickedName = targets.find((target) => target.uid === picked)?.name;
-  const seatOf = seatLookup(view.players);
+  const slotOf = colorSlotLookup(view.players);
 
   useEffect(() => {
     if (picked && !targets.some((target) => target.uid === picked)) setPicked(null);
@@ -347,7 +348,7 @@ function PlayerVote({ view }: { view: ClientView }) {
                 onClick={() => setPicked(selected ? null : target.uid)}
               >
                 <span className="stage-vote-avatar">
-                  <Avatar name={target.name} seat={seatOf(target.uid)} size="md" />
+                  <Avatar name={target.name} colorSlot={slotOf(target.uid)} size="md" />
                   {selected ? <span className="stage-vote-check" aria-hidden="true"><Icon name="check" /></span> : null}
                 </span>
                 <span className="stage-vote-name" dir="auto">{target.name}</span>
@@ -375,7 +376,7 @@ function PlayerVote({ view }: { view: ClientView }) {
 export function PhoneResultDetails({ view }: { view: ClientView }) {
   const result = view.result;
   if (!result?.roundComplete || !view.scoreboard) return null;
-  const seatOf = seatLookup(view.players);
+  const slotOf = colorSlotLookup(view.players);
   return (
     <>
       {view.self.role === "player" ? <MyScoreCallout rows={view.scoreboard} selfUid={view.self.uid} /> : null}
@@ -383,7 +384,7 @@ export function PhoneResultDetails({ view }: { view: ClientView }) {
       {(result.voteTally?.length ?? 0) > 0 ? (
         <section className="result-vote-section" aria-label="الأصوات">
           <h2 className="section-label">الأصوات</h2>
-          <VoteBoard rows={result.voteTally ?? []} seatOf={seatOf} />
+          <VoteBoard rows={result.voteTally ?? []} slotOf={slotOf} />
         </section>
       ) : null}
     </>

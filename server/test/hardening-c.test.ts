@@ -41,13 +41,14 @@ test("seat identity remains stable when another player leaves the roster", () =>
 });
 
 test("production UI has no native destructive confirm path and exposes modal accessibility contracts", async () => {
-  const [app, host, dialog, player, html, css] = await Promise.all([
+  const [app, host, dialog, player, html, css, inert] = await Promise.all([
     readFile(new URL("../../client/src/App.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/screens/Host.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/components/ConfirmDialog.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../client/index.html", import.meta.url), "utf8"),
     readFile(new URL("../../client/src/c-ux.css", import.meta.url), "utf8"),
+    readFile(new URL("../../client/src/ui/inert.ts", import.meta.url), "utf8"),
   ]);
 
   assert.equal(app.includes("confirm("), false);
@@ -55,7 +56,11 @@ test("production UI has no native destructive confirm path and exposes modal acc
   assert.ok(dialog.includes('role="dialog"'));
   assert.ok(dialog.includes('aria-modal="true"'));
   assert.ok(dialog.includes('event.key === "Escape"'));
-  assert.ok(dialog.includes('background?.setAttribute("inert", "")'));
+  // The dialog locks everything outside itself through the shared helper,
+  // which marks each background layer inert and hidden from assistive tech.
+  assert.ok(dialog.includes("inertOutside(panelRef.current)"));
+  assert.ok(inert.includes('element.setAttribute("inert", "")'));
+  assert.ok(inert.includes('element.setAttribute("aria-hidden", "true")'));
   assert.ok(app.includes('role="dialog"'));
   assert.ok(app.includes('data-game-surface'));
   assert.ok(player.includes("!targets.some((target) => target.uid === picked)"));

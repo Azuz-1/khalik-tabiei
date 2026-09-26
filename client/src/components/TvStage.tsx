@@ -4,7 +4,7 @@ import { TIMERS } from "../../../shared/constants.js";
 import { visibleCountdownSecond } from "../audio/hostAudioEvents.js";
 import { estimatedServerNow } from "../net/clock.js";
 import { stintRuleText } from "../i18n/counts.js";
-import { Avatar, seatLookup } from "../ui/Avatar.js";
+import { Avatar, colorSlotLookup } from "../ui/Avatar.js";
 import { EyesMark } from "../ui/EyesMark.js";
 import { Icon } from "../ui/Icon.js";
 import { MatchProgress, SlotMeter, matchPosition } from "../ui/Meters.js";
@@ -101,7 +101,7 @@ function TvLobby({ view, eyebrow }: { view: ClientView; eyebrow?: string }) {
   const selectedModes = view.room.availableModes.filter((mode) => view.room.selectedModes.includes(mode.id));
   const emptySlots = Math.max(0, view.room.maxPlayers - view.players.length);
   const missing = Math.max(0, view.room.minPlayers - active);
-  const slotOf = seatLookup(view.players);
+  const slotOf = colorSlotLookup(view.players);
   return (
     <div className="tv-lobby">
       <section className="tv-join" aria-label="الدخول للغرفة">
@@ -132,7 +132,7 @@ function TvLobby({ view, eyebrow }: { view: ClientView; eyebrow?: string }) {
           {view.players.map((player) => (
             <li key={player.uid} className={`tv-roster-slot${player.connected ? "" : " is-offline"}`}>
               <span className="tv-roster-avatar">
-                <Avatar name={player.name} seat={slotOf(player.uid)} size="lg" offline={!player.connected} />
+                <Avatar name={player.name} colorSlot={slotOf(player.uid)} size="lg" offline={!player.connected} />
                 {player.isHost ? <span className="tv-roster-crown" aria-label="مالك الغرفة"><Icon name="crown" /></span> : null}
               </span>
               <span className="tv-roster-name" dir="auto">{player.name}</span>
@@ -302,7 +302,7 @@ function TvTally({ view }: { view: ClientView }) {
   const all = view.result?.voteTally ?? [];
   const rows = all.filter((row) => row.votes > 0).sort((a, b) => b.votes - a.votes);
   const without = all.length - rows.length;
-  const slotOf = seatLookup(view.players);
+  const slotOf = colorSlotLookup(view.players);
   return (
     <div className="tv-tally" aria-label="الأصوات">
       <span className="tv-tally-label">الأصوات</span>
@@ -310,7 +310,7 @@ function TvTally({ view }: { view: ClientView }) {
         {rows.map((row) => (
           <li key={row.uid} className={row.votes === 0 ? "is-zero" : undefined} data-player-uid={row.uid}>
             <span className="tv-tally-avatar">
-              <Avatar name={row.name} seat={slotOf(row.uid)} size="md" />
+              <Avatar name={row.name} colorSlot={slotOf(row.uid)} size="md" />
               <b className="num-ltr">{row.votes}</b>
             </span>
             <span className="tv-tally-name" dir="auto">{row.name}</span>

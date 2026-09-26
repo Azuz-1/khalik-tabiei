@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { inertOutside } from "../ui/inert.js";
 
 type SuggestionCategory = "idea" | "content" | "bug" | "other";
 
@@ -26,18 +27,15 @@ export function SuggestionDialog({
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const background = document.querySelector<HTMLElement>("[data-app-content]");
     const previousOverflow = document.body.style.overflow;
 
-    background?.setAttribute("inert", "");
-    background?.setAttribute("aria-hidden", "true");
+    const releaseBackground = inertOutside(panelRef.current);
     document.body.style.overflow = "hidden";
     const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 0);
 
     return () => {
       window.clearTimeout(focusTimer);
-      background?.removeAttribute("inert");
-      background?.removeAttribute("aria-hidden");
+      releaseBackground();
       document.body.style.overflow = previousOverflow;
       if (previous?.isConnected) previous.focus();
     };

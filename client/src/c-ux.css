@@ -76,8 +76,11 @@ button:disabled { cursor: not-allowed; }
 .notice {
   position: fixed;
   z-index: 60;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centre with insets, not a transform: the rise-in entrance animation ends
+     at `transform: none`, which would push a transform-centred banner half
+     off-screen (and its recovery button out of reach). */
+  inset-inline: 0;
+  margin-inline: auto;
   width: min(calc(100% - 24px), 560px);
   display: flex;
   flex-direction: column;

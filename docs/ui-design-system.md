@@ -26,11 +26,11 @@ server-authoritative; nothing below recreates a rule in React.
 | Canvas | `--canvas`, `--canvas-raised`, `--stage`, `--stage-light*` |
 | Surfaces | `--surface`, `--surface-quiet`, `--surface-elevated(-2)`, `--surface-selected`, `--surface-sunken`, `--scrim` |
 | Ink | `--ink-strong`, `--ink`, `--ink-muted`, `--ink-subtle`, `--ink-disabled`, `--ink-accent`, `--ink-impostor` (all text steps ≥ 4.5:1 on canvas) |
-| Actions | `--action-primary(-hi/-pressed)`, `--action-secondary(-edge)`, `--action-danger(-ink/-tint)` |
+| Actions | `--action-primary(-deep/-hover/-pressed)`, `--action-danger-fill(-hover)`, `--action-secondary(-edge)`, `--action-danger(-ink/-tint)`. Every fill under `--ink-on-action` text is ≥ 4.5:1 (checked by `server/test/ui-contrast.test.ts`). |
 | Status | `--success`, `--warning`, `--danger`, `--impostor` (+ `-tint`) |
 | Edges / focus | `--edge-subtle`, `--edge`, `--edge-strong`, `--edge-selected`, `--focus-ring` |
 | Light | `--glow-primary`, `--glow-selected`, `--glow-result`, `--glow-text(-strong)` |
-| People | `--seat-1` … `--seat-10` (one stable colour per seat on every device; supplementary to name + seat number) |
+| People | `--person-1` … `--person-10`: a colour slot, not a seat (see People below) |
 | Scale | `--space-1…10`, `--radius-xs…xl/pill`, `--control-sm/md/lg`, `--touch-min` (44px) |
 | Type | phone `--text-meta…--text-display`; TV `--tv-meta…--tv-display` (vh-based) |
 | Motion | `--dur-instant…--dur-stage`, `--ease-out/spring/in-out`; all motion collapses under `prefers-reduced-motion` |
@@ -45,11 +45,27 @@ tokens so older selectors resolve to the system.
   `.btn-quiet`, `.btn-danger` (confirm dialogs only), `.btn-danger-quiet`,
   `.icon-btn`, `.link-btn`; sizes `.btn-sm` / `.btn-md` / default 58px.
 - Sheets & dialogs: `.sheet-backdrop` + `.sheet-panel` (bottom sheet on phones,
-  centred dialog ≥ 640px). Focus moves in, Tab is trapped, the page behind is
-  `inert`, Escape closes, focus returns to the opener (`ui/useModalFocus.ts`,
-  or the existing tested logic in `ConfirmDialog`/`SuggestionDialog`).
-- People: `ui/Avatar.tsx` (monogram, skips the definite article «ال»), roster
-  `.chip` with visible seat badge and visible «منقطع» state.
+  centred dialog ≥ 640px). Focus moves in, Tab is trapped, Escape closes, and
+  focus returns to the opener (`ui/useModalFocus.ts`; `ConfirmDialog` and
+  `SuggestionDialog` keep their own focus handling). Every modal, including
+  the room-closed notice, locks its background with `ui/inert.ts`: it walks
+  from the modal up to `<body>` and marks every sibling layer `inert` +
+  `aria-hidden` (app content, the gameplay HUD, the privacy link and
+  body-level portals, not just `[data-app-content]`). Locks are
+  reference-counted, so a confirm opened over a sheet releases only its own
+  lock.
+- People: `ui/Avatar.tsx` shows a monogram (skipping the definite article «ال»)
+  in a colour slot from `colorSlotLookup()`. The slot is the player's position
+  in the server's current player list: identical on every phone and the TV at
+  any moment, and unique for up to ten players. When someone leaves, the
+  players after them move up a slot, so their colour changes. Colour is
+  therefore supplementary and always shown next to the name. Phones receive
+  an opaque hashed `seatNumber` while the TV gets a room-local 1…n, so no seat
+  value is shared across screens. A colour that survives departures would need
+  a stable shared slot from the server.
+- Roster: `.chip` shows avatar, name, «(أنت)», «مالك الغرفة» and a spelled-out
+  «منقطع» state. The numeric `.seat-badge` stays in the DOM for tooling and
+  tests but is `hidden`, because on phones it is an opaque 6-digit id.
 - Progress: `ui/Meters.tsx`.
   - Match progress «التحدّي 4 من 9» → continuous segmented rail.
   - Impostor stint «دور المتخفي 2 من 3» → discrete magenta pips, only when the
@@ -75,7 +91,12 @@ reveal → discussion (question first, prompt as context) → vote (tap to selec
 then confirm in the dock, «تراجع» to clear) → voted → result → next.
 
 The curtain is presentation only; server projection remains the security
-boundary. The owner phone swaps to management surfaces only in LOBBY / RESULT /
+boundary. Its state lives in the private screen component (`ui/privacyCurtain.ts`),
+never in a module-level cache, so every fresh entry into QUESTION starts
+covered, including the first deal after a rematch, where the room code and
+every match counter repeat. While mounted, it re-covers when the observable
+private deal changes, when readiness drops (a role-blind redeal), or when the
+phone reconnects. The owner phone swaps to management surfaces only in LOBBY / RESULT /
 GAME_OVER, as before.
 
 ## Missing server data (not inferred on the client)

@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useGame } from "../net/socket.js";
-import { Avatar, seatLookup } from "../ui/Avatar.js";
+import { Avatar, colorSlotLookup } from "../ui/Avatar.js";
 import { Icon } from "../ui/Icon.js";
 import { MatchProgress } from "../ui/Meters.js";
 import { useModalFocus } from "../ui/useModalFocus.js";
@@ -68,7 +68,7 @@ export function GameChrome() {
   );
 
   if (!view || !activeRoom) return null;
-  const slotOf = seatLookup(view.players);
+  const slotOf = colorSlotLookup(view.players);
 
   // Settlement increments completedChallenges before RESULT is rendered, so RESULT
   // must keep showing the challenge that just finished instead of jumping ahead.
@@ -140,7 +140,7 @@ export function GameChrome() {
             <ul className="game-sheet-players" aria-label="اللاعبين">
               {orderedPlayers.map((player) => (
                 <li key={player.uid} className="game-sheet-player">
-                  <Avatar name={player.name} seat={slotOf(player.uid)} size="sm" offline={!player.connected} />
+                  <Avatar name={player.name} colorSlot={slotOf(player.uid)} size="sm" offline={!player.connected} />
                   <span className="game-sheet-player-name" dir="auto">{player.name}{player.uid === view.self.uid ? " · أنت" : ""}</span>
                   <span className={`game-sheet-presence ${player.connected ? "online" : "offline"}`}>
                     {player.connected ? "متصل" : "منقطع"}

@@ -14,9 +14,11 @@ import { ConfirmDialog, type ConfirmDialogState } from "./components/ConfirmDial
 import { Home } from "./screens/Home.js";
 import { Host, type ConfirmActionRequest } from "./screens/Host.js";
 import { Player } from "./screens/Player.js";
-import { Avatar, seatLookup } from "./ui/Avatar.js";
+import { Avatar, colorSlotLookup } from "./ui/Avatar.js";
 import { EyesMark } from "./ui/EyesMark.js";
 import { Icon } from "./ui/Icon.js";
+import { inertOutside } from "./ui/inert.js";
+import { useModalFocus } from "./ui/useModalFocus.js";
 
 interface RecoveryConfirmActionRequest {
   title: string;
@@ -279,13 +281,7 @@ export function App() {
         {toast ? <div className="toast" role="status">{toast.text}</div> : null}
 
         {notice ? (
-          <div className="overlay" role="dialog" aria-modal="true" aria-label="تنبيه الغرفة">
-            <div className="notice-card stack">
-              <EyesMark size={72} glance={false} className="notice-mark" />
-              <h2 className="title">{notice}</h2>
-              <button className="btn btn-primary" onClick={() => { clearNotice(); resetToHome(); }}>الرئيسية</button>
-            </div>
-          </div>
+          <RoomNotice text={notice} />
         ) : null}
       </div>
 
@@ -362,7 +358,7 @@ function HostPlayerManager({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const slotOf = seatLookup(players);
+  const slotOf = colorSlotLookup(players);
   const orderedPlayers = useMemo(
     () => [...players].sort((a, b) => Number(a.connected) - Number(b.connected) || a.seatNumber - b.seatNumber),
     [players],
@@ -370,14 +366,12 @@ function HostPlayerManager({
 
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const surface = document.querySelector<HTMLElement>("[data-game-surface]");
-    surface?.setAttribute("inert", "");
-    surface?.setAttribute("aria-hidden", "true");
+    // The game surface, gameplay chrome and every other sibling layer go inert.
+    const releaseBackground = inertOutside(panelRef.current);
     const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 0);
     return () => {
       window.clearTimeout(focusTimer);
-      surface?.removeAttribute("inert");
-      surface?.removeAttribute("aria-hidden");
+      releaseBackground();
       if (previous?.isConnected) previous.focus();
     };
   }, []);
@@ -442,7 +436,7 @@ function HostPlayerManager({
         {orderedPlayers.map((player) => (
           <div key={player.uid} className="manager-player-row">
             <div className="manager-player-main">
-              <Avatar name={player.name} seat={slotOf(player.uid)} size="md" offline={!player.connected} />
+              <Avatar name={player.name} colorSlot={slotOf(player.uid)} size="md" offline={!player.connected} />
               <div className="manager-player-text">
                 <strong dir="auto">{player.name}{player.isHost ? " · مالك الغرفة" : ""}</strong>
                 <div className={`helper${player.connected ? "" : " is-offline"}`}>{player.connected ? "متصل" : "منقطع — مكانه محفوظ"}</div>
@@ -496,6 +490,22 @@ function HostPlayerManager({
             <p className="helper">هذي القائمة تمنع رجوع نفس هوية اللعبة. مالك الغرفة يقدر يسمح للاعب يرجع من هنا.</p>
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Terminal room notice (closed, kicked…): a real modal with focus on its only action. */
+function RoomNotice({ text }: { text: string }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const homeRef = useRef<HTMLButtonElement>(null);
+  useModalFocus(panelRef, true, { initialFocus: homeRef });
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="تنبيه الغرفة">
+      <div ref={panelRef} className="notice-card stack" tabIndex={-1}>
+        <EyesMark size={72} glance={false} className="notice-mark" />
+        <h2 className="title">{text}</h2>
+        <button ref={homeRef} className="btn btn-primary" onClick={() => { clearNotice(); resetToHome(); }}>الرئيسية</button>
       </div>
     </div>
   );

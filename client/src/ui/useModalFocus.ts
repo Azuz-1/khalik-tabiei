@@ -1,28 +1,22 @@
 import { useEffect, type RefObject } from "react";
+import { inertOutside } from "./inert.js";
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
 /**
  * Modal focus discipline for sheets/dialogs: move focus in, keep Tab inside,
- * make the page behind inert, and restore focus to the opener on close.
+ * make everything outside the modal inert (see ui/inert.ts), and restore focus
+ * to the opener on close.
  */
 export function useModalFocus(
   panelRef: RefObject<HTMLElement>,
   open: boolean,
-  {
-    initialFocus,
-    inertSelector = "[data-app-content]",
-  }: { initialFocus?: RefObject<HTMLElement>; inertSelector?: string } = {},
+  { initialFocus }: { initialFocus?: RefObject<HTMLElement> } = {},
 ): void {
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const background = [...document.querySelectorAll<HTMLElement>(inertSelector)]
-      .filter((element) => !panelRef.current || !element.contains(panelRef.current));
-    for (const element of background) {
-      element.setAttribute("inert", "");
-      element.setAttribute("aria-hidden", "true");
-    }
+    const releaseBackground = inertOutside(panelRef.current);
     const focusTimer = window.setTimeout(() => (initialFocus?.current ?? panelRef.current)?.focus(), 0);
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -50,10 +44,7 @@ export function useModalFocus(
     return () => {
       window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", onKeyDown);
-      for (const element of background) {
-        element.removeAttribute("inert");
-        element.removeAttribute("aria-hidden");
-      }
+      releaseBackground();
       if (previous?.isConnected) previous.focus();
     };
   }, [open]);

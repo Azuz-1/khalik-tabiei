@@ -24,12 +24,13 @@ test("Home teaches the game before exposing the suggestion form", async ({ page 
   const dialog = page.getByRole("dialog", { name: "عندك فكرة أو ملاحظة؟" });
   await expect(dialog).toBeVisible();
   await expect(page.getByLabel("اقتراحك لتحسين اللعبة")).toBeVisible();
-  await expect(page.locator("[data-app-content]")).toHaveAttribute("inert", "");
+  // The dialog is portaled to <body>; the whole app root behind it is inert.
+  await expect.poll(() => page.locator("[data-app-content]").evaluate((element) => element.closest("[inert]") !== null)).toBe(true);
   await expect(page.getByRole("button", { name: "إغلاق الاقتراح" })).toBeFocused();
 
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator("[data-app-content]")).not.toHaveAttribute("inert", "");
+  await expect.poll(() => page.locator("[data-app-content]").evaluate((element) => element.closest("[inert]") !== null)).toBe(false);
   await expect(suggestionButton).toBeFocused();
 });
 

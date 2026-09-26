@@ -299,6 +299,23 @@ test("three-person full game: owner plays, reconnect survives, kick preserves mi
       expect(rendered).not.toMatch(/صوّت\s+(على|لـ)\s*\S+\s*→/);
     }
 
+    // Rematch reuses the room code and resets every match counter. Each phone
+    // revealed a private role nine times above, so the first private deal of the
+    // new match must still open behind the privacy curtain on every phone.
+    await owner.page.getByRole("button", { name: "العبوا مرة ثانية", exact: true }).click();
+    const restart = owner.page.getByRole("button", { name: "ابدأ اللعبة", exact: true });
+    await expect(restart).toBeEnabled({ timeout: PHASE_TIMEOUT });
+    await restart.click();
+    for (const player of players) {
+      await expect(player.page.getByRole("button", { name: "اعرض دوري", exact: true })).toBeVisible({
+        timeout: PHASE_TIMEOUT,
+      });
+      await expect(player.page.locator(".player-stage-main")).toHaveCount(0);
+      await expect(player.page.getByText("أنت المتخفي")).toHaveCount(0);
+      await expect(player.page.getByRole("button", { name: "جاهز", exact: true })).toHaveCount(0);
+    }
+    await revealPrivateRole(owner.page, PHASE_TIMEOUT);
+
     test.info().annotations.push({
       type: "journey-duration-ms",
       description: String(Date.now() - startedAt),

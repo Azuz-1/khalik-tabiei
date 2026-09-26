@@ -1,7 +1,7 @@
 import type { GameOverInfo, PublicPlayer, RoundResult, ScoreEntry, VoteTallyEntry } from "../../../shared/types.js";
 import { voteCountText } from "../i18n/counts.js";
 import { roundDeltaText, scoreReasonText } from "../i18n/score.js";
-import { Avatar, seatLookup } from "../ui/Avatar.js";
+import { Avatar, colorSlotLookup } from "../ui/Avatar.js";
 import { Icon } from "../ui/Icon.js";
 import { StageTimer } from "../ui/StageTimer.js";
 
@@ -33,17 +33,17 @@ export function PhaseCountdown({
   );
 }
 
-type SeatOf = (uid: string) => number | undefined;
+type SlotOf = (uid: string) => number | undefined;
 
 /** Settled aggregate only (name + count). Never rendered during VOTING. */
-export function VoteBoard({ rows, seatOf }: { rows: VoteTallyEntry[]; seatOf?: SeatOf }) {
+export function VoteBoard({ rows, slotOf }: { rows: VoteTallyEntry[]; slotOf?: SlotOf }) {
   const max = Math.max(1, ...rows.map((row) => row.votes));
   const ordered = [...rows].sort((a, b) => b.votes - a.votes);
   return (
     <ul className="vote-board result-vote-board" data-count={rows.length}>
       {ordered.map((row) => (
         <li className={`result-vote-row${row.votes === 0 ? " is-zero" : ""}`} key={row.uid} data-player-uid={row.uid}>
-          <Avatar name={row.name} seat={seatOf?.(row.uid)} size="sm" />
+          <Avatar name={row.name} colorSlot={slotOf?.(row.uid)} size="sm" />
           <span className="vote-card-name" dir="auto">{row.name}</span>
           <span className="vote-bar" aria-hidden="true"><i style={{ inlineSize: `${(row.votes / max) * 100}%` }} /></span>
           <span className="vote-card-count">{voteCountText(row.votes)}</span>
@@ -72,7 +72,7 @@ export function ResultBody({
   players?: PublicPlayer[];
   showTally?: boolean;
 }) {
-  const seatOf = seatLookup(players);
+  const slotOf = colorSlotLookup(players);
 
   if (!result.roundComplete) {
     return (
@@ -105,7 +105,7 @@ export function ResultBody({
       <h1 id="result-title" className={`result-title ${verdict.tone === "caught" ? "caught" : "escaped"}`}>{verdict.title}</h1>
       <div className="result-reveal">
         <span className="result-avatar">
-          <Avatar name={name} seat={result.impostorUid ? seatOf(result.impostorUid) : undefined} size="xl" />
+          <Avatar name={name} colorSlot={result.impostorUid ? slotOf(result.impostorUid) : undefined} size="xl" />
           <span className="result-avatar-mask" aria-hidden="true"><Icon name="mask" /></span>
         </span>
         <div className="result-impostor-label">المتخفي كان</div>
@@ -118,7 +118,7 @@ export function ResultBody({
       {showTally && (result.voteTally?.length ?? 0) > 0 ? (
         <div className="result-vote-section">
           <h2 className="section-label">الأصوات</h2>
-          <VoteBoard rows={result.voteTally ?? []} seatOf={seatOf} />
+          <VoteBoard rows={result.voteTally ?? []} slotOf={slotOf} />
         </div>
       ) : null}
     </section>
@@ -144,7 +144,7 @@ export function Scoreboard({
   round?: boolean;
   title?: string;
 }) {
-  const seatOf = seatLookup(players);
+  const slotOf = colorSlotLookup(players);
   return (
     <section className="scoreboard score-explain-board" aria-label={title ?? (round ? "النقاط بعد دور المتخفي" : "الترتيب النهائي")}>
       <h2 className="section-label">{title ?? (round ? "النقاط بعد دور المتخفي" : "الترتيب النهائي")}</h2>
@@ -154,7 +154,7 @@ export function Scoreboard({
           return (
             <li key={row.uid} className={`score-row score-explain-row${self ? " self" : ""}${row.rank === 1 ? " is-first" : ""}`}>
               <span className="score-rank num-ltr" aria-label={`المركز ${row.rank}`}>{row.rank}</span>
-              <Avatar name={row.name} seat={seatOf(row.uid)} size="sm" />
+              <Avatar name={row.name} colorSlot={slotOf(row.uid)} size="sm" />
               <span className="score-who">
                 <span className="score-name" dir="auto">{row.name}{self ? <span className="score-self"> · أنت</span> : null}</span>
                 {round ? <span className="score-reason">{scoreReasonText(row.roundReason)}</span> : null}
@@ -203,7 +203,7 @@ export function GameOverStats({ gameOver }: { gameOver: GameOverInfo }) {
 
 /** Top rank(s) for the final moment. Ties share the spotlight. */
 export function Winners({ rows, players = [] }: { rows: ScoreEntry[]; players?: PublicPlayer[] }) {
-  const seatOf = seatLookup(players);
+  const slotOf = colorSlotLookup(players);
   const top = rows.filter((row) => row.rank === 1);
   if (top.length === 0) return null;
   return (
@@ -212,7 +212,7 @@ export function Winners({ rows, players = [] }: { rows: ScoreEntry[]; players?: 
       <div className="winners-list">
         {top.map((row) => (
           <div key={row.uid} className="winner">
-            <Avatar name={row.name} seat={seatOf(row.uid)} size="lg" />
+            <Avatar name={row.name} colorSlot={slotOf(row.uid)} size="lg" />
             <span className="winner-name" dir="auto">{row.name}</span>
             <span className="winner-score"><b className="num-ltr">{row.score}</b> نقطة</span>
           </div>
