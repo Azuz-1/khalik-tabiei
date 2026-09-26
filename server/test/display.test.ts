@@ -79,6 +79,11 @@ test("display projection is public-only and never serializes real participant UI
   assert.ok(displayView.players.every((player) => /^d_[A-Za-z0-9_-]{16}$/.test(player.uid)));
 });
 
+test("display lobby carries the server-authoritative impostor stint cap", () => {
+  const view = buildDisplayView(seededRoom(), "https://game.test/join/ABCDE", "display-alias-secret");
+  assert.equal(view.room.impostorStintMax, 1);
+});
+
 test("same participant receives different display aliases in different room incarnations", () => {
   const secret = "display-alias-secret";
   const first = seededRoom(1000);

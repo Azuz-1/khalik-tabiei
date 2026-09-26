@@ -93,6 +93,7 @@ export function buildDisplayView(room: RoomState, joinUrl: string, secret: strin
       totalRounds: source.room.totalRounds,
       targetChallenges: source.room.targetChallenges,
       completedChallenges: source.room.completedChallenges,
+      ...(source.room.impostorStintMax !== undefined ? { impostorStintMax: source.room.impostorStintMax } : {}),
       maxPlayers: source.room.maxPlayers,
       minPlayers: source.room.minPlayers,
       hostUid: alias(source.room.hostUid),
