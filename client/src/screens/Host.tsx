@@ -343,7 +343,7 @@ function HostGameOver({ view, confirmAction }: { view: ClientView; confirmAction
           <p className="subtitle host-game-over-summary">لعبتوا {gameOver.completedChallenges} تحدّيات · مسكتوا المتخفي في {gameOver.caughtRounds} من {gameOver.totalRounds} أدوار متخفي</p>
           <div className="card stack host-game-over-card">
             <div className="row between host-summary-row"><span>انمسك</span><span>{gameOver.caughtRounds}</span></div>
-            <div className="row between host-summary-row"><span>نجا من 3 تحدّيات</span><span>{gameOver.completedEscapeRounds ?? gameOver.escapedRounds}</span></div>
+            <div className="row between host-summary-row"><span>نجا من دوره كامل</span><span>{gameOver.completedEscapeRounds ?? gameOver.escapedRounds}</span></div>
             {(gameOver.matchEndedUncaughtRounds ?? 0) > 0 ? <div className="row between host-summary-row"><span>انتهت المباراة وهو ما انمسك</span><span>{gameOver.matchEndedUncaughtRounds}</span></div> : null}
           </div>
         </>
