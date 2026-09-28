@@ -121,6 +121,9 @@ def analyze(wav):
     if seg == 8:
         i = find(words, "انمسك", "مسك"); R["انمسك_heard"] = i is not None
         R["pause_before_انمسك_ms"] = gap_before(i); R["rank_انمسك"] = pos(i)
+        j = find(words, "المتخفي", "متخفي"); R["المتخفي_rise_st"] = terminal(words[j])[0] if j is not None else None
+        R["انمسك_fall_st"] = terminal(words[i])[1] if i is not None else None
+        k = find(words, "وإذا", "واذا"); R["pause_before_وإذا_ms"] = gap_before(k)
     if seg == 10:
         i = find(words, "يفلت", "فلت"); R["rank_يفلت"] = pos(i); R["rank_نقاط"] = pos(find(words, "نقاط", "نقاض"))
         k = find(words, "قدر", "كدر", "جدر", "قد", "گدر"); R["word_قدر_asr"] = words[k]["w"] if k is not None else None
