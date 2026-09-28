@@ -110,3 +110,7 @@ Class-A fixes requested:
   - seg03_X = «تِدْخلون» seed 1; seg03_Y = «تدْخلون» seed 2.
   - seg06_X = plain «المتخفي» seed 2; seg06_Y = «المُتَخَفّي» seed 4; seg06_Z = «المُتَخَفّي» seed 5.
 - **Predictions logged before the owner listens: line 3 → X, line 6 → X.** «تدْخلون» (Y) was heard as «تدخلوا» (final ن dropped?) on both seeds. seg06_Z has the best timing, but Whisper heard «المتخف».
+
+## Round 11: owner's picks line 3 = **Y** («تدْخلون», seed 2), line 6 = **Y** («المُتَخَفّي», seed 4)
+- My logged predictions (X, X) were **both wrong**. The timing predictor is now **3/7 out-of-sample**: good for shortlisting, not for choosing. The owner's ear remains the decision.
+- **All 12 lines are chosen by the owner** → `picks_final.json`; per-line WAVs in `../segments/R_picks/`; `../narration_draft2_R.mp3` is assembled with the owner's own pauses between lines.
