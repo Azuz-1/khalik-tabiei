@@ -127,3 +127,11 @@ Class-A fixes requested:
   - **3:** «بدون تحميل… ولا تسجيل.», A = seed 12, B = seed 2. «ولا» is heard in all takes. «تسجيل» is now 5.6–5.9 dB under the line median, vs **14.5 dB** in the original pick (this matches the owner's "faint").
   - **5:** A = seed 2 (seeds 12 and 22 lost countdown pauses).
   - **6:** «يگلّدكم», A = the pick's seed 4, B = seed 24 (seed 14 heard «يقلتكم»).
+
+## Round 13: owner's picks 1 = **A** (round12 01_s2), 3 = **A** (round12 03b_s12), 5 = **A** (round12 05_s2)
+- **6:** the owner wants «المتخفي» to sound like the good one elsewhere in the narration. Taken to be **line 10 A** (the owner called its «المتخفي» "excellent"). Two approaches:
+  - **splice:** line 10's «المتخفي» cut in by forced alignment, loudness-matched, crossfaded;
+  - **regenerate:** 6 seeds of line 6, keeping the ones whose «المتخفي» is closest to line 10's (MFCC-DTW; a shortlist only).
+- Round-13 files (`critical_lines/Candidate-R/round13/`):
+  - **splice_A / splice_B:** round-12 6 A / 6 B with line 10's «المتخفي» cut in (`splice_word.py`: forced alignment, RMS match, 15 ms crossfades).
+  - **new_C / new_D:** re-takes, seeds 64 / 54, nominally closest to line 10's «المتخفي» by MFCC-DTW. The spread across all 8 takes was small (3.62–4.65), so this barely discriminates and is not a real ranking.
