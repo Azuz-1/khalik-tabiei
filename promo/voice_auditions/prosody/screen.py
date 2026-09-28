@@ -3,10 +3,11 @@ Fail if (a) Whisper misses a key word, or (b) there is no pause (>=120 ms) at a 
 owner paused (reference/owner_targets.json).
 Usage: python screen.py results.jsonl"""
 import sys, json, re
-KEY = {12: ["الحين", "السؤال", "تقدر", "خلك", "طبيعي"], 5: ["ثلاث", "اثنين", "واحد", "ارفع", "يدك"],
-       7: ["ينكشف", "المطلوب", "يشك", "بالثاني"], 10: ["المتخفي", "نقاط", "يفلت", "يكسب"], 8: ["المتخفي", "انمسك", "اغلب"]}
+KEY = {12: ["الحين", "السؤال", "خلك", "طبيعي"], 5: ["ثلاث", "اثنين", "واحد", "ارفع", "يدك"],
+       7: ["ينكشف", "المطلوب", "يشك", "بالثاني"], 10: ["نقاط", "يفلت", "يكسب"], 8: ["المتخفي", "انمسك", "اغلب"]}
 # owner pause points: (word before, word after)
-PAUSE = {12: [("السؤال", "تقدر"), ("تقدر", "خلك")], 5: [("اثنين", "واحد"), ("واحد", "ارفع")],
+# "*" = whatever word is adjacent (spelling variants such as «تِگْدَر» / «تِگْدَر تخدعهم»)
+PAUSE = {12: [("السؤال", "*"), ("*", "خلك")], 5: [("اثنين", "واحد"), ("واحد", "ارفع")],
          7: [], 10: [("نقاط", "واذا")], 8: [("فيه", "واذا"), ("المتخفي", "انمسك")]}
 def norm(t): return re.sub("[إأآ]", "ا", re.sub(r"[ً-ْـ]", "", t)).replace("ة", "ه")
 for l in open(sys.argv[1]):
@@ -14,8 +15,13 @@ for l in open(sys.argv[1]):
     miss = [k for k in KEY.get(seg, []) if norm(k)[:4] not in asr]
     W = r["words"]; bad = []
     for a, b in PAUSE.get(seg, []):
-        ia = next((i for i, w in enumerate(W) if norm(a) in w[0]), None)
-        ib = next((i for i, w in enumerate(W) if norm(b) in w[0] and (ia is None or i > ia)), None)
+        if b == "*":
+            ia = next((i for i, w in enumerate(W) if norm(a) in w[0]), None); ib = ia + 1 if ia is not None and ia + 1 < len(W) else None
+        elif a == "*":
+            ib = next((i for i, w in enumerate(W) if norm(b) in w[0]), None); ia = ib - 1 if ib else None
+        else:
+            ia = next((i for i, w in enumerate(W) if norm(a) in w[0]), None)
+            ib = next((i for i, w in enumerate(W) if norm(b) in w[0] and (ia is None or i > ia)), None)
         if ia is None or ib is None: bad.append(f"{a}|{b}:unaligned"); continue
         lo, hi = W[ia][1], W[ib][2]
         ms = max([pm for p0, pm in r["pauses"] if lo <= p0 <= hi] or [0])

@@ -50,3 +50,17 @@ Failed (not sent):
 - 5 seed 3: no pause after «اثنين».
 - 10 seeds 2 and 3: no contrast pause after «نقاط».
 - 12 seed 3: dialect drift «الحين» → «الآن» and no pause after «السؤال».
+
+## Round 6: owner's picks and issues
+- **Picked: 5 = seed 2** (`recipe/seg05_seed2`), **7 = seed 3** (`recipe/seg07_seed3`).
+- **12: "not understandable"; maybe the line itself needs changing.** Testing whether this is pronunciation (a lone «تِقْدَر؟» with strong ق) or wording (the question lacks an object):
+  - A = same words, «تِگْدَر»
+  - B = «تِگْدَر تخدعهم؟»
+  - C = «تِگْدَر تسايرهم؟»
+
+  B and C are wording proposals and would change the caption, so the owner decides.
+- **10: disliked «المتخفي»; «ق» too strong.** Najdi realizes ق as [g], so the test uses «گِدَر». «المتخفي» is tested in three forms: «المُتَخَفّي» (current), plain «المتخفي», and «المِتْخَفّي» (colloquial *mit-*).
+- Round-6 screen: 7 of 12 pass. The seed-1 takes of segment 10 lost the contrast pause for all three spellings; seed 2 kept it for all three. Two segment-12 takes said «خليك» instead of «خلك» (rejected).
+- Sent (`critical_lines/Candidate-R/round6/`):
+  - 10 A «المُتَخَفّي» / B «المتخفي» / C «المِتْخَفّي»: all seed 2, all with «گِدَر». Only «المتخفي» differs.
+  - 12 A «تِگْدَر؟» / B «تِگْدَر تخدعهم؟» / C «تِگْدَر تسايرهم؟».
