@@ -1,0 +1,15 @@
+{
+  "name": "khalik-tabiei-promo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Source project for the خلك طبيعي vertical promo video (capture → voice → compositor → score → mix → MP4).",
+  "type": "module",
+  "scripts": {
+    "capture": "node capture/capture.mjs && python3 tools/optimize_captures.py",
+    "build": "bash build.sh",
+    "stills": "node render/render.mjs --stills"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56"
+  }
+}
