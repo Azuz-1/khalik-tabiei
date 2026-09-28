@@ -1,13 +1,14 @@
-"""Original score + sound design for the promo, synthesized from scratch.
+"""Music bed + sound design for the short cut.
 
-Music: a Khaleeji-flavoured party groove in D Hijaz (doum/tak drums,
-hand-claps, riq shimmer, bass, a plucked oud-like Karplus-Strong lead, pads),
-arranged in sections that follow the story beats in build/timings.json.
+Music: modern, minimal game-ad bed in F minor, 116 BPM — soft sine kick,
+light snap, sparse hats, sidechained sub bass, warm FM electric-piano chords
+and a sparse mallet motif. Sections follow the narration beats
+(build/timings.json); drums drop out for the secret / countdown / reveal, and
+the bed falls silent for a beat right before «ارفعوا!», «انمسك!» and the logo.
 
-SFX: triggered from build/cues.json (exported by the compositor). The
-countdown ticks, action hit, hold, reveal, vote, caught and escaped sounds
-recreate the game's own Web Audio recipes (client/src/audio/gameAudio.ts),
-layered with restrained cinematic sweetening.
+SFX: triggered from build/cues.json. Countdown, action, hold, reveal, vote,
+caught, join are ports of the game's own Web Audio recipes
+(client/src/audio/gameAudio.ts).
 
 Writes build/music.wav and build/sfx.wav (48 kHz stereo float).
 """
@@ -19,414 +20,298 @@ from scipy.signal import butter, sosfilt, fftconvolve
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(ROOT, "build")
 SR = 48000
-rs = np.random.RandomState(1234)
+rs = np.random.RandomState(7)
 
 TM = json.load(open(os.path.join(BUILD, "timings.json")))
 CU = json.load(open(os.path.join(BUILD, "cues.json")))
-DUR = CU["duration"] + 1.0
+DUR = CU["duration"] + 0.6
 N = int(DUR * SR)
-beat_of = {b["id"]: b for b in TM["beats"]}
-chunk_of = {c["id"]: c for c in TM["chunks"]}
+beat = {b["id"]: b for b in TM["beats"]}
+chunk = {c["id"]: c for c in TM["chunks"]}
 cues = CU["cues"]
-T_ACTION = next(c["t"] for c in cues if c["type"] == "action")
-T_CAUGHT = next(c["t"] for c in cues if c["type"] == "caught")
-T_LOGO = next(c["t"] for c in cues if c["type"] == "logo")
+def cue_t(kind):
+    return next((c["t"] for c in cues if c["type"] == kind), None)
+T_ACTION, T_CAUGHT, T_LOGO = cue_t("action"), cue_t("caught"), cue_t("logo")
 
 # ------------------------------------------------------------------ utils --
-def tt(d):
-    return np.arange(int(d * SR)) / SR
+def n_(d): return int(round(d * SR))
+def tt(d): return np.arange(n_(d)) / SR
+def lp(x, f, o=2): return sosfilt(butter(o, f, "low", fs=SR, output="sos"), x)
+def hp(x, f, o=2): return sosfilt(butter(o, f, "high", fs=SR, output="sos"), x)
+def bp(x, a, b, o=2): return sosfilt(butter(o, [a, b], "band", fs=SR, output="sos"), x)
+def midi(m): return 440.0 * 2 ** ((m - 69) / 12)
 
-def env_exp(d, tau, attack=0.002):
-    t = tt(d)
-    e = np.exp(-t / tau)
-    a = int(attack * SR)
-    if a > 0:
-        e[:a] *= np.linspace(0, 1, a)
+def add(buf, x, t, g=1.0, pan=0.0):
+    i = n_(t)
+    if i >= len(buf) or i + len(x) <= 0: return
+    if i < 0: x = x[-i:]; i = 0
+    x = x[: len(buf) - i]
+    buf[i:i + len(x), 0] += x * g * np.cos((pan + 1) * np.pi / 4) * np.sqrt(2)
+    buf[i:i + len(x), 1] += x * g * np.sin((pan + 1) * np.pi / 4) * np.sqrt(2)
+
+def env(d, a=0.003, tau=0.2, rel=0.02):
+    t = tt(d); e = np.exp(-t / tau)
+    ai = max(1, n_(a)); e[:ai] *= np.linspace(0, 1, ai)
+    ri = max(1, n_(rel)); e[-ri:] *= np.linspace(1, 0, ri)
     return e
 
-def bp(x, lo, hi, order=2):
-    return sosfilt(butter(order, [lo, hi], btype="band", fs=SR, output="sos"), x)
+def room(seconds=1.2, decay=0.28, seed=3):
+    r = np.random.RandomState(seed); t = tt(seconds)
+    ir = np.stack([r.randn(len(t)), r.randn(len(t))], 1) * np.exp(-t / decay)[:, None]
+    ir = np.stack([lp(ir[:, 0], 5000), lp(ir[:, 1], 5000)], 1)
+    return ir / np.sqrt((ir ** 2).sum(0))
 
-def lp(x, f, order=2):
-    return sosfilt(butter(order, f, btype="low", fs=SR, output="sos"), x)
-
-def hp(x, f, order=2):
-    return sosfilt(butter(order, f, btype="high", fs=SR, output="sos"), x)
-
-def add(buf, x, t, gain=1.0, pan=0.0):
-    i = int(round(t * SR))
-    if i >= len(buf) or i + len(x) <= 0:
-        return
-    if i < 0:
-        x = x[-i:]; i = 0
-    x = x[: len(buf) - i]
-    l = gain * np.cos((pan + 1) * np.pi / 4) * np.sqrt(2)
-    r = gain * np.sin((pan + 1) * np.pi / 4) * np.sqrt(2)
-    buf[i:i + len(x), 0] += x * l
-    buf[i:i + len(x), 1] += x * r
-
-def sweep(f0, f1, d, wave="sine"):
-    t = tt(d)
-    f = f0 * (f1 / f0) ** (t / d) if f0 > 0 and f1 > 0 else np.linspace(f0, f1, len(t))
-    ph = 2 * np.pi * np.cumsum(f) / SR
-    if wave == "tri":
-        return 2 / np.pi * np.arcsin(np.sin(ph))
-    return np.sin(ph)
-
-def note(n):  # midi → Hz
-    return 440.0 * 2 ** ((n - 69) / 12)
-
-def reverb_ir(seconds=1.8, decay=0.45, seed=3):
-    r = np.random.RandomState(seed)
-    t = tt(seconds)
-    e = np.exp(-t / decay)
-    ir = np.stack([r.randn(len(t)) * e, r.randn(len(t)) * e], 1)
-    ir[:, 0] = lp(ir[:, 0], 6000); ir[:, 1] = lp(ir[:, 1], 6000)
-    ir /= np.sqrt((ir ** 2).sum(0))
-    return ir
-
-def apply_reverb(x, ir, wet):
-    y = np.stack([fftconvolve(x[:, k], ir[:, k])[: len(x)] for k in range(2)], 1)
-    return x + wet * y
+def reverb(x, ir, wet):
+    return x + wet * np.stack([fftconvolve(x[:, k], ir[:, k])[: len(x)] for k in range(2)], 1)
 
 # ------------------------------------------------------------ instruments --
-def doum(vel=1.0):
-    d = 0.5
-    x = sweep(120, 52, d) * env_exp(d, 0.2) * 0.9
-    click = np.zeros(len(x)); c = int(0.004 * SR)
-    click[:c] = rs.randn(c) * np.linspace(1, 0, c) * 0.25
-    return (x + click) * vel
+def kick(v=1.0):
+    d = 0.45; t = tt(d)
+    f = 48 + 110 * np.exp(-t / 0.035)
+    x = np.sin(2 * np.pi * np.cumsum(f) / SR) * env(d, 0.001, 0.16, 0.05)
+    x = np.tanh(1.6 * x) / np.tanh(1.6)
+    c = n_(0.0015); x[:c] += hp(rs.randn(c), 3000) * 0.15
+    return x * v
 
-def tak(vel=1.0):
-    d = 0.14
-    n = bp(rs.randn(int(d * SR)), 1800, 5200) * env_exp(d, 0.03)
-    tone = np.sin(2 * np.pi * 380 * tt(d)) * env_exp(d, 0.035)
-    return (0.55 * n + 0.5 * tone) * vel
+def snap(v=1.0):
+    d = 0.12
+    n = bp(rs.randn(n_(d)), 1800, 5200) * env(d, 0.0005, 0.022, 0.01)
+    tone = np.sin(2 * np.pi * 1150 * tt(d)) * env(d, 0.0005, 0.012, 0.01)
+    return (0.8 * n + 0.25 * tone) * v
 
-def clap(vel=1.0):
-    d = 0.3
-    x = np.zeros(int(d * SR))
-    for off in (0, 0.011, 0.023):
-        i = int(off * SR)
-        m = len(x) - i
-        seg = bp(rs.randn(m), 900, 2800) * np.exp(-np.arange(m) / SR / (0.012 if off < 0.02 else 0.085))
-        x[i:] += seg
-    return x * 0.5 * vel
+def hat(v=1.0, open_=False):
+    d = 0.18 if open_ else 0.05
+    return hp(rs.randn(n_(d)), 7500, 3) * env(d, 0.0005, 0.06 if open_ else 0.012, 0.01) * 0.5 * v
 
-def riq(vel=1.0):
-    d = 0.09
-    return hp(rs.randn(int(d * SR)), 6500) * env_exp(d, 0.02) * 0.22 * vel
-
-_PLUCKS = {}
-
-
-def pluck(f, d=1.2, bright=0.55, vel=1.0):
-    """Karplus–Strong string with a soft, oud-like body (cached per note)."""
-    key = (round(f, 2), round(d, 3), bright)
-    if key not in _PLUCKS:
-        _PLUCKS[key] = _pluck(f, d, bright)
-    return _PLUCKS[key] * vel
-
-
-def _pluck(f, d, bright):
-    n = int(d * SR)
-    L = max(2, int(SR / f))
-    buf = (rs.rand(L) * 2 - 1) * 0.8
-    buf = lp(buf, 400 + bright * 5000)
-    out = np.zeros(n)
-    idx = 0
-    prev = 0.0
-    k = 0.994
-    for i in range(n):
-        v = buf[idx]
-        nv = k * 0.5 * (v + prev)
-        prev = v
-        buf[idx] = nv
-        out[i] = v
-        idx = (idx + 1) % L
-    out = lp(out, 3800)
-    a = int(0.003 * SR); out[:a] *= np.linspace(0, 1, a)
-    return out
-
-def bass(f, d, vel=1.0):
+def sub(f, d, v=1.0):
     t = tt(d)
-    x = np.sin(2 * np.pi * f * t) + 0.35 * np.sin(2 * np.pi * 2 * f * t) + 0.12 * np.sign(np.sin(2 * np.pi * f * t))
-    e = np.minimum(1, t / 0.01) * np.exp(-t / (d * 0.9))
-    r = int(0.03 * SR); e[-r:] *= np.linspace(1, 0, r)
-    return lp(x * e, 700) * 0.55 * vel
+    x = np.sin(2 * np.pi * f * t) + 0.18 * np.sin(4 * np.pi * f * t)
+    e = np.minimum(1, t / 0.008) * np.exp(-t / max(0.2, d * 0.8))
+    r = n_(0.03); e[-r:] *= np.linspace(1, 0, r)
+    return lp(np.tanh(1.3 * x * e), 400) * 0.6 * v
 
-def pad(freqs, d, bright=900):
-    t = tt(d)
-    x = np.zeros(len(t))
-    for f in freqs:
-        for det in (-0.12, 0.0, 0.13):
-            ph = rs.rand() * 2 * np.pi
-            x += (2 * ((f * (1 + det / 100) * t + ph / (2 * np.pi)) % 1) - 1)
-    x = lp(x / (3 * len(freqs)), bright)
-    fade = min(1.2, d / 3)
-    e = np.minimum(1, t / fade) * np.minimum(1, (d - t) / fade)
-    return x * e
+_EP = {}
+def ep(m, d=1.8, v=1.0):
+    """Clean FM electric-piano note (Rhodes-like tine), cached."""
+    key = (m, round(d, 2))
+    if key not in _EP:
+        f = midi(m); t = tt(d)
+        idx = 1.6 * np.exp(-t / 0.35)
+        mod = np.sin(2 * np.pi * f * t) * idx
+        x = np.sin(2 * np.pi * f * t + mod) * np.exp(-t / 1.1)
+        x += 0.25 * np.sin(2 * np.pi * 2 * f * t) * np.exp(-t / 0.25)
+        a = n_(0.006); x[:a] *= np.linspace(0, 1, a)
+        r = n_(0.08); x[-r:] *= np.linspace(1, 0, r)
+        _EP[key] = lp(x, 3200)
+    return _EP[key] * v
 
-# --------------------------------------------------------------- sections --
-BPM = 104
-BEAT = 60 / BPM
-S16 = BEAT / 4
-D_HIJAZ = [62, 63, 66, 67, 69, 70, 72, 74]  # D Eb F# G A Bb C D
-ROOTS = [38, 39, 38, 36]                      # bass per bar: D Eb D C
+def mallet(m, v=1.0):
+    f = midi(m); d = 0.6; t = tt(d)
+    x = np.sin(2 * np.pi * f * t) * np.exp(-t / 0.22) + 0.35 * np.sin(2 * np.pi * 3.9 * f * t) * np.exp(-t / 0.05)
+    a = n_(0.002); x[:a] *= np.linspace(0, 1, a)
+    return x * v
 
-def section_bounds():
-    B = lambda k: beat_of[k]["start"]
-    return [
-        ("intro", 0.0, B("title")),
-        ("grooveA", B("title"), B("secret")),
-        ("dark", B("secret"), B("ready")),
-        ("build", B("ready"), T_ACTION),
-        ("grooveA", T_ACTION, B("reveal")),
-        ("suspense", B("reveal"), B("vote")),
-        ("light", B("vote"), T_CAUGHT),
-        ("grooveFull", T_CAUGHT, beat_of["win"]["start"]),
-        ("sly", beat_of["win"]["start"], B("cta")),
-        ("finale", B("cta"), DUR),
-    ]
+def pad(ms, d, cutoff=900):
+    t = tt(d); x = np.zeros(len(t))
+    for m in ms:
+        f = midi(m)
+        for det in (-0.08, 0.08):
+            x += np.sin(2 * np.pi * f * (1 + det / 100) * t) + 0.3 * np.sin(2 * np.pi * 2 * f * (1 + det / 100) * t)
+    x = lp(x / (2.6 * len(ms)), cutoff)
+    fade = min(0.8, d / 3)
+    return x * np.minimum(1, t / fade) * np.minimum(1, np.maximum(0, d - t) / fade)
 
-drums = np.zeros((N, 2)); claps = np.zeros((N, 2)); low = np.zeros((N, 2)); lead = np.zeros((N, 2)); pads = np.zeros((N, 2)); fx = np.zeros((N, 2))
+# -------------------------------------------------------------- structure --
+BPM = 116
+BT = 60 / BPM
+CHORDS = [  # voicings (midi) and bass root — Fm9 · Dbmaj7 · Abmaj7 · Eb6
+    ([56, 60, 63, 67], 41), ([56, 60, 61, 65], 37), ([55, 60, 63, 68], 44), ([55, 58, 60, 63], 39),
+]
+MOTIF = [(0, 72), (1.5, 75), (2, 77), (3, 75)]  # beats, midi — F minor pentatonic
 
-DOUM, TAK = doum(), tak()
-LEAD_HOOK = [(0, 69, 2), (2, 70, 1), (3, 69, 1), (4, 66, 2), (6, 67, 1), (7, 66, 1), (8, 63, 3), (12, 62, 4)]  # (16th, midi, len)
+def B(i): return beat[i]["start"]
+def silence_before(t, d=0.22):
+    return (t - d, t) if t else None
 
-for name, a, b in section_bounds():
-    if b - a <= 0.05:
+SECTIONS = [
+    # name,      start,       end,        drums, bass, keys, motif, pad
+    ("hook",     0.0,         B("s2"),    0,     0,    1,    0,     1),
+    ("groove",   B("s2"),     B("s4"),    1,     1,    1,    0,     0),
+    ("secret",   B("s4"),     B("s5"),    0,     2,    1,    0,     1),
+    ("count",    B("s5"),     T_ACTION,   0,     0,    0,    0,     1),
+    ("groove",   T_ACTION,    B("s7"),    2,     1,    1,    1,     0),
+    ("reveal",   B("s7"),     B("s8"),    0,     2,    1,    0,     1),
+    ("vote",     B("s8"),     T_CAUGHT,   3,     2,    1,    0,     0),
+    ("groove",   T_CAUGHT,    B("s11"),   2,     1,    1,    1,     0),
+    ("build",    B("s11"),    B("s12"),   4,     1,    1,    1,     0),
+    ("question", B("s12"),    T_LOGO,     0,     0,    1,    0,     1),
+    ("end",      T_LOGO,      DUR,        0,     0,    0,    0,     0),
+]
+STOPS = [silence_before(T_ACTION), silence_before(T_CAUGHT), silence_before(T_LOGO, 0.3)]
+
+drums = np.zeros((N, 2)); bass = np.zeros((N, 2)); keys = np.zeros((N, 2)); mot = np.zeros((N, 2)); pads = np.zeros((N, 2)); fx = np.zeros((N, 2))
+kicks = []
+
+for name, a, b, dr, bs, ky, mo, pd in SECTIONS:
+    if b - a < 0.05:
         continue
-    bars = int(np.ceil((b - a) / (BEAT * 4))) + 1
-    for bar in range(bars):
-        t_bar = a + bar * BEAT * 4
-        root = ROOTS[bar % 4]
-        for step in range(16):
-            t = t_bar + step * S16
-            if t >= b - 0.02:
-                break
-            swing = 0.018 if step % 2 else 0.0
-            ts = t + swing
-            full = name in ("grooveA", "grooveFull", "finale")
-            if name == "intro":
-                if step in (0, 8):
-                    add(drums, doum(0.35), ts, 0.8)
-                if step % 4 == 0:
-                    add(drums, riq(0.5), ts, 0.6, 0.3)
-            elif name == "build":
-                pass
-            elif name == "suspense":
-                if step == 0:
-                    add(drums, doum(0.8), ts, 0.9)
-                if step == 10:
-                    add(drums, doum(0.45), ts, 0.7)
-                if step % 4 == 2:
-                    add(drums, riq(0.5), ts, 0.5, -0.3)
-            else:
-                if step in (0, 6, 8) or (full and step == 14 and bar % 2):
-                    add(drums, doum(1.0 if step == 0 else 0.8), ts, 0.95)
-                if step in (4, 12):
-                    add(drums, tak(0.9), ts, 0.6, 0.15)
-                if step in (3, 11) and name != "dark":
-                    add(drums, tak(0.4), ts, 0.4, -0.2)
-                if step % 2 == 0:
-                    add(drums, riq(0.8 if step % 4 == 2 else 0.5), ts, 0.7, 0.35)
-                if name in ("grooveA", "grooveFull", "finale", "light", "sly") and step in (10, 14) + ((7,) if full else ()):
-                    add(claps, clap(1.0 if step == 10 else 0.8), ts, 0.9, 0.1 * (1 if step == 14 else -1))
-            # bass
-            if name in ("grooveA", "grooveFull", "finale", "dark", "light", "sly"):
-                if step in (0, 6, 8, 14 if name != "dark" else 99):
-                    f = note(root + (12 if step == 14 else 0))
-                    if name == "sly":
-                        f = note([38, 37, 36, 35][bar % 4] + (7 if step == 8 else 0))
-                    add(low, bass(f, S16 * (3 if step in (0, 8) else 2)), ts, 0.85 if name != "dark" else 0.7)
-        # lead hook every other bar in grooves; sparse question motif in suspense
-        if name in ("grooveA", "grooveFull", "finale") and bar % 2 == 1:
-            for s16, m, ln in LEAD_HOOK:
-                t = t_bar + s16 * S16
-                if t < b - 0.1:
-                    add(lead, pluck(note(m), ln * S16 + 0.5, 0.6, 0.55), t, 0.7, -0.25)
-        if name in ("intro", "dark") and bar % 2 == 0:
-            for s16, m in ((0, 62), (3, 63), (6, 62), (10, 66 if name == "dark" else 69)):
-                t = t_bar + s16 * S16
-                if t < b - 0.1:
-                    add(lead, pluck(note(m), 1.4, 0.35, 0.5), t, 0.6, 0.2)
-        if name == "suspense" and bar % 2 == 0:
-            for s16, m in ((0, 69), (6, 70), (12, 69)):
-                t = t_bar + s16 * S16
-                if t < b - 0.1:
-                    add(lead, pluck(note(m), 1.5, 0.3, 0.45), t, 0.55, 0.2)
-        if name == "sly":
-            for s16, m in ((0, 74), (3, 73), (6, 72), (9, 71), (12, 70)):
-                t = t_bar + s16 * S16
-                if t < b - 0.1:
-                    add(lead, pluck(note(m), 0.7, 0.5, 0.5), t, 0.6, -0.2)
-    # pads per section
-    chord = {"intro": [50, 57, 62], "dark": [50, 51, 57], "suspense": [50, 57, 58], "build": [50, 57, 62, 63]}.get(name, [50, 57, 62, 66])
-    bright = {"intro": 700, "dark": 600, "suspense": 800, "build": 500}.get(name, 1200)
-    add(pads, pad([note(m) for m in chord], b - a + 0.8, bright), a - 0.1, 0.9 if name in ("intro", "dark", "suspense", "build") else 0.5)
+    nbeats = int(np.ceil((b - a) / BT)) + 1
+    for k in range(nbeats):
+        tb = a + k * BT
+        if tb >= b - 0.03:
+            break
+        bar, pos = divmod(k, 4)
+        ch, root = CHORDS[bar % 4]
+        # drums
+        if dr in (1, 2, 4):
+            if pos in (0, 2) or (dr == 4):
+                add(drums, kick(1.0 if pos == 0 else 0.85), tb, 1.0); kicks.append(tb)
+            if pos in (1, 3):
+                add(drums, snap(0.8), tb, 0.55, 0.05)
+            add(drums, hat(0.55 + 0.15 * (pos % 2)), tb + BT / 2, 0.5, 0.3)
+            if dr in (2, 4):
+                add(drums, hat(0.3), tb + BT / 4, 0.4, -0.3)
+                add(drums, hat(0.25), tb + 3 * BT / 4, 0.4, -0.3)
+        elif dr == 3:  # heartbeat for the vote
+            if pos == 0:
+                add(drums, kick(0.8), tb, 1.0); add(drums, kick(0.5), tb + 0.18, 1.0); kicks += [tb, tb + 0.18]
+            add(drums, hat(0.4), tb + BT / 2, 0.45, 0.3)
+        # bass
+        if bs == 1 and pos in (0, 2):
+            add(bass, sub(midi(root), BT * (1.5 if pos == 0 else 1.0)), tb, 1.0)
+            if pos == 2:
+                add(bass, sub(midi(root + 12), BT * 0.45, 0.5), tb + 1.5 * BT, 1.0)
+        elif bs == 2 and pos == 0:
+            add(bass, sub(midi(root), BT * 3.5, 0.8), tb, 1.0)
+        # keys: one soft chord per bar (stabs on the offbeat in grooves)
+        if ky and pos == 0:
+            for j, m in enumerate(ch):
+                add(keys, ep(m, BT * 3.8, 0.5), tb + 0.012 * j, 0.55, -0.35 + 0.23 * j)
+        if ky and dr in (2, 4) and pos == 2:
+            for j, m in enumerate(ch[1:]):
+                add(keys, ep(m + 12, 0.5, 0.25), tb + BT / 2, 0.35, 0.3 - 0.2 * j)
+        # motif every other bar
+        if mo and pos == 0 and bar % 2 == 1:
+            for off, m in MOTIF:
+                if tb + off * BT < b - 0.05:
+                    add(mot, mallet(m, 0.5), tb + off * BT, 0.5, 0.25)
+    if pd:
+        ms = {"hook": [53, 60, 63, 68], "secret": [53, 56, 61], "count": [41, 48], "reveal": [53, 56, 60], "question": [53, 56, 60, 63]}.get(name, [53, 60, 63])
+        add(pads, pad(ms, b - a + 0.5, 700 if name in ("secret", "count") else 1100), a - 0.05, 0.8)
+    if name == "count":  # rising tension into «ارفعوا!»
+        d = b - a
+        x = hp(rs.randn(n_(d)), 1200) * np.linspace(0, 1, n_(d)) ** 2.5 * 0.09
+        add(fx, x, a, 1.0, 0.0)
+    if name == "build":
+        d = b - a
+        x = hp(rs.randn(n_(d)), 2000) * np.linspace(0, 1, n_(d)) ** 3 * 0.07
+        add(fx, x, a, 1.0)
 
-# build: heartbeat accelerating + riser into the action hit
-a, b = beat_of["ready"]["start"], T_ACTION
-t = a
-gap = 0.75
-while t < b - 0.2:
-    add(drums, doum(0.7), t, 0.9)
-    add(drums, doum(0.45), t + 0.16, 0.8)
-    t += gap
-    gap = max(0.42, gap * 0.93)
-rise = b - a
-x = hp(rs.randn(int(rise * SR)), 1500) * np.linspace(0, 1, int(rise * SR)) ** 2.5 * 0.18
-x = x * (0.6 + 0.4 * np.sin(np.linspace(0, 60, len(x))) ** 2)
-add(fx, x, a, 1.0)
-add(fx, sweep(80, 320, rise) * np.linspace(0, 1, int(rise * SR)) ** 2 * 0.12, a, 1.0)
+# sidechain: bass and keys duck under each kick
+duck = np.ones(N)
+for kt in kicks:
+    i = n_(kt); d = n_(0.16)
+    if i < N:
+        seg = 1 - 0.55 * np.exp(-np.arange(min(d, N - i)) / SR / 0.06)
+        duck[i:i + len(seg)] = np.minimum(duck[i:i + len(seg)], seg)
+bass *= duck[:, None]; keys *= (0.5 + 0.5 * duck)[:, None]
 
-music = drums * 0.9 + claps * 0.75 + low * 0.9 + lead * 0.8 + pads * 0.55
-# section dynamics: breathe down for the secret, the countdown and the suspense
-SECTION_GAIN = {"intro": 0.55, "dark": 0.62, "build": 0.7, "suspense": 0.55, "light": 0.85, "sly": 0.8}
-g = np.ones(N)
-for name, a, b in section_bounds():
-    g[int(a * SR):int(b * SR)] = SECTION_GAIN.get(name, 1.0)
-k = int(0.25 * SR)
-g = np.convolve(np.pad(g, (k, k), mode="edge"), np.ones(k) / k, mode="same")[k:-k]
-music *= g[:, None]
-music += fx
-music = apply_reverb(music, reverb_ir(1.6, 0.35), 0.18)
-# glue: gentle bus saturation, then normalise
-music = np.tanh(music * 1.4) / 1.4
+music = drums * 0.9 + bass * 0.9 + keys * 0.55 + mot * 0.5 + pads * 0.4 + fx
+music = reverb(music, room(1.2, 0.25), 0.12)
+# silent beats before the big moments
+for s in STOPS:
+    if not s: continue
+    a, b = n_(s[0]), n_(s[1])
+    ramp = n_(0.03)
+    music[a:a + ramp] *= np.linspace(1, 0, ramp)[:, None]
+    music[a + ramp:b] = 0
+# final: logo chord + kick, then ring out
+if T_LOGO:
+    for j, m in enumerate([53, 60, 63, 67, 72]):
+        add(music, ep(m, 3.0, 0.6), T_LOGO + 0.01 * j, 0.6, -0.4 + 0.2 * j)
+    add(music, kick(1.0), T_LOGO, 1.0)
+music = np.tanh(music * 1.2) / 1.2
 music /= np.abs(music).max() + 1e-9
 music *= 0.9
-# final ring-out after the logo hit: fade the groove, leave the pad
-fade_start = T_LOGO + 1.2
-fi = int(fade_start * SR)
-if fi < N:
-    r = np.linspace(1, 0, N - fi) ** 1.5
-    music[fi:] *= r[:, None]
+tail = n_(0.8)
+music[-tail:] *= np.linspace(1, 0, tail)[:, None]
 
 # --------------------------------------------------------------------- SFX --
 sfx = np.zeros((N, 2))
 
 def game_tone(f, d, peak, wave="sine", delay=0.0, f_end=None):
-    """Port of gameAudio.ts tone(): linear attack ≤18 ms, linear release."""
+    """Port of gameAudio.ts tone(): ≤18 ms linear attack, linear release."""
     t = tt(d)
-    if f_end is None:
-        ph = 2 * np.pi * f * t
-    else:
-        ph = 2 * np.pi * np.cumsum(np.linspace(f, f_end, len(t))) / SR
+    ph = 2 * np.pi * (f * t if f_end is None else np.cumsum(np.linspace(f, f_end, len(t))) / SR)
     x = 2 / np.pi * np.arcsin(np.sin(ph)) if wave == "tri" else np.sin(ph)
     atk = min(0.018, d * 0.24)
     e = np.where(t < atk, t / atk, 1 - (t - atk) / (d - atk))
-    y = np.zeros(int((delay + d) * SR))
-    y[int(delay * SR):int(delay * SR) + len(x)] = x * e * peak
+    y = np.zeros(n_(delay + d)); y[n_(delay):n_(delay) + len(x)] = x * e * peak
     return y
 
-def whoosh(d=0.45, lo=300, hi=4000, g=0.5):
-    n = rs.randn(int(d * SR))
-    t = tt(d)
-    out = np.zeros(len(n))
-    seg = 1024
-    for i in range(0, len(n), seg):
-        c = lo * (hi / lo) ** (i / len(n))
-        out[i:i + seg] = bp(n[max(0, i - 2048):i + seg], max(40, c * 0.6), min(20000, c * 1.6))[-len(n[i:i + seg]):]
-    e = np.sin(np.pi * t / d) ** 2
-    return out * e * g
+def mixdown(*parts):
+    L = max(len(p) for p in parts)
+    return sum(np.pad(p, (0, L - len(p))) for p in parts)
 
-def boom(g=1.0):
-    d = 1.6
-    x = sweep(70, 30, d) * env_exp(d, 0.45) * 0.9 + lp(rs.randn(int(d * SR)), 200) * env_exp(d, 0.12) * 0.5
+def soft_hit(g=1.0):
+    d = 1.0
+    return (kick(1.0)[: n_(d)] if n_(d) <= len(kick()) else np.pad(kick(), (0, n_(d) - len(kick())))) * g
+
+def swish(d=0.28, g=0.12):
+    x = bp(rs.randn(n_(d)), 1500, 7000) * np.sin(np.pi * tt(d) / d) ** 2
     return x * g
-
-def impact(g=1.0):
-    return boom(g) + np.concatenate([clap(1.2), np.zeros(int(1.6 * SR) - len(clap()))]) * 0.4 * g
 
 for c in cues:
     t, k = c["t"], c["type"]
     if k == "tick":
         f = {5: 320, 4: 380, 3: 450, 2: 530, 1: 640}[c["step"]]
-        x = game_tone(f, 0.095, 0.18 if c["step"] == 1 else 0.14, "tri")
-        x2 = game_tone(f * 2, 0.07, 0.04)
-        add(sfx, np.concatenate([x, np.zeros(max(0, len(x2) - len(x)))])[: max(len(x), len(x2))] + np.pad(x2, (0, max(0, len(x) - len(x2)))), t, 3.2)
+        add(sfx, game_tone(f, 0.095, 0.18 if c["step"] == 1 else 0.14, "tri"), t, 3.0)
     elif k == "action":
-        x = game_tone(165, 0.2, 0.22, "sine", 0, 95) + np.pad(game_tone(930, 0.085, 0.1, "tri"), (0, int(0.2 * SR) - int(0.085 * SR)))
-        add(sfx, x, t, 3.0)
-        add(sfx, impact(0.9), t, 1.0)
+        add(sfx, mixdown(game_tone(165, 0.2, 0.22, "sine", 0, 95), game_tone(930, 0.085, 0.1, "tri")), t, 3.0)
+        add(sfx, kick(1.0), t, 0.9)
     elif k == "hold":
-        add(sfx, game_tone(145, 0.14, 0.075, "sine", 0, 125), t, 3.0)
+        add(sfx, game_tone(145, 0.14, 0.075, "sine", 0, 125), t, 2.5)
     elif k == "reveal":
-        a1 = game_tone(500, 0.18, 0.11); a2 = game_tone(660, 0.22, 0.1, "tri", 0.075)
-        L = max(len(a1), len(a2)); x = np.pad(a1, (0, L - len(a1))) + np.pad(a2, (0, L - len(a2)))
-        add(sfx, x, t, 3.0)
-        add(sfx, whoosh(0.8, 2000, 9000, 0.25), t - 0.2, 1.0, 0.3)
+        add(sfx, mixdown(game_tone(500, 0.18, 0.11), game_tone(660, 0.22, 0.1, "tri", 0.075)), t, 3.0)
     elif k == "vote":
         n = c.get("n", 1)
-        add(sfx, game_tone(760 + min(max(n - 1, 0), 3) * 35, 0.075, 0.052), t, 4.5, 0.2 * ((n % 3) - 1))
+        add(sfx, game_tone(760 + min(max(n - 1, 0), 3) * 35, 0.075, 0.052), t, 4.0, 0.15 * ((n % 3) - 1))
     elif k == "caught":
-        a1 = game_tone(440, 0.28, 0.12, "tri"); a2 = game_tone(554, 0.28, 0.115, "tri", 0.12); a3 = game_tone(659, 0.32, 0.11, "sine", 0.24)
-        L = max(map(len, (a1, a2, a3)))
-        x = sum(np.pad(a, (0, L - len(a))) for a in (a1, a2, a3))
-        add(sfx, x, t + 0.05, 3.2)
-        add(sfx, impact(1.0), t, 1.0)
-    elif k == "escaped":
-        a1 = game_tone(620, 0.23, 0.1, "tri"); a2 = game_tone(520, 0.23, 0.095, "tri", 0.12); a3 = game_tone(430, 0.25, 0.09, "sine", 0.24)
-        L = max(map(len, (a1, a2, a3)))
-        add(sfx, sum(np.pad(a, (0, L - len(a))) for a in (a1, a2, a3)), t, 3.2)
-    elif k in ("join", "ready"):
-        add(sfx, game_tone(820, 0.09, 0.05), t, 4.0)
-    elif k == "whoosh":
-        add(sfx, whoosh(0.5, 250, 5000, 0.3), t - 0.15, 1.0, rs.uniform(-0.4, 0.4))
-    elif k == "swish":
-        add(sfx, whoosh(0.3, 800, 8000, 0.22), t - 0.1, 1.0, rs.uniform(-0.4, 0.4))
-    elif k == "pop":
-        add(sfx, sweep(320, 1100, 0.07) * env_exp(0.07, 0.03) * 0.25, t, 1.0, rs.uniform(-0.3, 0.3))
-    elif k == "tap":
-        x = hp(rs.randn(int(0.02 * SR)), 2500) * env_exp(0.02, 0.004) * 0.3 + np.sin(2 * np.pi * 180 * tt(0.02)) * env_exp(0.02, 0.008) * 0.25
-        add(sfx, x, t, 1.0)
-    elif k == "flip":
-        for o in (0, 0.09):
-            add(sfx, bp(rs.randn(int(0.04 * SR)), 1500, 6000) * env_exp(0.04, 0.01) * 0.25, t + o, 1.0)
-        add(sfx, whoosh(0.25, 1500, 6000, 0.12), t, 1.0)
-    elif k in ("impostor", "mask"):
-        d = 1.2
-        x = (sweep(55, 45, d) * 0.5 + pluck(note(63), d, 0.3) * 0.6 + pluck(note(62), d, 0.3) * 0.5) * env_exp(d, 0.45)
-        add(sfx, x, t, 0.9 if k == "impostor" else 0.6)
-        add(sfx, whoosh(0.6, 3000, 300, 0.2), t - 0.3, 1.0)
-    elif k == "question":
-        add(sfx, pluck(note(67), 0.6, 0.6) * 0.5, t, 0.8, 0.2)
-        add(sfx, pluck(note(70), 0.8, 0.6) * 0.5, t + 0.16, 0.8, 0.2)
-    elif k == "hesitate":
-        d = 0.5
-        f = np.linspace(300, 430, int(d * SR)) + 18 * np.sin(np.linspace(0, 30, int(d * SR)))
-        x = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * tt(d) / d) * 0.12
-        add(sfx, x, t, 1.0)
-    elif k == "impact":
-        add(sfx, impact(0.9), t, 1.0)
-        add(sfx, whoosh(0.7, 4000, 200, 0.25), t - 0.55, 1.0)
-    elif k == "majority":
-        add(sfx, game_tone(880, 0.25, 0.08, "tri") + np.pad(game_tone(1320, 0.1, 0.05), (0, int(0.15 * SR))), t, 3.0)
+        add(sfx, mixdown(game_tone(440, 0.28, 0.12, "tri"), game_tone(554, 0.28, 0.115, "tri", 0.12), game_tone(659, 0.32, 0.11, "sine", 0.24)), t + 0.03, 3.0)
+        add(sfx, kick(1.0), t, 1.0)
+    elif k == "join":
+        add(sfx, game_tone(820, 0.09, 0.05), t, 3.5)
     elif k == "point":
         n = c.get("n", 1)
-        for j in range(2):
-            add(sfx, game_tone(note(74 + (n - 1) * 3 + j * 7), 0.12, 0.08, "tri"), t + j * 0.07, 3.0, 0.2)
+        add(sfx, mixdown(game_tone(midi(76 + 2 * (n - 1)), 0.12, 0.08, "tri"), game_tone(midi(83 + 2 * (n - 1)), 0.1, 0.05, "sine", 0.06)), t, 3.0)
     elif k == "crown":
-        for j, m in enumerate((81, 86, 90, 93)):
-            add(sfx, game_tone(note(m), 0.25, 0.05, "sine"), t + j * 0.06, 3.0, -0.3 + j * 0.2)
+        for j, m in enumerate((84, 88, 91, 96)):
+            add(sfx, game_tone(midi(m), 0.25, 0.045), t + j * 0.055, 3.0, -0.3 + 0.2 * j)
+    elif k in ("mask", "impostor"):
+        d = 0.9
+        add(sfx, np.sin(2 * np.pi * np.cumsum(np.linspace(110, 70, n_(d))) / SR) * env(d, 0.05, 0.35, 0.2) * 0.35, t, 1.0)
+        add(sfx, mallet(61, 0.35) + np.pad(mallet(60, 0.3), (0, 0)), t + 0.02, 0.6, 0.2)
+    elif k == "flip":
+        add(sfx, swish(0.18, 0.08), t, 1.0)
+    elif k == "tap":
+        x = hp(rs.randn(n_(0.015)), 3000) * env(0.015, 0.0005, 0.003, 0.003) * 0.25
+        add(sfx, x, t, 1.0)
+    elif k == "question":
+        add(sfx, mallet(79, 0.35), t, 0.7, 0.3); add(sfx, mallet(82, 0.35), t + 0.13, 0.7, 0.3)
+    elif k == "swish":
+        add(sfx, swish(0.25, 0.07), t - 0.08, 1.0, rs.uniform(-0.3, 0.3))
+    elif k == "whoosh":
+        add(sfx, swish(0.3, 0.09), t - 0.1, 1.0)
     elif k == "sly":
-        for j, m in enumerate((74, 73, 72)):
-            add(sfx, pluck(note(m), 0.5, 0.5) * 0.4, t + j * 0.12, 0.8, -0.2)
-    elif k == "suspense":
-        d = 2.0
-        add(sfx, pad([note(38), note(50)], d, 400) * 0.4, t - 0.6, 1.0)
-    elif k == "party":
-        for j in range(6):
-            add(sfx, clap(0.8), t + j * 0.09, 0.5, rs.uniform(-0.5, 0.5))
+        for j, m in enumerate((79, 78, 77)):
+            add(sfx, mallet(m, 0.3), t + j * 0.1, 0.7, -0.2)
+    elif k == "impact":
+        add(sfx, kick(1.0), t, 0.9)
     elif k == "logo":
-        add(sfx, impact(1.1), t, 1.0)
-        for j, m in enumerate((62, 69, 74, 78, 81)):
-            add(sfx, pluck(note(m), 2.5, 0.7) * 0.4, t + j * 0.05, 0.9, -0.4 + j * 0.2)
+        add(sfx, mixdown(game_tone(440, 0.28, 0.1, "tri"), game_tone(554, 0.28, 0.1, "tri", 0.1), game_tone(659, 0.34, 0.1, "sine", 0.2)), t + 0.05, 2.2)
 
-sfx = apply_reverb(sfx, reverb_ir(1.4, 0.3, 9), 0.22)
+sfx = reverb(sfx, room(1.0, 0.22, 9), 0.15)
 sfx /= max(1.0, np.abs(sfx).max() / 0.95)
-
 sf.write(os.path.join(BUILD, "music.wav"), music.astype(np.float32), SR)
 sf.write(os.path.join(BUILD, "sfx.wav"), sfx.astype(np.float32), SR)
 print(f"music + sfx: {DUR:.2f}s")
