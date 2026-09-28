@@ -28,3 +28,8 @@
 | V fix2 / fix3 | The two «انمسك» sound very close | — | The «إخْتار» respelling and in-sentence placement made little audible difference. |
 
 **Target for «إنْمَسَكْ» (owner):** explanatory, matter-of-fact, clearly separated from «المتخفي» but not a full stop, and **not** exclaimed or surprised.
+
+## Owner's read-through (received as a speech-to-text transcript, not audio)
+- Natural word choice: **«بصابعك»** (not «بأصابعك») in segment 9. Adopted for the hidden text.
+- The transcript shows «هذه» and «الفائز». These are likely the transcriber's MSA normalization of «هذي» and «الفايز», so not adopted.
+- There is no prosody information (no audio). Calibration still needs the audio file itself.
