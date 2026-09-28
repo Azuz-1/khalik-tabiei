@@ -64,3 +64,14 @@ Failed (not sent):
 - Sent (`critical_lines/Candidate-R/round6/`):
   - 10 A «المُتَخَفّي» / B «المتخفي» / C «المِتْخَفّي»: all seed 2, all with «گِدَر». Only «المتخفي» differs.
   - 12 A «تِگْدَر؟» / B «تِگْدَر تخدعهم؟» / C «تِگْدَر تسايرهم؟».
+
+## Round 7: owner's picks
+- **10 = A** («المُتَخَفّي» with tashkeel + «گِدَر», seed 2) → `round6/seg10_A_mutakhaffi`. **«المُتَخَفّي» becomes the spelling for every segment.**
+- **12:** liked **C's delivery** (seed 2) but wants **«تخدعهم»** instead of «تسايرهم», or a new line. Generating:
+  - B wording on C's seed/settings.
+  - New line N1 «تِگْدَر تضحك عليهم؟».
+  - New line N2 «طيب… لو كنت أنت المُتَخَفّي؟».
+- Round-7 screen: N1 seed 1 rejected («خليك»). Sent (`critical_lines/Candidate-R/round7/`):
+  - «تخدعهم» on C's seed.
+  - N1 «تضحك عليهم» (seed 2).
+  - N2 «لو كنت أنت المتخفي» (seeds 1 and 2).
