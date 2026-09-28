@@ -1,0 +1,1 @@
+{"seg": 7, "take": 3, "kind": "split", "desc": "reveal | suspicion, 280 ms", "phrases": ["بعدها يِنكَشِف المطلوب…", "وكل واحد يبدأ يِشِكْ بالثاني."], "gaps_ms": [280], "engine": "voxcpm2+fasee7", "engine_text": ["بعدها يِنكَشِف المطلوب…", "وكل واحد يبدأ يِشِكْ بالثاني."], "cfg_value": 2.0, "timesteps": 20, "seed": 1}

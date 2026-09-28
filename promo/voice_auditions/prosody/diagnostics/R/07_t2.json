@@ -1,0 +1,1 @@
+{"seg": 7, "take": 2, "kind": "adj", "desc": "engine-native prosody adjustment (playfully suspicious)", "phrases": ["بعدها يِنكَشِف المطلوب… وكل واحد يبدأ يِشِكْ بالثاني."], "gaps_ms": [], "engine": "voxcpm2+fasee7", "engine_text": ["(playfully suspicious, conversational)بعدها يِنكَشِف المطلوب… وكل واحد يبدأ يِشِكْ بالثاني."], "cfg_value": 2.0, "timesteps": 20, "seed": 1}

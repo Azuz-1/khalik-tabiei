@@ -1,0 +1,1 @@
+{"seg": 10, "take": 3, "kind": "spell", "desc": "hidden Najdi /g/: قِدَر → گِدَر (caption unchanged)", "phrases": ["إذا عرفت المُتَخَفّي تَكْسَب نقاط… وإذا گِدَر يِفْلِت، هو اللي يَكْسَب."], "gaps_ms": [], "engine": "voxcpm2+fasee7", "engine_text": ["إذا عرفت المُتَخَفّي تَكْسَب نقاط… وإذا گِدَر يِفْلِت، هو اللي يَكْسَب."], "cfg_value": 2.0, "timesteps": 20, "seed": 1}

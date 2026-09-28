@@ -1,0 +1,1 @@
+{"seg": 5, "take": 3, "kind": "split", "desc": "count as one phrase + 450 ms beat + payoff phrase", "phrases": ["ثلاثة… اثنين… واحد…", "اِرْفَع يَدَك!"], "gaps_ms": [450], "engine": "voxcpm2+fasee7", "engine_text": ["ثلاثة… اثنين… واحد…", "اِرْفَع يَدَك!"], "cfg_value": 2.0, "timesteps": 20, "seed": 1}

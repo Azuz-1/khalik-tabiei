@@ -1,6 +1,6 @@
 # Saudi-Najdi prosody casting experiment: critical lines only
 
-> **Listen to `../critical_lines/Candidate-V` and `Candidate-K` before reading this file**, because the engine details below would unblind them.
+> **Listen to `../critical_lines/Candidate-V`, `Candidate-K`, `Candidate-M` and `Candidate-R` before reading this file**, because the engine details below would unblind them. (M and R are the VoxCPM and Chatterbox runs you asked for in parallel, under random letters.)
 > Each folder has `segNN_takeN.mp3`, 6 segments × 3 takes. V also has `pairs/` for the pronunciation A/B tests.
 > Take meanings (the same across both candidates):
 > - take 1 = engine defaults, one phrase
@@ -82,8 +82,73 @@ Automatic measurements below (Whisper, pitch, pauses, prominence) are **diagnost
 | 1 | Clean in all takes. The ending falls (1.2–2.1 st) rather than rising; the surprise is carried by «الوحيد» (rank 1–3). |
 | 10 | The «گِدَر» take (t3) was heard by Whisper as «أدري فلت». Whisper can't judge /g/ vs /q/, so that one is for your ear. |
 
-## 3b. Cross-engine lesson (the most reusable finding)
-**Phrase splitting is not universally good.** The espeak/Kokoro engine (V) needs segment 12 split into beats to get any pause or question shape. The diffusion engine (K) produces the pause, question rise and payoff beat by itself when given the whole line, and breaks when short phrases are isolated. The recipe must therefore be chosen per engine, after you pick the voice.
+### M: see sealed mapping
+_Added at your request as a parallel candidate for later comparison._
+- **Controls** (per the Chatterbox README): exaggeration, cfg_weight, temperature, seed. Take 1 uses the README defaults (0.5 / 0.5, temperature 0.8). "adj" uses the README's "expressive or dramatic" recipe (exaggeration 0.7, cfg_weight 0.3). Built-in default voice, no reference audio.
+- **Generation time:** 18 takes in about 10 minutes (2 CPU threads, running in parallel with another engine).
+- **Hidden overrides:** none. Your tashkeel text was used as-is. The model card says the model supports tashkeel and that missing tashkeel "may affect pronunciation accuracy".
+- **Failures:**
+  - **10-t1 (defaults) is broken:** it repeats «هو الذي يكسب هو الذي يكسب», a known Chatterbox repetition issue. It also **drifts «اللي» → «الذي»** (MSA). It was held back from the pack and re-taken with seed 2.
+  - **Dialect drift under the expressive setting:** 12-t3 seed 1 (exaggeration 0.7 / cfg 0.3) says **«الآن»** instead of «الحين». The same setting gives 7-t2 a large end-rise (+7 st) and loses the «يشك» focus. The seed-2 re-take (the one now in the pack) keeps «الحين», so that drift is **not systematic**. But **both seeds lose the question rise** (0.0–0.1 st), and seed 2 blurs «خلك» (heard «شنك»). **Recipe: keep the defaults (0.5 / 0.5) for questions and taglines.** The seed-1 take is kept in the scratch record only, not in the pack.
+  - **«اللي» → «الذي» drift on segment 10 at defaults, in both seeds.** The split take (10-t2) keeps «اللي». This is a systematic dialect-drift point for this model on this line.
+  - 1-t2 (expressive): «يرفعون» was heard as «يدفعون» (stochastic).
+- **What worked:**
+  - **12-t2** (defaults, 3 beats) is the clearest question shape of any engine so far: «تقدر» rises **6.8 st**, with pauses of 420 and 470 ms. The one-phrase 12-t1 instead *rises* at the end of the tagline (−2.8 st fall), which is the wrong direction.
+  - «انمسك» is the most prominent word both when isolated (8-t2, 390 ms beat) and in-sentence under the expressive setting (8-t3).
+  - 10-t2 (split): «يفلت» is the most prominent word, with a 370 ms contrast pause.
+
+### R: see sealed mapping
+_Added at your request as a parallel candidate for later comparison._
+- **Voice:** the casual young Saudi female designed earlier (sample G's anchor clip, no real person), used as the reference for every phrase.
+- **Controls** (VoxCPM2 docs): a style instruction `(…)` prepended to the text together with the reference ("controllable cloning"), plus cfg_value (2.0), inference_timesteps (20) and seed. "adj" = per-segment style instructions:
+  - 1: "playful, curious, surprised, casual, not over-acted"
+  - 7: "playfully suspicious, conversational"
+  - 8: "conversational, building tension toward the end"
+  - 12: "calm, slightly slower" / "genuine curious question" / "confident, relaxed, settled falling ending"
+- **Generation time:** 18 takes in about 11 minutes (4 threads, running alone). My first attempt ran in parallel with M and was **OOM-killed** (9.4 GB); running it alone fixed that.
+- **Hidden overrides:** none. Your tashkeel text was used as-is and was transcribed cleanly.
+- **Harness correction (my bug, not the model's):** VoxCPM phrases carry long low-level lead/tail silence, so split takes first measured 900–1360 ms pauses. `retrim_gaps.py` trims only the engine's own silence next to each inserted gap. The inserted gaps are exact digital zeros, so this is not time-stretching. Pauses afterwards: 370–590 ms.
+- **Failures / oddities (for your ear):**
+  - 1-t3 said «الوحيد**ة**» (feminine), apparently leaking from the female voice.
+  - 12-t1/t2 say «خ**لي**ك» for «خلك».
+  - 7-t2 (style instruction) was heard as «بحتها» and ends on a rise.
+  - 10-t3 («گِدَر») loses the stress on «يفلت».
+- **What worked:**
+  - «انمسك» is the most prominent word in **all three** takes, both in-sentence and isolated.
+  - 7-t3 (the split) makes **«يشك» the most prominent word** in the line.
+  - 12-t1's tagline falls 5.8 st, with a question rise of 1.9 st. With the 3-beat split, 12-t2's tagline falls 8 st.
+
+## 3b. Cross-engine lessons (the most reusable findings)
+
+**Phrase splitting is engine-dependent.**
+- It helps V (the only way to get a pause or a question shape), M (12-t2: the biggest question rise, 6.8 st) and R (7-t3: puts the focus on «يشك»).
+- It breaks K: short isolated phrases come out silent or garbled. K does the pause, rise and payoff beat by itself in one phrase.
+
+**Expressiveness settings are risky for dialect.**
+- M's expressive recipe (exaggeration 0.7 / cfg 0.3) caused MSA drift («الآن» in one seed) and flattened the question rise in both seeds.
+- R's style instructions changed delivery, but 7-t2 garbled a word.
+- In all cases, conservative defaults and phrase structure were more reliable than "more expression".
+
+**Hidden spelling is engine-specific:**
+- V needs a sukun against MSA case vowels, and plain «تخيل».
+- K needs the tashkeel removed.
+- M and R take your tashkeel as written.
+
+**Effective pause = inserted gap + the engine's own lead/tail silence.**
+- The tail varies by engine (about 100 ms for V, up to about 1 s for R before correction).
+- Measure it per engine and set the gap so the result lands at 300–450 ms.
+
+## 3c. Success-criteria status (you fill in the perceptual rows)
+
+| Question | V | K | M | R |
+|---|---|---|---|---|
+| 1. Sounds Saudi/Najdi? | your ear | your ear | your ear | your ear |
+| 2. Least synthetic? | your ear | your ear | your ear | your ear |
+| 3. Controllable prosody | speed only + phrase splits | cfg / speed / seed; must stay one phrase | exaggeration / cfg / seed + splits; defaults safest | style instructions + seed + splits |
+| 4. Overrides needed | «تخيل» plain, «اِنْمَسَكْ» (+ A/B pairs) | strip tashkeel | none (watch «اللي»→«الذي» drift in seg 10) | none (watch «الوحيدة», «خليك») |
+| 5. Best question / payoff shape so far (diagnostic) | 12: 3 beats; 8: isolated payoff | 12 and 8: one phrase | 12: 3 beats at defaults; 8: isolated or in-sentence | 12: 3 beats; 8: any; 7: split |
+| 6. Reproducible across the script? | yes, deterministic | yes with fixed seeds, but slow (~1 min/phrase on CPU) | yes with fixed seeds (re-take repetitions) | yes with fixed seeds |
+| 7. Commercial use | Apache-2.0 ✔ | CC-BY-NC-SA ✘ | MIT ✔ (inaudible Perth watermark) | Apache-2.0 ✔ |
 
 ## 4. Candidates not auditioned, and why
 

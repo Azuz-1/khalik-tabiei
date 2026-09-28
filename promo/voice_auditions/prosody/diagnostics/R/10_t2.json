@@ -1,0 +1,1 @@
+{"seg": 10, "take": 2, "kind": "split", "desc": "contrast split at … : outcome 1 | outcome 2, 300 ms", "phrases": ["إذا عرفت المُتَخَفّي تَكْسَب نقاط…", "وإذا قِدَر يِفْلِت، هو اللي يَكْسَب."], "gaps_ms": [300], "engine": "voxcpm2+fasee7", "engine_text": ["إذا عرفت المُتَخَفّي تَكْسَب نقاط…", "وإذا قِدَر يِفْلِت، هو اللي يَكْسَب."], "cfg_value": 2.0, "timesteps": 20, "seed": 1}
