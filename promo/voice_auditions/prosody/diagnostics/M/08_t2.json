@@ -1,0 +1,1 @@
+{"seg": 8, "take": 2, "kind": "split", "desc": "payoff isolated: sentence | 320 ms | اِنْمَسَك!", "phrases": ["تبدون بالتصويت على الشخص اللي شاكِّين فيه… وإذا أغلبكم اختار المُتَخَفّي،", "اِنْمَسَك!"], "gaps_ms": [320], "engine": "namaa-chatterbox", "exaggeration": 0.5, "cfg_weight": 0.5, "temperature": 0.8, "seed": 1}

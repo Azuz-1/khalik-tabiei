@@ -1,0 +1,1 @@
+{"seg": 5, "take": 1, "kind": "default", "desc": "engine default settings, one phrase", "phrases": ["ثلاثة… اثنين… واحد… اِرْفَع يَدَك!"], "gaps_ms": [], "engine": "namaa-chatterbox", "exaggeration": 0.5, "cfg_weight": 0.5, "temperature": 0.8, "seed": 1}

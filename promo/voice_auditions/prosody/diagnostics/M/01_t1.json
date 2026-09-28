@@ -1,0 +1,1 @@
+{"seg": 1, "take": 1, "kind": "default", "desc": "engine default settings, one phrase", "phrases": ["تَخَيَّل كلهم يرفعون يِدْهُم… وأنت الوحيد اللي ما تَدري وش السالفة!"], "gaps_ms": [], "engine": "namaa-chatterbox", "exaggeration": 0.5, "cfg_weight": 0.5, "temperature": 0.8, "seed": 1}
