@@ -160,6 +160,6 @@ Feedback on round 2 was that none of the voices worked; the brief is now **casua
 - **Voice:** designed from the description `(A young Saudi woman in her twenties, casual and chatty, warm, smiling, playful, talking to her friends, relaxed, not formal)`, rendered on the anchor line «هلا والله يا بنات! تعالوا أقولكم عن لعبة حلوة مرة، والله بتعجبكم.» (seed 32, kept as `segments/G/anchor.wav`). That anchor is the voice prompt for all segments. Median pitch is about 200–285 Hz on every segment, confirming a female voice (`tools/check_pitch.py`). Seed 31 of the same description came out male and was discarded.
 - **Text:** the approved hidden script, verbatim.
 - **Seeds:** segments 1–4 and 6–12 use `--seed 32`. Segment 5 was re-taken with `--seed 40` because the first take had a creaky low-pitch artifact.
-- **Runtime:** 56.2 s at the model's natural pace, with no speed-up.
+- **Runtime:** 55.8 s at the model's natural pace, with no speed-up.
 - **Free or paid:** free (open weights, runs locally)
 - **Commercial use / license:** Apache-2.0 (LoRA) and Apache-2.0 (VoxCPM2). Commercial use is allowed.
