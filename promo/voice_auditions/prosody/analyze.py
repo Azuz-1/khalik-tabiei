@@ -107,6 +107,7 @@ def analyze(wav):
     rank = sorted(range(len(words)), key=lambda k: -words[k].get("prom", 0))
     R = dict(take=os.path.basename(wav), dur=round(len(y) / sr, 2), asr=asr,
              pauses=pauses, top3=[norm(words[k]["w"]) for k in rank[:3]])
+    R["words"] = [(norm(w["w"]), round(w["s"], 2), round(w["e"], 2)) for w in words]
     seg = int(os.path.basename(wav)[:2])
     pos = lambda i: rank.index(i) + 1 if i is not None else None
     if seg == 1:
