@@ -9,6 +9,7 @@ The model card advises NOT adding MSA tashkeel, so text is fed as written.
 import sys, os, argparse, numpy as np, soundfile as sf
 from huggingface_hub import snapshot_download
 from script import CAPTIONS
+from hidden_script import HIDDEN
 
 SPOKEN = dict(enumerate(CAPTIONS, 1))
 # Model reads dialect spelling as written; guillemets removed only.
@@ -26,7 +27,10 @@ SPEED = {i: 1.0 for i in SPOKEN}
 ap = argparse.ArgumentParser()
 ap.add_argument("out"); ap.add_argument("segs", nargs="*", type=int)
 ap.add_argument("--speed", type=float, default=1.0)
+ap.add_argument("--hidden", action="store_true", help="use the approved hidden script verbatim (C2)")
 a = ap.parse_intermixed_args(); os.makedirs(a.out, exist_ok=True)
+if a.hidden:  # verbatim; only the «» quote marks are dropped (punctuation, not pronunciation)
+    SPOKEN = {i: t.replace("«", "").replace("»", "") for i, t in enumerate(HIDDEN, 1)}
 
 sys.path.insert(0, snapshot_download("oddadmix/Nabra-Saudi-82M",
     allow_patterns=["*.py", "*.json", "af_msa.pt", "nabra_saudi_82m_v0.pth"]))

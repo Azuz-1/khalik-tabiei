@@ -60,3 +60,77 @@ Voices are listed alphabetically; they are not ranked.
   - Segment 3: `تدخلون` becomes `تِدْخِلونْ`. espeak had produced the MSA form «tadakhkhulūna».
   - Segment 5: `ارفعوا` becomes `اِرْفَعوا`, because the plain spelling came out as «أرفع».
   - Segment 8: `تصوّتون` becomes `تصوّتونْ` and `شاكّين` becomes `شاكّينْ`. The sukun drops the MSA «-na» ending that espeak adds.
+
+---
+
+# Round 2: C2, D, E and F (approved hidden script)
+
+All four read the owner-approved hidden pronunciation script **verbatim** (`tools/hidden_script.py`): the tashkeel is kept, nothing is normalized to MSA and no dialect word is rewritten. The only change is dropping the «» quote marks, which are punctuation. The visible captions are not part of this and remain plain Arabic.
+Output format is the same as round 1: 48 kHz mono MP3 at 160 kbps, peak-normalized, with no time-stretch and no other processing. Per-segment WAVs are in `segments/<C2|D|E|F>/`.
+Voices are listed by letter; they are not ranked.
+
+**How the voice is kept consistent without cloning anyone (D and E):** these engines have no fixed built-in speaker. For each one, a voice was *designed* from a text description (no reference audio). It was rendered once on a short anchor line that is not part of the script («هلا والله! اليوم عندي لكم لعبة حلوة مرة، تعالوا أعلمكم عليها.»). That synthetic `anchor.wav` (kept in `segments/D` and `segments/E`) was then used as the voice prompt for all 12 segments.
+
+**Network (2026-09-28, round 2):** Hugging Face, `download.pytorch.org` and PyPI were all reachable. Reddit is blocked for the research tools used here, and TikTok is not searchable, so the evidence below comes from X, Hugging Face, GitHub and vendor/official pages.
+
+## C2: Nabra-Saudi-82M, regenerated
+
+- **Provider / model:** [oddadmix/Nabra-Saudi-82M](https://huggingface.co/oddadmix/Nabra-Saudi-82M), a Kokoro-82M/StyleTTS2 model fine-tuned on about 146 h of single-speaker Saudi speech (`nabra_saudi_82m_v0.pth`), run on CPU
+- **Voice:** `af_msa`, the model's single built-in voice (female)
+- **Runtime:** 45.4 s
+- **Free or paid:** free (open weights, runs locally)
+- **Commercial use / license:** Apache-2.0. Commercial use is allowed.
+- **Settings:** speed 1.0. `tools/gen_nabra.py --hidden`
+- **Evidence:** [model card](https://huggingface.co/oddadmix/Nabra-Saudi-82M) and [82M vs 7M demo Space](https://huggingface.co/spaces/oddadmix/Nabra-Saudi-Demo). The same author's [Nabra-2 demo](https://huggingface.co/spaces/oddadmix/Nabra-2-Demo) and an upstream [sherpa-onnx integration request](https://github.com/k2-fsa/sherpa-onnx/issues/3897) are also relevant. No first-hand comments from Saudi users were found. This one is here because you asked for it, not because of community feedback.
+
+## D: Lahgtna-OmniVoice-v2, «لهجتنا»
+
+- **Provider / model:** [oddadmix/lahgtna-omnivoice-v2](https://huggingface.co/oddadmix/lahgtna-omnivoice-v2), a fine-tune of [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice) covering 13 Arabic dialects. It was run with the `lahgtna-omnivoice` 0.1.5 package using its Saudi dialect id `"sa"` ("Saudi Lahgtna"), with 32 steps and guidance 2.0, on CPU.
+- **Voice:** a designed voice with attributes `male, young adult, moderate pitch`. It is carried across segments by the synthetic anchor described above (seed 11).
+- **Runtime:** 54.2 s. The model's own pacing is slow; the speech alone is about 48.5 s. The model has a native `speed` option that was not used.
+- **Free or paid:** free (open weights, runs locally)
+- **Commercial use / license:** **non-commercial.** The fine-tune has no license tag of its own. Its base, the OmniVoice pre-trained weights, is CC-BY-NC because of its training data, and the audio tokenizer is under the Boson Higgs Audio 2 Community License. The `lahgtna-omnivoice` code is Apache-2.0.
+- **Settings:** `tools/gen_omnivoice.py`
+- **Evidence:** the [model](https://huggingface.co/oddadmix/lahgtna-omnivoice-v2) (about 500 downloads, 11 likes), a [public demo Space](https://huggingface.co/spaces/oddadmix/Lahgtna-OmniVoice-Demo) and the [GitHub repo](https://github.com/Oddadmix/Lahgtna-OmniVoice). There is also third-party reuse: [Rabe3/saudi-xtts-v2](https://huggingface.co/Rabe3/saudi-xtts-v2) was trained on Saudi speech synthesized with this model, and there are community dialect forks such as [ehabnegm/lahgtna-omnivoice-egyptian-v3](https://huggingface.co/ehabnegm/lahgtna-omnivoice-egyptian-v3). The earlier [Lahgtna Chatterbox](https://huggingface.co/oddadmix/lahgtna-chatterbox-v1) has 16 likes.
+
+## E: Fasee7-Najdi-Small (VoxCPM2 + Najdi LoRA)
+
+- **Provider / model:** [Wittify/Fasee7-Najdi-Small](https://huggingface.co/Wittify/Fasee7-Najdi-Small), a Najdi LoRA (r=32) from Wittify.ai, applied to [openbmb/VoxCPM2](https://huggingface.co/openbmb/VoxCPM2). It was run with `voxcpm` on CPU, with cfg 2.0 and 20 timesteps as the model card recommends.
+- **Voice:** designed with VoxCPM2 voice design using the description `(A young adult Saudi man, warm, friendly and playful, relaxed and confident, conversational)`. It is carried across segments by the synthetic anchor described above (seed 21). Output is 48 kHz.
+- **Runtime:** 51.7 s
+- **Free or paid:** free (open weights, runs locally)
+- **Commercial use / license:** Apache-2.0 (Fasee7 LoRA) and Apache-2.0 (VoxCPM2). Commercial use is allowed.
+- **Settings:** `tools/gen_voxcpm.py`
+- **Evidence:** the [model card](https://huggingface.co/Wittify/Fasee7-Najdi-Small), which says it is trained on an in-house conversational Najdi dataset and released in June 2026. Wittify.ai also makes regional-Arabic voices commercially with [Rime](https://www.rime.ai/resources/rime-wittify). VoxCPM2 itself has about 1.6k likes and about 390k downloads on HF. No first-hand comments from Saudi users on this LoRA were found; it is very new, with about 100 downloads.
+
+## F: NAMAA-Saudi-TTS
+
+- **Provider / model:** [NAMAA-Space/NAMAA-Saudi-TTS](https://huggingface.co/NAMAA-Space/NAMAA-Saudi-TTS), a Saudi-dialect fine-tune of the Chatterbox Multilingual T3 model (0.5B). It was run with `chatterbox-tts` 0.1.7 on CPU. This is the same model as round-1 voice B, re-run on the approved script.
+- **Voice:** Chatterbox's built-in default voice (`conds.pt`); no reference audio
+- **Runtime:** 44.5 s
+- **Free or paid:** free (open weights, runs locally)
+- **Commercial use / license:** MIT (NAMAA) and MIT (Chatterbox). Commercial use is allowed. The output carries Chatterbox's inaudible Perth watermark.
+- **Settings:** the same per-segment exaggeration/cfg as voice B. Segment 12 is generated as two phrases split at the scripted pause after «تِقْدَر؟», with the text unchanged. Several seeds were generated per segment and the best take was kept; the seeds are recorded in `SEEDS_HIDDEN` in `tools/gen_chatterbox.py --hidden`.
+- **Evidence:** this is the Saudi open model with the most first-hand posts from Saudi users on X:
+  - [@alghali](https://x.com/alghali/status/2024111820978442591): «كلام سعودي طبيعي كأنك تسولف»
+  - [@muslehNayesh](https://x.com/muslehNayesh/status/2024181386266235104): «يعطي نبرة وتنغيم طبيعيين ولهجة سعودية مضبوطة»
+  - [@sulimanalowayed](https://x.com/sulimanalowayed/status/2024148304854962236)
+  - [@OsMo999](https://x.com/OsMo999/status/2024092360519332191)
+
+  It also has a [public demo Space](https://huggingface.co/spaces/omarelshehy/NAMAA-Saudi-Voice) and is hosted on [TTS.ai](https://tts.ai/text-to-speech/?model=saudi-tts). There is a critical user report too: HF discussion ["The synthesized voice is too fast"](https://huggingface.co/NAMAA-Space/NAMAA-Saudi-TTS/discussions).
+
+## Researched but not generated
+
+- **Needs an account, API key or payment, so not auditioned here.** These are for you to try directly if you want to:
+  - [SILMA TTS v2 KSA](https://silma.ai/saudi-tts-model): Najdi, API-only, paid from $0.025/min, sign-up required for "Try Now"
+  - [Nabrah AI](https://www.nabrah.ai/): Riyadh-based, Saudi-dialect TTS and voice agents
+  - [ElevenLabs Saudi voices](https://elevenlabs.io/text-to-speech/arabic)
+  - [Lahajati](https://lahajati.ai/en)
+  - Munsit
+  - Rime × Wittify
+- **Open, but only reach a Saudi voice by cloning a reference speaker (excluded by the no-cloning rule):**
+  - [Habibi-TTS SAU](https://huggingface.co/SWivid/Habibi-TTS) (CC-BY-NC-SA; a Saudi user [post on X](https://x.com/muslehNayesh/status/2028873731171324248))
+  - [NAMAA-Saudi-TTS-V2](https://huggingface.co/NAMAA-Space/NAMAA-Saudi-TTS-V2)
+  - [khalidhabbash/Saudi-tts-v4](https://huggingface.co/khalidhabbash/Saudi-tts-v4)
+  - [mobarmg/OmniVoice-Najdi](https://huggingface.co/mobarmg/OmniVoice-Najdi): single real podcast speaker; its auto voice drifts to that person
+  - [Rabe3/saudi-xtts-v2](https://huggingface.co/Rabe3/saudi-xtts-v2)

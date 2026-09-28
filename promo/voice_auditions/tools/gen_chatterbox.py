@@ -10,6 +10,7 @@ from huggingface_hub import snapshot_download
 from safetensors.torch import load_file
 from chatterbox import mtl_tts
 from script import CAPTIONS
+from hidden_script import HIDDEN
 
 # Hidden spellings (light diacritics only on words the model tends to misread).
 SPOKEN = dict(enumerate(CAPTIONS, 1))
@@ -27,10 +28,17 @@ STYLE.update({1: (0.65, 0.35), 5: (0.70, 0.35), 9: (0.60, 0.35), 12: (0.65, 0.40
 # the take with the fewest garbled words, per Whisper + listening proxy, was kept).
 SEEDS = {1: 202, 2: 302, 3: 101, 4: 7, 5: 7, 6: 101, 7: 7, 8: 101, 9: 101, 10: 101, 11: 101, 12: 202}
 
+# Same, for the approved hidden script (voice F).
+SEEDS_HIDDEN = {1: 7, 2: 404, 3: 7, 4: 404, 5: 7, 6: 303, 7: 7, 8: 101, 9: 7, 10: 7, 11: 101, 12: 7}
+
 ap = argparse.ArgumentParser()
 ap.add_argument("out"); ap.add_argument("segs", nargs="*", type=int)
-ap.add_argument("--stock", action="store_true"); ap.add_argument("--seed", type=int, default=None)
+ap.add_argument("--stock", action="store_true")
+ap.add_argument("--hidden", action="store_true", help="use the approved hidden script verbatim (F)"); ap.add_argument("--seed", type=int, default=None)
 a = ap.parse_intermixed_args(); os.makedirs(a.out, exist_ok=True)
+if a.hidden:  # verbatim; «» dropped; 12 split at the scripted pause after «تقدر؟» (text unchanged)
+    SPOKEN = {i: t.replace("«", "").replace("»", "") for i, t in enumerate(HIDDEN, 1)}
+    SPOKEN[12] = [HIDDEN[11].split("؟")[0] + "؟", HIDDEN[11].split("؟")[1].strip()]
 
 torch.set_num_threads(os.cpu_count())
 model = mtl_tts.ChatterboxMultilingualTTS.from_pretrained(device="cpu")
@@ -40,7 +48,7 @@ if not a.stock:
     model.t3.eval()
 
 for i in a.segs or list(SPOKEN):
-    torch.manual_seed((a.seed if a.seed is not None else SEEDS[i]) + i)
+    torch.manual_seed((a.seed if a.seed is not None else (SEEDS_HIDDEN if a.hidden else SEEDS)[i]) + i)
     ex, cfg = STYLE[i]
     parts = SPOKEN[i] if isinstance(SPOKEN[i], list) else [SPOKEN[i]]
     audio = []
