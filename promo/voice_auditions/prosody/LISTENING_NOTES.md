@@ -33,3 +33,9 @@
 - Natural word choice: **«بصابعك»** (not «بأصابعك») in segment 9. Adopted for the hidden text.
 - The transcript shows «هذه» and «الفائز». These are likely the transcriber's MSA normalization of «هذي» and «الفايز», so not adopted.
 - There is no prosody information (no audio). Calibration still needs the audio file itself.
+
+## Calibration against the owner's reading (segment 8, engine R)
+Six takes: approach A = two phrases, calm style instruction on «إنْمَسَكْ.», 160 ms inserted gap; approach B = one phrase with a «…» juncture. Three seeds each. They were scored by distance to the owner's contour and pauses (`diagnostics/calibrated/score_vs_owner.txt`; a shortlist only).
+- **cal1 = A seed 2:** closest. «المتخفي» rise → 230 ms → «انمسك» low falling, not stressed. Same shape as the owner's reading (compare `reference/owner_line08.png`).
+- **cal2 = A seed 3:** runner-up. 230 ms juncture, «انمسك» a little more stressed.
+- **cal3 = B seed 3:** the only one-phrase take with a juncture (240 ms), for comparison. The other B seeds glued «المتخفي انمسك» together, the same fault the owner heard in fix1.

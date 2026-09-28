@@ -23,7 +23,8 @@ def intended_text(wav):
     j = wav[:-4] + ".json"
     if os.path.exists(j):
         d = json.load(open(j))
-        return " ".join(d["phrases"]) if "phrases" in d else " ".join(p["text"] for p in d["parts"])
+        t = " ".join(d["phrases"]) if "phrases" in d else " ".join(p["text"] for p in d["parts"])
+        return re.sub(r"\([^)]*\)", " ", t)  # drop VoxCPM style instructions
     return BASE[int(os.path.basename(wav)[:2])]
 
 def align(y, sr, text):
