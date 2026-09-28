@@ -1,0 +1,74 @@
+[
+ {
+  "line": 1,
+  "take": "segments/R_picks/01.wav",
+  "dur": 4.45,
+  "gap_after_ms": 720
+ },
+ {
+  "line": 2,
+  "take": "segments/R_picks/02.wav",
+  "dur": 4.66,
+  "gap_after_ms": 730
+ },
+ {
+  "line": 3,
+  "take": "segments/R_picks/03.wav",
+  "dur": 3.47,
+  "gap_after_ms": 790
+ },
+ {
+  "line": 4,
+  "take": "segments/R_picks/04.wav",
+  "dur": 4.28,
+  "gap_after_ms": 640
+ },
+ {
+  "line": 5,
+  "take": "segments/R_picks/05.wav",
+  "dur": 3.7,
+  "gap_after_ms": 830
+ },
+ {
+  "line": 6,
+  "take": "segments/R_picks/06.wav",
+  "dur": 3.97,
+  "gap_after_ms": 720
+ },
+ {
+  "line": 7,
+  "take": "segments/R_picks/07.wav",
+  "dur": 3.63,
+  "gap_after_ms": 990
+ },
+ {
+  "line": 8,
+  "take": "segments/R_picks/08.wav",
+  "dur": 5.46,
+  "gap_after_ms": 830
+ },
+ {
+  "line": 9,
+  "take": "segments/R_picks/09.wav",
+  "dur": 5.35,
+  "gap_after_ms": 390
+ },
+ {
+  "line": 10,
+  "take": "segments/R_picks/10.wav",
+  "dur": 5.03,
+  "gap_after_ms": 620
+ },
+ {
+  "line": 11,
+  "take": "segments/R_picks/11.wav",
+  "dur": 3.66,
+  "gap_after_ms": 760
+ },
+ {
+  "line": 12,
+  "take": "segments/R_picks/12.wav",
+  "dur": 4.41,
+  "gap_after_ms": 0
+ }
+]

@@ -135,3 +135,12 @@ Class-A fixes requested:
 - Round-13 files (`critical_lines/Candidate-R/round13/`):
   - **splice_A / splice_B:** round-12 6 A / 6 B with line 10's «المتخفي» cut in (`splice_word.py`: forced alignment, RMS match, 15 ms crossfades).
   - **new_C / new_D:** re-takes, seeds 64 / 54, nominally closest to line 10's «المتخفي» by MFCC-DTW. The spread across all 8 takes was small (3.62–4.65), so this barely discriminates and is not a real ranking.
+
+## Round 14: owner's pick for line 6 = **splice_A**. R_picks updated
+New in `segments/R_picks/`:
+- 01 = round12 01_s2 «يِدّهُم»
+- 03 = round12 03b_s12 «بدون تحميل… ولا تسجيل»
+- 05 = round12 05_s2 «يِدّكْ»
+- 06 = round-12 6 A with line 10's «المتخفي» spliced in
+
+Video rebuilt from these.

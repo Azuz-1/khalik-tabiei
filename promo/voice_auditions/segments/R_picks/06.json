@@ -1,1 +1,1 @@
-{"phrases": ["(calm, conversational, playful)هنا لازم المُتَخَفّي يحاول يقلّدكم… ويحاول ما يَفْضَح نفسه."], "gaps_ms": [], "seed": 4, "engine": "R", "variant": "06a"}
+{"phrases": ["(calm, conversational, playful)هنا لازم المُتَخَفّي يحاول يگلّدكم… ويحاول ما يَفْضَح نفسه."], "gaps_ms": [], "seed": 4, "engine": "R", "variant": "06", "splice": "«المتخفي» replaced with the same word from line 10 (R_picks/10.wav) by prosody/splice_word.py (owner request, round 13)"}

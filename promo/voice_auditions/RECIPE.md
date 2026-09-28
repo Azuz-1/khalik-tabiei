@@ -6,6 +6,7 @@ This is what we learned producing the «خلك طبيعي» promo voice (2026-09
 - **Model:** [openbmb/VoxCPM2](https://huggingface.co/openbmb/VoxCPM2) (Apache-2.0) + the [Wittify/Fasee7-Najdi-Small](https://huggingface.co/Wittify/Fasee7-Najdi-Small) Najdi LoRA (Apache-2.0). Commercial use is OK.
 - **Voice:** a casual young Saudi woman created with VoxCPM2 voice design, not cloned from anyone. The reference clip is `segments/G/anchor.wav`, and every line uses it via `reference_wav_path`.
 - **Settings:** `cfg_value=2.0`, `inference_timesteps=20`. Seed with `torch.manual_seed(seed*100+80)`.
+- **Word splice as a last resort:** when one word is only right in another line (line 6 «المتخفي» ← line 10), `prosody/splice_word.py` cuts it in via forced alignment, RMS match and 15 ms crossfades. The owner accepted it.
 - **Runs** on CPU at about 1 minute per line on 4 cores. It needs ~9.5 GB RAM, so **never run it in parallel** with another large model (it gets OOM-killed).
 - **Rejected by the owner:**
   - Piper / VITS «SA_dii»
@@ -35,6 +36,10 @@ These go into the TTS input only; the visible captions stay normal Arabic.
 | انمسك | **«إنْمَسَكْ.»** | The owner's own pronunciation, with a calm «.». |
 | تدخلون | **«تدْخلون»** (sukun on د) | Otherwise it gets an audible shadda. |
 | بأصابعك | **«بصابعك»** | What the owner actually says. |
+| يدهم | **«يِدّهُم»** | Shadda; a sukun («يِدْهُم») gave «يدْهم». |
+| يدك (ارفع يدك) | **«يِدّكْ»** | Not «يَدَك» / «يدْك». |
+| يقلدكم | **«يگلّدكم»** | Najdi [g]; a written «ق» sounds too strong, as with «قدر». |
+| ولا تسجيل | **«بدون تحميل… ولا تسجيل.»** | Without the beat, «و» was swallowed and «تسجيل» came out 14.5 dB quieter than the line. |
 
 **Hidden spelling is engine-specific.** The same tashkeel that helps one engine breaks another:
 - espeak-based engines need a sukun against MSA case endings;
