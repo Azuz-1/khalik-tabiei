@@ -1,8 +1,9 @@
 # خلك طبيعي — promo video (source project)
 
-The finished film is **`out/khalik-tabiei-promo.mp4`** — vertical 1080×1920, 30 fps,
-H.264 + AAC, 1:34, 28 MiB, with a full Saudi-Arabic voiceover, burned-in Arabic
-captions, an original score and sound design. It's ready for TikTok, Reels and Shorts.
+The finished film is **`out/khalik-tabiei-promo.mp4`**. It is vertical 1080×1920 (9:16), 30 fps,
+H.264 + AAC, **1:02**, 19 MB. It has a natural Saudi (light Najdi) voiceover, a word-timed Arabic
+transcript burned in along the lower third (clear of the TikTok/Reels/Shorts UI), a music bed and the
+game's sound effects. It is ready for TikTok, Instagram Reels and YouTube Shorts.
 
 This folder is self-contained and separate from the game. Nothing in `server/`,
 `client/` or `shared/` was changed, and the root `npm` workspaces don't include it.
@@ -33,9 +34,9 @@ The illustrated characters are drawn in the language of the game's own mark
 
 ```
 capture/capture.mjs      real gameplay → assets/capture/*.webp
-script/narration.json    captions (cap) + hidden voweled TTS spelling (say)
-audio/tts.py             local Saudi voice, 5 takes/line, best take by Whisper
-                         intelligibility + DNSMOS quality → build/vo, build/timings.json
+script/short.json        12 lines: caption phrases (plain Arabic) + the owner's pause after each line
+audio/narration_picks.py the owner-confirmed voiceover (voice_auditions/segments/R_picks) →
+                         build/vo/narration.wav + caption timing by forced alignment → build/timings.json
 compositor/              deterministic HTML/SVG motion design; renderAt(t)
 render/render.mjs        headless Chromium → frames → x264 (+ build/cues.json)
 audio/score.py           original Khaleeji-style score in D Hijaz + SFX
@@ -46,8 +47,11 @@ build.sh                 runs everything → out/khalik-tabiei-promo.mp4
 
 Everything is free and open source and runs locally. No paid APIs were used.
 
-* **Voice:** Piper/VITS `ar-SA dii` voice (OpenVoiceOS), run through sherpa-onnx.
-* **Pronunciation QA:** Whisper-turbo (sherpa-onnx) + DNSMOS (Microsoft `speechmos`).
+* **Voice:** VoxCPM2 (OpenBMB, Apache-2.0) + the Fasee7-Najdi-Small LoRA (Wittify, Apache-2.0), with a
+  designed casual young Saudi female voice (no real person cloned). Every line was chosen by the
+  native-Saudi owner. The full recipe and learnings are in `voice_auditions/RECIPE.md`, and the
+  project skill is `.claude/skills/saudi-voiceover`.
+* **Caption timing:** MMS forced alignment (torchaudio) of the spoken words.
 * **Font:** Tajawal (OFL, the game's own font), in `assets/fonts/`.
 
 ## Editing

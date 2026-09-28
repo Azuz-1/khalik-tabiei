@@ -1,21 +1,113 @@
 {
-  "_about": "Short cut (35–42 s). Narration is the narrator's own recording in promo/voice/. `phrases` are the caption units, split at the speaker's real pauses. `caps` may override a phrase's caption text to match exactly what was said. `gap` is the silence (s) after a segment. `takes` can force a take per segment, e.g. {\"s3\": 2}.",
-  "lead_in": 0.12,
-  "tail": 1.3,
-  "est_cps": 14.5,
-  "takes": {},
-  "segments": [
-    { "id": "s1", "gap": 0.2, "phrases": ["تخيّل كلهم يرفعون يدهم…", "وأنت الوحيد اللي ما تدري وش السالفة!"] },
-    { "id": "s2", "gap": 0.2, "phrases": ["هذي «خلك طبيعي»…", "لعبة جماعية،", "وواحد فيكم ما يدري وش المطلوب."] },
-    { "id": "s3", "gap": 0.18, "phrases": ["تدخلون من جوالاتكم،", "بدون تحميل ولا تسجيل."] },
-    { "id": "s4", "gap": 0.2, "phrases": ["كل واحد يشوف المطلوب بسرّه…", "إلا المتخفي."] },
-    { "id": "s5", "gap": 0.15, "min": 3.2, "phrases": ["ثلاثة…", "اثنين…", "واحد…", "ارفعوا!"] },
-    { "id": "s6", "gap": 0.22, "phrases": ["هنا لازم المتخفي يسايركم…", "ويحاول ما يفضح نفسه."] },
-    { "id": "s7", "gap": 0.2, "phrases": ["بعدها ينكشف المطلوب…", "وكل واحد يبدأ يشك بالثاني."] },
-    { "id": "s8", "gap": 0.25, "phrases": ["تصوّتون للشخص اللي شاكّين فيه…", "وإذا أغلبكم اختاره،", "انمسك!"] },
-    { "id": "s9", "gap": 0.2, "phrases": ["مرة ترفع يدك،", "مرة تأشّر،", "ومرة تورّي رقم بأصابعك…", "وكل جولة غير."] },
-    { "id": "s10", "gap": 0.2, "phrases": ["إذا عرفت المتخفي تكسب نقاط…", "وإذا قدر يفلت،", "هو اللي يكسب."] },
-    { "id": "s11", "gap": 0.25, "phrases": ["وبالنهاية…", "أكثر واحد جمع نقاط هو الفايز."] },
-    { "id": "s12", "gap": 0.0, "phrases": ["الحين السؤال…", "تقدر؟", "خلك طبيعي!"] }
-  ]
+ "_about": "Short cut. Narration = the owner-confirmed AI voiceover (VoxCPM2 + Fasee7 Najdi LoRA; voice_auditions/segments/R_picks, assembled by audio/narration_picks.py with the owner's own pauses). `phrases` are the on-screen caption units (plain Arabic; the hidden TTS spellings live in R_picks/*.json). Caption timing comes from forced alignment of the spoken words. `gap` = silence after the line (owner's reading).",
+ "lead_in": 0.12,
+ "tail": 1.3,
+ "est_cps": 14.5,
+ "takes": {},
+ "segments": [
+  {
+   "id": "s1",
+   "gap": 0.72,
+   "phrases": [
+    "تخيّل كلهم يرفعون يدهم…",
+    "وأنت الوحيد اللي ما تدري وش السالفة!"
+   ]
+  },
+  {
+   "id": "s2",
+   "gap": 0.73,
+   "phrases": [
+    "هذي «خلك طبيعي»…",
+    "لعبة جماعية،",
+    "وواحد منكم ما يدري وش المطلوب."
+   ]
+  },
+  {
+   "id": "s3",
+   "gap": 0.79,
+   "phrases": [
+    "تدخلون من جوالاتكم،",
+    "بدون تحميل ولا تسجيل."
+   ]
+  },
+  {
+   "id": "s4",
+   "gap": 0.64,
+   "phrases": [
+    "كل واحد يشوف المطلوب بجواله…",
+    "إلا المتخفي ما يطلع له شيء."
+   ]
+  },
+  {
+   "id": "s5",
+   "gap": 0.83,
+   "phrases": [
+    "ثلاثة…",
+    "اثنين…",
+    "واحد…",
+    "ارفع يدك!"
+   ]
+  },
+  {
+   "id": "s6",
+   "gap": 0.72,
+   "phrases": [
+    "هنا لازم المتخفي يحاول يقلّدكم…",
+    "ويحاول ما يفضح نفسه."
+   ]
+  },
+  {
+   "id": "s7",
+   "gap": 0.99,
+   "phrases": [
+    "بعدها ينكشف المطلوب…",
+    "وكل واحد يبدأ يشك بالثاني."
+   ]
+  },
+  {
+   "id": "s8",
+   "gap": 0.83,
+   "phrases": [
+    "تبدون بالتصويت على الشخص اللي شاكّين فيه…",
+    "وإذا أغلبكم اختار المتخفي…",
+    "انمسك!"
+   ]
+  },
+  {
+   "id": "s9",
+   "gap": 0.39,
+   "phrases": [
+    "مرة ترفع يدك،",
+    "مرة تأشّر،",
+    "ومرة تورّي رقم بصابعك…",
+    "وكل جولة غير."
+   ]
+  },
+  {
+   "id": "s10",
+   "gap": 0.62,
+   "phrases": [
+    "إذا عرفت المتخفي تكسب نقاط…",
+    "وإذا قدر يفلت،",
+    "هو اللي يكسب."
+   ]
+  },
+  {
+   "id": "s11",
+   "gap": 0.76,
+   "phrases": [
+    "وبالنهاية…",
+    "أكثر واحد جمع نقاط هو الفايز."
+   ]
+  },
+  {
+   "id": "s12",
+   "gap": 0.0,
+   "phrases": [
+    "الحين السؤال…",
+    "تقدر تخدعهم؟",
+    "خلك طبيعي!"
+   ]
+  }
+ ]
 }

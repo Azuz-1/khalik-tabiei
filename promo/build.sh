@@ -5,7 +5,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 FF="${FFMPEG:-ffmpeg}"
 
-python3 audio/tts.py --takes="${TAKES:-5}"   # Arabic VO (cached per line)
+# Voice: the owner-confirmed Saudi-Najdi AI narration (voice_auditions/segments/R_picks), assembled with
+# the owner's own pauses; captions timed by forced alignment. Needs torch/torchaudio/uroman/librosa
+# (set VO_PY to that interpreter). See voice_auditions/RECIPE.md.
+"${VO_PY:-python3}" audio/narration_picks.py
 node render/render.mjs                         # frames → build/video.mp4 (+ build/cues.json)
 python3 audio/score.py                         # original music + SFX from cues
 python3 audio/mix.py                           # duck, EQ, loudness → build/mix.wav

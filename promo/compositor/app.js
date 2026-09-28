@@ -345,7 +345,7 @@ function fmtCap(s) {
   return s
     .replace(/(خلك طبيعي)/g, "<strong>$1</strong>")
     .replace(/(المتخفية|المتخفي|متخفّي)/g, "<em>$1</em>")
-    .replace(/(انكشف!|نجا!|انمسك!|ارفعوا!)/g, "<strong>$1</strong>")
+    .replace(/(انكشف!|نجا!|انمسك!|ارفع يدك!)/g, "<strong>$1</strong>")
     .replace(/([+]?\d+(?:–\d+)?)/g, '<span class="num">$1</span>');
 }
 if (TM.wordless) document.body.classList.add("wordless");
@@ -516,7 +516,7 @@ scene("count", B("s5").start - 0.05, T_ACTION + 0.06, (root) => {
   };
 }, { fadeIn: 0.05, fadeOut: 0.04 });
 
-/* s5.3 + s6 · ACTION — «ارفعوا!» then the impostor copies the room ---------- */
+/* s5.3 + s6 · ACTION — «ارفع يدك!» then the impostor copies the room ---------- */
 scene("action", T_ACTION, nxt("s7"), (root) => {
   const burst = makeCrop(root, ["tv_c1_4_action"], 1920, [300, 60, 1320, 900], 1240, 540, 640, 0);
   burst.e.style.maskImage = "radial-gradient(closest-side, #000 60%, transparent 100%)";
@@ -760,7 +760,7 @@ scene("winner", B("s11").start, nxt("s12"), (root) => {
   };
 });
 
-/* s12 · CTA — «الحين السؤال… تقدر؟ خلك طبيعي!» ------------------------------ */
+/* s12 · CTA — «الحين السؤال… تقدر تخدعهم؟ خلك طبيعي!» ------------------------------ */
 scene("cta", B("s12").start, END + 1, (root) => {
   const cam = el("div", "layer", root);
   cam.style.transformOrigin = "540px 1050px";
