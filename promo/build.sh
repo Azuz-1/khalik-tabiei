@@ -12,12 +12,15 @@ python3 audio/mix.py                           # duck, EQ, loudness → build/mi
 
 mkdir -p out
 DUR=$(python3 -c "import json;print(json.load(open('build/cues.json'))['duration'])")
-"$FF" -y -hide_banner -loglevel error -i build/video.mp4 -i build/mix.wav \
-  -t "$DUR" -map 0:v -map 1:a \
-  -c:v libx264 -preset slow -crf "${CRF:-19}" -profile:v high -level 4.2 -pix_fmt yuv420p \
-  -x264-params "aq-mode=3" -r 30 \
-  -c:a aac -b:a 256k -ar 48000 -af "afade=t=out:st=$(python3 -c "print($DUR-0.6)"):d=0.6" \
-  -movflags +faststart \
-  -metadata title="خلك طبيعي" -metadata:s:a:0 language=ara \
-  out/khalik-tabiei-promo.mp4
+FADE=$(python3 -c "print($DUR-0.6)")
+# Two-pass at ~2.25 Mb/s keeps the file under 30 MiB (easy to share from a phone)
+# with no visible loss; platforms re-encode to a similar rate anyway.
+X264=(-c:v libx264 -preset slow -b:v 2250k -profile:v high -level 4.2 -pix_fmt yuv420p -x264-params aq-mode=3 -r 30)
+(cd build && "$FF" -y -hide_banner -loglevel error -i video.mp4 -t "$DUR" "${X264[@]}" -pass 1 -passlogfile x264pass -an -f mp4 /dev/null)
+(cd build && "$FF" -y -hide_banner -loglevel error -i video.mp4 -i mix.wav -t "$DUR" -map 0:v -map 1:a \
+  "${X264[@]}" -maxrate 4500k -bufsize 9000k -pass 2 -passlogfile x264pass \
+  -c:a aac -b:a 224k -ar 48000 -af "afade=t=out:st=$FADE:d=0.6" \
+  -movflags +faststart -metadata title="خلك طبيعي" -metadata:s:a:0 language=ara \
+  ../out/khalik-tabiei-promo.mp4)
+"$FF" -y -hide_banner -loglevel error -ss 7.6 -i out/khalik-tabiei-promo.mp4 -frames:v 1 -q:v 2 out/cover.jpg
 echo "→ out/khalik-tabiei-promo.mp4"

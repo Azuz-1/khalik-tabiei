@@ -1,7 +1,7 @@
 # خلك طبيعي — promo video (source project)
 
 The finished film is **`out/khalik-tabiei-promo.mp4`** — vertical 1080×1920, 30 fps,
-H.264 + AAC, about 1½ minutes, with a full Saudi-Arabic voiceover, burned-in Arabic
+H.264 + AAC, 1:34, 28 MiB, with a full Saudi-Arabic voiceover, burned-in Arabic
 captions, an original score and sound design. It's ready for TikTok, Reels and Shorts.
 
 This folder is self-contained and separate from the game. Nothing in `server/`,
