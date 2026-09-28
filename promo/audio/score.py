@@ -265,28 +265,28 @@ for c in cues:
     t, k = c["t"], c["type"]
     if k == "tick":
         f = {5: 320, 4: 380, 3: 450, 2: 530, 1: 640}[c["step"]]
-        add(sfx, game_tone(f, 0.095, 0.18 if c["step"] == 1 else 0.14, "tri"), t, 3.0)
+        add(sfx, game_tone(f, 0.095, 0.18 if c["step"] == 1 else 0.14, "tri"), t, 5.5)
     elif k == "action":
-        add(sfx, mixdown(game_tone(165, 0.2, 0.22, "sine", 0, 95), game_tone(930, 0.085, 0.1, "tri")), t, 3.0)
+        add(sfx, mixdown(game_tone(165, 0.2, 0.22, "sine", 0, 95), game_tone(930, 0.085, 0.1, "tri")), t, 4.5)
         add(sfx, kick(1.0), t, 0.9)
     elif k == "hold":
-        add(sfx, game_tone(145, 0.14, 0.075, "sine", 0, 125), t, 2.5)
+        add(sfx, game_tone(145, 0.14, 0.075, "sine", 0, 125), t, 5.0)
     elif k == "reveal":
-        add(sfx, mixdown(game_tone(500, 0.18, 0.11), game_tone(660, 0.22, 0.1, "tri", 0.075)), t, 3.0)
+        add(sfx, mixdown(game_tone(500, 0.18, 0.11), game_tone(660, 0.22, 0.1, "tri", 0.075)), t, 6.0)
     elif k == "vote":
         n = c.get("n", 1)
-        add(sfx, game_tone(760 + min(max(n - 1, 0), 3) * 35, 0.075, 0.052), t, 4.0, 0.15 * ((n % 3) - 1))
+        add(sfx, game_tone(760 + min(max(n - 1, 0), 3) * 35, 0.075, 0.052), t, 16.0, 0.15 * ((n % 3) - 1))
     elif k == "caught":
-        add(sfx, mixdown(game_tone(440, 0.28, 0.12, "tri"), game_tone(554, 0.28, 0.115, "tri", 0.12), game_tone(659, 0.32, 0.11, "sine", 0.24)), t + 0.03, 3.0)
+        add(sfx, mixdown(game_tone(440, 0.28, 0.12, "tri"), game_tone(554, 0.28, 0.115, "tri", 0.12), game_tone(659, 0.32, 0.11, "sine", 0.24)), t + 0.03, 5.5)
         add(sfx, kick(1.0), t, 1.0)
     elif k == "join":
-        add(sfx, game_tone(820, 0.09, 0.05), t, 3.5)
+        add(sfx, game_tone(820, 0.09, 0.05), t, 9.0)
     elif k == "point":
         n = c.get("n", 1)
-        add(sfx, mixdown(game_tone(midi(76 + 2 * (n - 1)), 0.12, 0.08, "tri"), game_tone(midi(83 + 2 * (n - 1)), 0.1, 0.05, "sine", 0.06)), t, 3.0)
+        add(sfx, mixdown(game_tone(midi(76 + 2 * (n - 1)), 0.12, 0.08, "tri"), game_tone(midi(83 + 2 * (n - 1)), 0.1, 0.05, "sine", 0.06)), t, 11.0)
     elif k == "crown":
         for j, m in enumerate((84, 88, 91, 96)):
-            add(sfx, game_tone(midi(m), 0.25, 0.045), t + j * 0.055, 3.0, -0.3 + 0.2 * j)
+            add(sfx, game_tone(midi(m), 0.25, 0.045), t + j * 0.055, 8.0, -0.3 + 0.2 * j)
     elif k in ("mask", "impostor"):
         d = 0.9
         add(sfx, np.sin(2 * np.pi * np.cumsum(np.linspace(110, 70, n_(d))) / SR) * env(d, 0.05, 0.35, 0.2) * 0.35, t, 1.0)
@@ -308,7 +308,7 @@ for c in cues:
     elif k == "impact":
         add(sfx, kick(1.0), t, 0.9)
     elif k == "logo":
-        add(sfx, mixdown(game_tone(440, 0.28, 0.1, "tri"), game_tone(554, 0.28, 0.1, "tri", 0.1), game_tone(659, 0.34, 0.1, "sine", 0.2)), t + 0.05, 2.2)
+        add(sfx, mixdown(game_tone(440, 0.28, 0.1, "tri"), game_tone(554, 0.28, 0.1, "tri", 0.1), game_tone(659, 0.34, 0.1, "sine", 0.2)), t + 0.05, 6.0)
 
 sfx = reverb(sfx, room(1.0, 0.22, 9), 0.15)
 sfx /= max(1.0, np.abs(sfx).max() / 0.95)

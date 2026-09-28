@@ -327,3 +327,6 @@ body { width: 1080px; height: 1920px; overflow: hidden; }
 
 .particle { position: absolute; border-radius: 3px; }
 .arrow-line { position: absolute; height: 10px; border-radius: 6px; transform-origin: 0 50%; background: linear-gradient(90deg, rgb(196 181 253 / 0.1), var(--violet-300)); box-shadow: 0 0 20px rgb(167 139 250 / 0.9); }
+
+/* wordless cut: text cards are the explanation, so they are bigger and bolder */
+.wordless .cap { font-size: 70px; font-weight: 900; padding: 18px 40px 14px; background: rgb(8 5 16 / 0.8); border-color: rgb(196 181 253 / 0.28); }

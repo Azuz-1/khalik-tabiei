@@ -348,16 +348,19 @@ function fmtCap(s) {
     .replace(/(انكشف!|نجا!|انمسك!|ارفعوا!)/g, "<strong>$1</strong>")
     .replace(/([+]?\d+(?:–\d+)?)/g, '<span class="num">$1</span>');
 }
-const caps = TM.chunks.map((c, k) => {
+if (TM.wordless) document.body.classList.add("wordless");
+const caps = TM.chunks.filter((c) => c.cap).map((c) => {
+  const k = TM.chunks.indexOf(c);
   const e = el("div", "cap", capLayer, fmtCap(c.cap));
   const next = TM.chunks[k + 1];
-  const a = c.start - 0.08;
-  const b = Math.min(next ? next.start - 0.04 : END, c.end + 0.45);
+  // clean hand-over: the previous card is gone before the next fades in
+  const a = c.start - 0.02;
+  const b = Math.min(next ? next.start - 0.07 : END, c.end + 0.45);
   return { e, a, b };
 });
 function renderCaptions(t) {
   for (const c of caps) {
-    const v = vis(t, c.a, c.b, 0.16, 0.12);
+    const v = vis(t, c.a, c.b, 0.12, 0.06);
     const rise = (1 - P(t, c.a, 0.28, E.out)) * 22;
     c.e.style.opacity = v;
     c.e.style.visibility = v > 0.002 ? "visible" : "hidden";

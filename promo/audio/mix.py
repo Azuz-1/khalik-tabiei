@@ -34,9 +34,18 @@ vo, music, sfx = fit(vo, N), fit(music, N), fit(sfx, N)
 key = follower(vo)
 talk = np.clip(key / (0.25 * (np.abs(vo).max() + 1e-9)), 0, 1)
 k = int(0.12 * SR); talk = np.convolve(talk, np.ones(k) / k, "same")
-music_gain = 0.30 * 10 ** (-10 * talk / 20)   # ~-10 dB more while speaking
-sfx_gain = 0.55 * 10 ** (-4 * talk / 20)
+wordless = np.abs(vo).max() < 1e-4
+# With a narrator the music sits well underneath; in the wordless cut the
+# game sounds lead and the music carries the rhythm.
+M, X = (0.5, 0.9) if wordless else (0.30, 0.55)
+music_gain = M * 10 ** (-10 * talk / 20)   # ~-10 dB more while speaking
+sfx_gain = X * 10 ** (-4 * talk / 20)
 
+# the game's own sounds tell the story: dip the music briefly under each one
+sk = follower(sfx.mean(1), 0.004, 0.25)
+hit = np.clip(sk / (0.2 * (np.abs(sfx).max() + 1e-9)), 0, 1)
+k2 = int(0.03 * SR); hit = np.convolve(hit, np.ones(k2) / k2, "same")
+music_gain = music_gain * 10 ** (-7 * hit / 20)
 mix = music * music_gain[:, None] + sfx * sfx_gain[:, None] + vo[:, None]
 pre = os.path.join(BUILD, "mix_pre.wav")
 sf.write(pre, (mix / (np.abs(mix).max() / 0.8)).astype(np.float32), SR)
