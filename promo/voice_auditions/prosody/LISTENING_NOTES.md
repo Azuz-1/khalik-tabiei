@@ -17,3 +17,14 @@
 - «إنْمَسَكْ» («in-masak»). Engine-specific spellings used to get that sound:
   - R/M/K: «إنْمَسَكْ» as written.
   - V: «اِنْمَسَكْ». Its front end drops the initial vowel from «إنْمَسَكْ» (`ʔnmasak`) but keeps it from «اِنْمَسَكْ» (`ʔinmasak`).
+
+## Round 3: segment 8 fixes
+| Clip | Owner's verdict | Error class | Consequence |
+|---|---|---|---|
+| R fix1 (payoff in the sentence) | «المتخفي انمسك» **merges into one word** | B (missing juncture) | Needs a *short* boundary, not a full phrase break. |
+| R fix2 (payoff isolated, 250 ms) | Stops after «المتخفي», then «انمسك»: **feels unnatural**. «انمسك» is a **small shout**; it should be **explanatory**. The sound itself is good. | B (juncture too strong) + wrong emotion | Separate generation with «!» triggers an exclamation. Drop «!» from the hidden text, and keep some context in the payoff phrase instead of the bare word. |
+| R fix3 (fix2, seed 2) | **Bad**: «انمسك» sounds surprised/shouted | wrong emotion | Same cause. |
+| V fix1 | **Liked the voice**, but it **still uses «ط» instead of «ت»/«د»** | A (acoustic emphasis) | Spelling can't reach this: the phonemes already ask for plain /t/ and /d/. It is how this voice realizes them. |
+| V fix2 / fix3 | The two «انمسك» sound very close | — | The «إخْتار» respelling and in-sentence placement made little audible difference. |
+
+**Target for «إنْمَسَكْ» (owner):** explanatory, matter-of-fact, clearly separated from «المتخفي» but not a full stop, and **not** exclaimed or surprised.
