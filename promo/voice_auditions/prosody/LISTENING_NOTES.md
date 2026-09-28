@@ -82,3 +82,12 @@ Next: remaining segments 1, 2, 3, 4, 6, 9, 11 with the same recipe (3 seeds each
 - Round-8 screen: 17 of 21 pass.
   - Failed: 4 seed 2 («يطلع» garbled); 6 seeds 1 and 2 («يقلّدكم» heard «يقلتكم», a possible class-A d→t devoicing, so watch 6 seed 3 too); 9 seed 3 (no pause after «بصابعك», «غير» heard «خير»).
   - Also withheld: 2 seed 2 («خلق»), 3 seed 2 («تدخلوا» without ن), 11 seed 1 («الفائز», MSA). 14 takes sent in `critical_lines/Candidate-R/round8/`.
+
+## Round 9: can I predict the owner's picks? Backtest + draft narration
+- **Backtest on the owner's 3 prosody picks (5, 7, 8):** my combined score was wrong on 5 and 8. The pitch-contour similarity to the owner was *anti*-predictive (the picked takes had the lowest correlation). **Timing only** (word-rhythm correlation minus pause error at the owner's pause points) matched 3 of 3. This rule was found post hoc on 3 decisions, so it's a hypothesis to test, not a validated predictor.
+- **Picks for the remaining lines** (timing predictor + pronunciation screen; neither alone decides):
+  - 1 = seed 2; 3 = seed 3 (exactly the owner's 210 ms pause); 6 = seed 3; 11 = seed 3.
+  - 2 = round-9 seed 4 (the timing-best seed 2 was heard as «خلق»).
+  - 9 = round-9 split, seed 2 (the one-phrase takes never produced the owner's 630 ms pause).
+  - 4 = round-8 seed 1: **unsolved**. The owner pauses 120 ms; takes give ~370–390 ms or none. «،» instead of «…» didn't help; one seed drifted to «لا يطلع على شيء».
+- **Draft 1:** `../narration_draft1_R.mp3` = **63.2 s**, with the owner's own pauses between lines (0.39–0.99 s). Per-line WAVs are in `../segments/R_draft1/`. **Length conflict:** the owner's natural read is ~55 s of speech in a 57.8 s recording, and the video plan was ~40 s. Options: tighter gaps between lines, trimming the script, or a longer video. No time-stretching.
