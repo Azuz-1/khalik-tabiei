@@ -75,3 +75,10 @@ Failed (not sent):
   - «تخدعهم» on C's seed.
   - N1 «تضحك عليهم» (seed 2).
   - N2 «لو كنت أنت المتخفي» (seeds 1 and 2).
+
+## Round 8: owner's pick for segment 12 = **«تِگْدَر تخدعهم؟»** (`round7/seg12_tikhda3hum_Cseed`)
+**Chosen so far:** 5 = recipe seed 2 · 7 = recipe seed 3 · 8 = cal3 · 10 = round6 A · 12 = round7 «تخدعهم».
+Next: remaining segments 1, 2, 3, 4, 6, 9, 11 with the same recipe (3 seeds each). Pause points come from the owner's reading, and segment 9 uses the owner's spoken form «بصابعك».
+- Round-8 screen: 17 of 21 pass.
+  - Failed: 4 seed 2 («يطلع» garbled); 6 seeds 1 and 2 («يقلّدكم» heard «يقلتكم», a possible class-A d→t devoicing, so watch 6 seed 3 too); 9 seed 3 (no pause after «بصابعك», «غير» heard «خير»).
+  - Also withheld: 2 seed 2 («خلق»), 3 seed 2 («تدخلوا» without ن), 11 seed 1 («الفائز», MSA). 14 takes sent in `critical_lines/Candidate-R/round8/`.
