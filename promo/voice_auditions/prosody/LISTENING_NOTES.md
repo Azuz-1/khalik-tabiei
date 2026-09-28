@@ -91,3 +91,22 @@ Next: remaining segments 1, 2, 3, 4, 6, 9, 11 with the same recipe (3 seeds each
   - 9 = round-9 split, seed 2 (the one-phrase takes never produced the owner's 630 ms pause).
   - 4 = round-8 seed 1: **unsolved**. The owner pauses 120 ms; takes give ~370–390 ms or none. «،» instead of «…» didn't help; one seed drifted to «لا يطلع على شيء».
 - **Draft 1:** `../narration_draft1_R.mp3` = **63.2 s**, with the owner's own pauses between lines (0.39–0.99 s). Per-line WAVs are in `../segments/R_draft1/`. **Length conflict:** the owner's natural read is ~55 s of speech in a 57.8 s recording, and the video plan was ~40 s. Options: tighter gaps between lines, trimming the script, or a longer video. No time-stretching.
+
+## Round 10: owner's picks from round 8 (out-of-sample test of the timing predictor)
+| Line | My prediction | Owner | |
+|---|---|---|---|
+| 1 | seed 2 | seed 2 | ✓ |
+| 2 | round-9 seed 4 | round-8 seed 1 | ✗ |
+| 4 | seed 1 | seed 1 | ✓ |
+| 9 | round-9 split seed 2 | round-8 seed 2 (one phrase) | ✗ |
+| 11 | seed 3 | seed 3 | ✓ |
+
+**3/5.** Useful for shortlisting, not a replacement for the owner's ear. Both misses came from letting a measured pause override the one-phrase take.
+
+Class-A fixes requested:
+- **3:** «تدخلون» has an audible shadda on «د»; it should be «تدْخلون».
+- **6:** the model says «المتختفي» (extra ت); it should be «المتخفي».
+- Round-10 files (`critical_lines/Candidate-R/round10/`; neutral names so the prediction isn't revealed):
+  - seg03_X = «تِدْخلون» seed 1; seg03_Y = «تدْخلون» seed 2.
+  - seg06_X = plain «المتخفي» seed 2; seg06_Y = «المُتَخَفّي» seed 4; seg06_Z = «المُتَخَفّي» seed 5.
+- **Predictions logged before the owner listens: line 3 → X, line 6 → X.** «تدْخلون» (Y) was heard as «تدخلوا» (final ن dropped?) on both seeds. seg06_Z has the best timing, but Whisper heard «المتخف».
