@@ -1,0 +1,1 @@
+{"seg": 5, "take": 3, "kind": "split", "desc": "count as one phrase + 450 ms beat + payoff phrase", "phrases": ["ثلاثة… اثنين… واحد…", "اِرْفَع يَدَك!"], "gaps_ms": [450], "engine": "nabra", "speed": [1.0, 1.0], "engine_text": ["ثلاثة… اثنين… واحد…", "اِرْفَع يَدَك!"]}

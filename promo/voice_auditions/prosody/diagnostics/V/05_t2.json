@@ -1,0 +1,1 @@
+{"seg": 5, "take": 2, "kind": "split", "desc": "countdown as individual beats (380/380 ms) + 450 ms beat before payoff", "phrases": ["ثلاثة…", "اثنين…", "واحد…", "اِرْفَع يَدَك!"], "gaps_ms": [380, 380, 450], "engine": "nabra", "speed": [1.0, 1.0, 1.0, 1.0], "engine_text": ["ثلاثة…", "اثنين…", "واحد…", "اِرْفَع يَدَك!"]}

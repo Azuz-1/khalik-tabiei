@@ -1,0 +1,1 @@
+{"seg": 10, "take": 1, "kind": "default", "desc": "engine default settings, one phrase", "phrases": ["إذا عرفت المُتَخَفّي تَكْسَب نقاط… وإذا قِدَر يِفْلِت، هو اللي يَكْسَب."], "gaps_ms": [], "engine": "habibi-sau", "cfg_strength": 2.0, "nfe_step": 16, "speed": [1.0], "seed": 1, "engine_text": ["إذا عرفت المتخفي تكسب نقاط… وإذا قدر يفلت، هو اللي يكسب."]}

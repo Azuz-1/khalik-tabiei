@@ -1,0 +1,1 @@
+{"seg": 1, "take": 3, "kind": "split", "desc": "beat split at … : setup | punchline, 220 ms", "phrases": ["تَخَيَّل كلهم يرفعون يِدْهُم…", "وأنت الوحيد اللي ما تَدري وش السالفة!"], "gaps_ms": [220], "engine": "habibi-sau", "cfg_strength": 2.0, "nfe_step": 16, "speed": [1.0, 1.0], "seed": 1, "engine_text": ["تخيل كلهم يرفعون يدهم…", "وأنت الوحيد اللي ما تدري وش السالفة!"]}

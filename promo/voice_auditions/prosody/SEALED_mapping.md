@@ -9,6 +9,6 @@ Letters were assigned by a random shuffle.
 |---|---|
 | V | Nabra-Saudi-82M (oddadmix), voice af_msa |
 | K | Habibi-TTS Specialized SAU (SWivid), reference = synthetic male anchor |
-| R | (reserved for a third engine; see REPORT.md) |
+| R | not used: Audar-TTS-V1 was blocked at Gate 2 (gated codec, see REPORT.md §4) |
 
 </details>

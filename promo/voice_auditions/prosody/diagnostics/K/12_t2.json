@@ -1,0 +1,1 @@
+{"seg": 12, "take": 2, "kind": "split", "desc": "2 beats: الحين السؤال… | 250 ms | تِقْدَر؟ خَلِّك طبيعي! (replaces broken 3-beat)", "phrases": ["الحين السؤال…", "تِقْدَر؟ خَلِّك طبيعي!"], "gaps_ms": [250], "engine": "habibi-sau", "cfg_strength": 2.0, "nfe_step": 16, "speed": [1.0, 1.0], "seed": 1, "engine_text": ["الحين السؤال…", "تقدر؟ خلك طبيعي!"]}

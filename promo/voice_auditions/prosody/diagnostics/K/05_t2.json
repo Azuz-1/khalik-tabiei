@@ -1,0 +1,1 @@
+{"seg": 5, "take": 2, "kind": "adj", "desc": "count phrase | 450 ms | payoff, cfg 1.5 (replaces broken per-word beats)", "phrases": ["ثلاثة… اثنين… واحد…", "اِرْفَع يَدَك!"], "gaps_ms": [450], "engine": "habibi-sau", "cfg_strength": 1.5, "nfe_step": 16, "speed": [1.0, 1.0], "seed": 1, "engine_text": ["ثلاثة… اثنين… واحد…", "ارفع يدك!"]}

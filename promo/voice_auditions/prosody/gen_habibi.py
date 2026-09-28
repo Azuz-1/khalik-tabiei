@@ -24,17 +24,35 @@ def fix(p): return re.sub(r"[\u064B-\u0652]", "", p).replace("«", "").replace("
 NFE = 16  # 32 is the default; 16 used for the time budget (applied to every take equally)
 ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--seed", type=int, default=1)
 ap.add_argument("--only", nargs="*", type=int)
+ap.add_argument("--order", nargs="*", help="take ids like 12_t2 in priority order (CPU time budget)")
 a = ap.parse_args(); os.makedirs(a.out, exist_ok=True); torch.set_num_threads(os.cpu_count())
 cfg = OmegaConf.load(str(files("f5_tts").joinpath("configs/F5TTS_v1_Base.yaml")))
 model = load_model(get_class(f"f5_tts.model.{cfg.model.backbone}"), cfg.model.arch,
                    str(cached_path("hf://SWivid/Habibi-TTS/Specialized/SAU/model_200000.safetensors")),
                    mel_spec_type="vocos", vocab_file=str(cached_path("hf://SWivid/Habibi-TTS/Specialized/SAU/vocab.txt")), device="cpu")
 voc = load_vocoder(vocoder_name="vocos", device="cpu")
-for (seg, n), t in sorted(T.items()):
+# Engine-specific replacements (F5 cannot voice very short isolated phrases: the lone «تِقْدَر؟», lone
+# countdown words and lone «اِنْمَسَك!» came out silent/garbled -> pruned). Replacements keep the beat
+# but give each phrase enough context. Wording unchanged.
+OVR = {
+    (5, 2): dict(kind="adj", desc="count phrase | 450 ms | payoff, cfg 1.5 (replaces broken per-word beats)",
+                 phrases=["ثلاثة… اثنين… واحد…", "اِرْفَع يَدَك!"], gaps_ms=[450]),
+    (8, 2): dict(kind="split", desc="tension split before the condition: first clause | 300 ms | condition+payoff in context (replaces broken isolated انمسك)",
+                 phrases=["تبدون بالتصويت على الشخص اللي شاكِّين فيه…", "وإذا أغلبكم اختار المُتَخَفّي، اِنْمَسَك!"], gaps_ms=[300]),
+    (12, 2): dict(kind="split", desc="2 beats: الحين السؤال… | 250 ms | تِقْدَر؟ خَلِّك طبيعي! (replaces broken 3-beat)",
+                  phrases=["الحين السؤال…", "تِقْدَر؟ خَلِّك طبيعي!"], gaps_ms=[250]),
+    (12, 3): dict(kind="adj", desc="12 t2 phrasing + cfg 1.5, per-beat speed 0.9 / 1.0",
+                  phrases=["الحين السؤال…", "تِقْدَر؟ خَلِّك طبيعي!"], gaps_ms=[250]),
+}
+for k, v in OVR.items(): T[k] = dict(T[k], **v)
+keys = sorted(T) if not a.order else [(int(k[:2]), int(k[-1])) for k in a.order]
+for (seg, n) in keys:
+    t = T[(seg, n)]
     if a.only and seg not in a.only: continue
+    if os.path.exists(os.path.join(a.out, f"{seg:02d}_t{n}.wav")): continue
     adj = t["kind"] == "adj"
     cfgs = 1.5 if adj else 2.0
-    sp = ([0.9, 1.0, 0.95] if (adj and seg == 12) else [1.0] * len(t["phrases"]))
+    sp = ([0.9, 1.0, 0.95][:len(t["phrases"])] if (adj and seg == 12) else [1.0] * len(t["phrases"]))
     xs = []
     for k, (p, s) in enumerate(zip(t["phrases"], sp)):
         torch.manual_seed(a.seed * 100 + seg * 10 + k)
