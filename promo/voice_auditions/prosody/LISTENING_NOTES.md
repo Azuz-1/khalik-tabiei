@@ -114,3 +114,16 @@ Class-A fixes requested:
 ## Round 11: owner's picks line 3 = **Y** («تدْخلون», seed 2), line 6 = **Y** («المُتَخَفّي», seed 4)
 - My logged predictions (X, X) were **both wrong**. The timing predictor is now **3/7 out-of-sample**: good for shortlisting, not for choosing. The owner's ear remains the decision.
 - **All 12 lines are chosen by the owner** → `picks_final.json`; per-line WAVs in `../segments/R_picks/`; `../narration_draft2_R.mp3` is assembled with the owner's own pauses between lines.
+
+## Round 12: owner's notes on the confirmed narration (all class A: wrong sound)
+| Line | Heard | Fix (hidden spelling) |
+|---|---|---|
+| 1 | «يدْهم» | **«يِدّهُم»** (shadda; my «يِدْهُم» had put a sukun) |
+| 3 | «بدون تحميل **لا** تسجيل»: the «و» was dropped, and «تسجيل» said faintly | give «ولا» its own beat: «بدون تحميل، ولا تسجيل.» / «بدون تحميل… ولا تسجيل.» |
+| 5 | «ارفع يدْك» | **«اِرْفَع يِدّكْ.»** |
+| 6 | «يقلدكم»: ق too strong | Najdi [g]: **«يگلّدكم»** (as with «گِدَر») |
+- Round-12 screen (`critical_lines/Candidate-R/round12/`):
+  - **1:** A = the pick's seed 2, B = seed 12 (seed 22 lost «ت»).
+  - **3:** «بدون تحميل… ولا تسجيل.», A = seed 12, B = seed 2. «ولا» is heard in all takes. «تسجيل» is now 5.6–5.9 dB under the line median, vs **14.5 dB** in the original pick (this matches the owner's "faint").
+  - **5:** A = seed 2 (seeds 12 and 22 lost countdown pauses).
+  - **6:** «يگلّدكم», A = the pick's seed 4, B = seed 24 (seed 14 heard «يقلتكم»).
