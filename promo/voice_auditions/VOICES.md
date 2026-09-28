@@ -134,3 +134,32 @@ Voices are listed by letter; they are not ranked.
   - [khalidhabbash/Saudi-tts-v4](https://huggingface.co/khalidhabbash/Saudi-tts-v4)
   - [mobarmg/OmniVoice-Najdi](https://huggingface.co/mobarmg/OmniVoice-Najdi): single real podcast speaker; its auto voice drifts to that person
   - [Rabe3/saudi-xtts-v2](https://huggingface.co/Rabe3/saudi-xtts-v2)
+
+---
+
+# Round 3: casual voices for everyday listeners, one sample at a time
+
+Feedback on round 2 was that none of the voices worked; the brief is now **casual, for normal people, and female voices are welcome**.
+
+**What people actually use and recommend.** This was researched on Arabic reviews, X, TikTok discovery pages, vendor pages and HF. Reddit and TikTok content can't be fetched from here.
+- **ElevenLabs**
+  - A hands-on Arabic comparison ([the-aicity, Sep 2026](https://www.the-aicity.com/2026/09/arabic-text-to-speech-ai-tools.html)) called it «the closest to human voice in our experience».
+  - Its voice library includes Saudi/casual female voices (e.g. "Hana – casual & relaxed", Heba Mansuri) ([list](https://json2video.com/ai-voices/elevenlabs/languages/arabic/)).
+  - TikTok creators share "best ElevenLabs Arabic voice" picks ([TikTok discover](https://www.tiktok.com/discover/best-voice-for-eleven-labs-arab)).
+  - Free tier: 10k credits/month, but free-tier output is not licensed for commercial use.
+- **Lahajati**
+  - The same review rated it as natural as ElevenLabs and the best for **Saudi/Najdi dialect control** ([lahajati.ai](https://lahajati.ai/en)).
+  - Free: 10k points/month.
+- **Gemini TTS** (Google AI Studio): free; controllable by style prompts (e.g. "casual, chatty"). Reviewers found it less natural than the two above for casual delivery.
+- **Fish Audio**: popular community "بنت سعودية" voices ([example](https://fish.audio/m/384051d27069462aa9b7a021ce541c8f/)). These are user-uploaded clones of real people, so they are excluded under the no-cloning rule.
+- **Blocked for me:** all four require an account or API key, and there is none in this environment. They can be auditioned as soon as a key is provided. The free Gemini API key is the easiest; ElevenLabs and Lahajati also have free keys.
+
+## G: casual young Saudi woman (VoxCPM2 + Fasee7 Najdi LoRA)
+
+- **Provider / model:** [Wittify/Fasee7-Najdi-Small](https://huggingface.co/Wittify/Fasee7-Najdi-Small) Najdi LoRA on [openbmb/VoxCPM2](https://huggingface.co/openbmb/VoxCPM2), run on CPU with cfg 2.0 and 20 timesteps. This is the same engine as round-2 voice E, which had the cleanest transcription, but with a new casual female voice.
+- **Voice:** designed from the description `(A young Saudi woman in her twenties, casual and chatty, warm, smiling, playful, talking to her friends, relaxed, not formal)`, rendered on the anchor line «هلا والله يا بنات! تعالوا أقولكم عن لعبة حلوة مرة، والله بتعجبكم.» (seed 32, kept as `segments/G/anchor.wav`). That anchor is the voice prompt for all segments. Median pitch is about 200–285 Hz on every segment, confirming a female voice (`tools/check_pitch.py`). Seed 31 of the same description came out male and was discarded.
+- **Text:** the approved hidden script, verbatim.
+- **Seeds:** segments 1–4 and 6–12 use `--seed 32`. Segment 5 was re-taken with `--seed 40` because the first take had a creaky low-pitch artifact.
+- **Runtime:** 56.2 s at the model's natural pace, with no speed-up.
+- **Free or paid:** free (open weights, runs locally)
+- **Commercial use / license:** Apache-2.0 (LoRA) and Apache-2.0 (VoxCPM2). Commercial use is allowed.
