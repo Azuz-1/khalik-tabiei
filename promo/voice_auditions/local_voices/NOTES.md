@@ -132,3 +132,25 @@
 `{"F_01_A":"NAMAA-Saudi-TTS-V2","F_01_B":"Saudi-tts-v4","F_01_C":"VoxCPM2localcopy(round3)","F_05_A":"VoxCPM2localcopy(round3)","F_05_B":"Saudi-tts-v4","F_05_C":"NAMAA-Saudi-TTS-V2","F_08_A":"NAMAA-Saudi-TTS-V2","F_08_B":"Saudi-tts-v4","F_08_C":"VoxCPM2localcopy(round3)","F_12_A":"VoxCPM2localcopy(round3)","F_12_B":"Saudi-tts-v4","F_12_C":"NAMAA-Saudi-TTS-V2","M_01_A":"Saudi-tts-v4","M_01_B":"NAMAA-Saudi-TTS-V2","M_05_A":"NAMAA-Saudi-TTS-V2","M_05_B":"Saudi-tts-v4","M_08_A":"NAMAA-Saudi-TTS-V2","M_08_B":"Saudi-tts-v4","M_12_A":"NAMAA-Saudi-TTS-V2","M_12_B":"Saudi-tts-v4"}`
 
 </details>
+
+**Owner picks on the new-models page (female):**
+- line 1: NAMAA-V2;
+- lines 5, 8 and 12: the VoxCPM2 local copy (round 3).
+- The owner rated the pronunciation "about 90%", but heard **echo or noise**.
+- The owner rejected **all male options** and **Lahgtna** (it sounded Levantine or Jordanian).
+
+## Echo cleanup test
+- **Diagnosis:** the noise floor between words is already −88 to −98 dB (cleaner than Voice 4's −70), so the "echo" is inside the voice (vocoder roominess or doubling), not hiss.
+- **Versions tested per pick:**
+  - original;
+  - cleaned with ClearerVoice MossFormer2_SE_48K (Apache-2.0);
+  - line 1 only: cleaned plus MossFormer2_SR_48K upscaling (NAMAA outputs 24 kHz);
+  - lines 5, 8 and 12 only: regenerated with the same seed at 40 diffusion steps (`STEPS=40 gen_bank.py`), raw and cleaned.
+- The 40-step takes keep every word.
+- **Blind page:** `test_clean/index.html`.
+
+<details><summary><b>SEALED cleanup mapping: don't open before the owner has picked</b></summary>
+
+`{ "01_1": "cleaned + upscaled to 48k", "01_2": "cleaned", "01_3": "original", "05_1": "original", "05_2": "40 steps + cleaned", "05_3": "cleaned", "05_4": "40 steps", "08_1": "40 steps", "08_2": "cleaned", "08_3": "40 steps + cleaned", "08_4": "original", "12_1": "40 steps + cleaned", "12_2": "original", "12_3": "40 steps", "12_4": "cleaned"}`
+
+</details>
