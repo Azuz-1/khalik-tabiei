@@ -16,7 +16,8 @@ out = sys.argv[1]; os.makedirs(out, exist_ok=True)
 arg = lambda i, d: (sys.argv[i] if len(sys.argv) > i else d).split(",")
 models, lines, seeds = arg(2, "N2,S4"), arg(3, "01,05,08,12"), [int(s) for s in arg(4, "1,2,3")]
 torch.set_num_threads(os.cpu_count())
-ref_wav = os.path.join(H, "ref", "F4_prompt.wav")
+VOICE = os.environ.get("VOICE", "F4")  # F4 = Voice 4 sample, M2 = Voice 2 (male) sample
+ref_wav = os.path.join(H, "ref", f"{VOICE}_prompt.wav")
 ref_txt = TK.sub("", json.load(open(os.path.join(H, "ref", "prompt_text.json")))["prompt_text"]).replace("«", "").replace("»", "")
 def text(n): return TK.sub("", json.load(open(os.path.join(R, f"{n}.json")))["phrases"][0].split(")", 1)[1]).strip()
 
@@ -38,7 +39,7 @@ for mname in models:
     ra, rt = preprocess_ref_audio_text(ref_wav, ref_txt)
     for n in lines:
         for s in seeds:
-            fn = os.path.join(out, f"{mname}_{n}_s{s}.wav")
+            fn = os.path.join(out, f"{mname}{VOICE}_{n}_s{s}.wav")
             if os.path.exists(fn): continue
             torch.manual_seed(s * 100 + 80)
             w, sr, _ = infer(ra, rt, text(n), model, voc, **kw)
