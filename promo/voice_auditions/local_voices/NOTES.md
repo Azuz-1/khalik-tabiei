@@ -111,3 +111,24 @@
   - Zero-shot copying transfers the voice colour but not the liveliness.
   - Selecting among many clean takes matches timing and pauses closely; melody reaches 0.74–0.87 at best.
   - Post-hoc prosody transplant was rejected (artifacts).
+
+## New free Saudi models (2026-09-29): NAMAA-Saudi-TTS-V2, Saudi-tts-v4, Lahgtna
+- **Setup:** all three copy the Voice 4 sample (female) and the Voice 2 sample (male). Lines 1, 5, 8 and 12, with 3–4 takes each.
+  - NAMAA-V2 and Saudi-tts-v4 use F5-TTS (`gen_saudi_f5.py`), with tashkeel removed and «گ» kept.
+  - Lahgtna uses Chatterbox (`gen_lahgtna.py`) with dialect "sa".
+- **Licences:**
+  - NAMAA-V2 and Saudi-tts-v4: CC-BY-NC-SA-4.0 (non-commercial).
+  - Lahgtna: MIT.
+- **Screen (Whisper, key words):**
+  - NAMAA-V2 is the cleanest. It sometimes adds a sound after «المتخفي».
+  - Saudi-tts-v4 slips more («تدر» for «تقدر», dropped «ارفع», «خليك»).
+  - Lahgtna repeats words and babbles at line ends on most takes, so it is excluded from the blind test (2 samples shown).
+- **Blind page:** `test_new/index.html`.
+  - One best clean take per model, chosen by `pick_takes.py` against Voice 4 or Voice 2.
+  - Female also includes the round-3 VoxCPM2 local copy.
+
+<details><summary><b>SEALED new-models mapping: don't open before the owner has picked</b></summary>
+
+`{"F_01_A":"NAMAA-Saudi-TTS-V2","F_01_B":"Saudi-tts-v4","F_01_C":"VoxCPM2localcopy(round3)","F_05_A":"VoxCPM2localcopy(round3)","F_05_B":"Saudi-tts-v4","F_05_C":"NAMAA-Saudi-TTS-V2","F_08_A":"NAMAA-Saudi-TTS-V2","F_08_B":"Saudi-tts-v4","F_08_C":"VoxCPM2localcopy(round3)","F_12_A":"VoxCPM2localcopy(round3)","F_12_B":"Saudi-tts-v4","F_12_C":"NAMAA-Saudi-TTS-V2","M_01_A":"Saudi-tts-v4","M_01_B":"NAMAA-Saudi-TTS-V2","M_05_A":"NAMAA-Saudi-TTS-V2","M_05_B":"Saudi-tts-v4","M_08_A":"NAMAA-Saudi-TTS-V2","M_08_B":"Saudi-tts-v4","M_12_A":"NAMAA-Saudi-TTS-V2","M_12_B":"Saudi-tts-v4"}`
+
+</details>
