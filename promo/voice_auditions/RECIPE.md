@@ -70,3 +70,23 @@ These go into the TTS input only; the visible captions stay normal Arabic.
 ## 7. Final narration
 - Per-line WAVs picked by the owner: `segments/R_picks/NN.wav` (+ `.json` with the exact text, style and seed).
 - Assembled with the owner's own pauses between lines: `narration_draft2_R.mp3` (60.1 s). The owner confirmed this version.
+
+## 8. ElevenLabs Voice 4: the current production voice (owner verdict, 2026-09-29)
+Full notes: `elevenlabs/NOTES.md` and `local_voices/NOTES.md`.
+- **The voice.** The owner designed "Voice 4" ("بنت عربي", id `tPQlZxlHLbatonwL593Q`) in ElevenLabs Voice Design. The owner found it better than R and more alive than any local copy.
+- **Generation.**
+  - Model `eleven_v4`, text = the hidden TTS text of RECIPE §3 with a `[warm]` tag.
+  - Settings: stability 0.6, style 0, speed 1.0.
+  - Generate 2–3 takes per line; one take per line was the main cause of drift.
+- **Free-plan API limits.** It works only with voices the owner designed. Library voices return 402 and voice design returns 403.
+- **Designing voices.**
+  - First sentence: "Native Arabic, Saudi Najdi …"; describe delivery, not "accent".
+  - The preview text shapes the voice. Keep the Najdi in the sound, not in dialect vocabulary.
+- **Spelling for this engine.**
+  - Tashkeel is fine; it was *not* the cause of formal drift.
+  - Write «ثنين» for the countdown.
+- **Local copies can't replace it.**
+  - VoxCPM2 + Fasee7 with Voice 4 samples copies the voice colour, not the liveliness.
+  - Picking the best of 8–11 clean takes (`local_voices/pick_takes.py`) helps timing and pauses.
+  - Never stretch or pitch-bend the audio afterwards: the owner heard echo and a thick sound.
+- **Captions and credits.** The owner decides; the post caption stays exactly as written.

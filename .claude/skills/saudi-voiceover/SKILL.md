@@ -36,5 +36,12 @@ Read `promo/voice_auditions/RECIPE.md` first. It is the full recipe with the rea
    - payoff swallowed or shouted → the pause before it plus «.».
 6. **Assemble** with the owner's measured pauses between lines: `prosody/assemble_draft.py`, targets in `prosody/reference/owner_targets.json`.
 
-## Current final voiceover
+## Current production voice (2026-09-29)
+- **The voice:** ElevenLabs "Voice 4", designed by the owner. See RECIPE §8 for settings, limits and prompting lessons.
+- **The video:** `promo/out/khalik-tabiei-promo-v4.mp4`, built with `PICKS=V4_picks`.
+- **Local backup:** R, or the local Voice 4 copy in `local_voices/`.
+- **The owner overrode** the earlier "no paid APIs/new accounts" rule for ElevenLabs.
+- **Never post-process voice audio** (stretch or pitch-shift). The owner rejected it.
+
+## Earlier final voiceover (R)
 Owner-picked per-line takes: `promo/voice_auditions/segments/R_picks/NN.wav`, each with a `.json` holding the exact text, style and seed. The confirmed narration is `promo/voice_auditions/narration_draft2_R.mp3` (60.1 s). The video uses it via `promo/audio/narration_picks.py`.

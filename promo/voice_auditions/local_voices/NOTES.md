@@ -102,3 +102,12 @@
 `{"F4_01_1":"F4_01_bank_s3.wav","F4_01_2":"F4_01_bank_s11.wav","F4_05_1":"F4_05_bank_s9.wav","F4_05_2":"F4_05_bank_s1.wav","F4_08_1":"F4_08_bank_s3.wav","F4_08_2":"F4_08_bank_s6.wav","F4_12_1":"F4_12_bank_s7.wav","F4_12_2":"F4_12_bank_s10.wav"}`
 
 </details>
+
+## Conclusion (owner, 2026-09-29)
+- **Verdict:** the local copy is "good", but Voice 4 feels more alive and real.
+- **Production:** Voice 4 on ElevenLabs (owner-designed voice, eleven_v4, via the website or the API).
+- **Local copy** (VoxCPM2 + Fasee7 + `ref/F4_*`) is a free offline backup for drafts. Use `say.py` or `gen_bank.py`, generate 8+ takes and pick with `pick_takes.py`.
+- **Findings:**
+  - Zero-shot copying transfers the voice colour but not the liveliness.
+  - Selecting among many clean takes matches timing and pauses closely; melody reaches 0.74–0.87 at best.
+  - Post-hoc prosody transplant was rejected (artifacts).
