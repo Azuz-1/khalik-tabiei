@@ -47,3 +47,14 @@
   - 12 ← 11
 - **Takes:** 3 per line.
 - **Stop rule:** if this is still not close, stop chasing a local copy and use ElevenLabs' monthly free credits (10,000 per month, about 12 full narrations) for Voice 4.
+
+**Round 2 screen:**
+- All 12 takes have every word clean.
+- The delivery check is closer than in round 1 on pauses and pitch range for lines 8 and 12.
+- Blind page: `test_r2/index.html`. Line 1 also includes the round-1 pick as a hidden control.
+
+<details><summary><b>SEALED round 2 mapping: don't open before the owner has picked</b></summary>
+
+`{"F4_01_1":"bank_s1","F4_01_2":"bank_s3","F4_01_3":"round1_pick_B_s2","F4_01_4":"bank_s2","F4_05_1":"bank_s1","F4_05_2":"bank_s3","F4_05_3":"bank_s2","F4_08_1":"bank_s3","F4_08_2":"bank_s1","F4_08_3":"bank_s2","F4_12_1":"bank_s1","F4_12_2":"bank_s3","F4_12_3":"bank_s2"}`
+
+</details>

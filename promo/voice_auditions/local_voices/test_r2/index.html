@@ -1,0 +1,68 @@
+<title>Local Voice Test 2</title>
+<style>
+/* Layout: one column; per voice and line: target, shuffled takes (pick one), a free note */
+:root{--bg:#f4f6f5;--card:#fff;--fg:#1b211e;--muted:#5c6862;--line:#dce2de;--accent:#0f6b4f;--tgt:#e6efe9;--sel:#e1f1ea;
+--ui:"IBM Plex Sans",system-ui,sans-serif;--ar:"IBM Plex Sans Arabic",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111513;--card:#1a1f1d;--fg:#e7ece9;--muted:#98a69e;--line:#2b3330;--accent:#5fc9a3;--tgt:#1d2d26;--sel:#173a2e;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111513;--card:#1a1f1d;--fg:#e7ece9;--muted:#98a69e;--line:#2b3330;--accent:#5fc9a3;--tgt:#1d2d26;--sel:#173a2e;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:15px;line-height:1.45}
+main{max-width:680px;margin:0 auto;padding-inline:16px;padding-block:24px 64px;display:flex;flex-direction:column;gap:14px}
+h1{margin:0;font-size:1.5rem;text-wrap:balance} .lead{margin:0;color:var(--muted)}
+.grp{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.lab{margin:0;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.txt{margin:0;font-family:var(--ar);font-weight:600;font-size:1.1rem}
+.target{background:var(--tgt);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:4px} .tl{font-size:.8rem;font-weight:600}
+.hint{margin:4px 0 0;font-size:.85rem;color:var(--muted)}
+audio{width:100%;min-width:0;height:40px}
+.take{display:flex;align-items:center;gap:8px;border-radius:8px;padding:2px 4px} .take audio{flex:1}
+.take:has(input:checked),.none:has(input:checked){background:var(--sel)}
+.pick{display:flex;gap:6px;align-items:center;cursor:pointer} .pick input{accent-color:var(--accent);width:18px;height:18px}
+.none{font-size:.9rem;border-radius:8px;padding:4px}
+.num{font-family:var(--mono);font-weight:600;color:var(--accent);min-width:1.2em}
+.nl{font-size:.85rem;color:var(--muted);margin-top:4px}
+.w{font:inherit;font-family:var(--ar),var(--ui);font-size:.95rem;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);resize:vertical}
+.out{position:sticky;bottom:0;background:var(--bg);padding-block:8px calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px}
+.out p{margin:0;font-size:.8rem;color:var(--muted)}
+#out{font-family:var(--mono);font-size:.78rem;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);padding:8px;resize:vertical}
+button{font:inherit;font-weight:600;padding:10px;border-radius:10px;border:0;background:var(--accent);color:var(--bg);cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@600&display=swap">
+<main>
+<h1>Round 2: female, closer?</h1>
+<p class="lead">For each line, listen to the green target (the real ElevenLabs voice). Pick the local take closest to it, or "None is close". Then say in your own words what is still different: a word, the energy, the rhythm, anything. Skip any line you like.</p>
+<section class="grp" data-k="F4_01" data-name="Female line 1"><p class="lab">Female (copy of Voice 4) · line 1</p><p class="txt" dir="rtl" lang="ar">تخيل كلهم يرفعون يدهم… وأنت الوحيد اللي ما تدري وش السالفة!</p>
+<div class="target"><span class="tl">Target (ElevenLabs)</span><audio controls preload="none" src="F4_01_target.mp3"></audio></div>
+<p class="hint">Tap the number of the take closest to the target:</p><div class="take"><label class="pick"><input type="radio" name="p_F4_01" value="1"><span class="num">1</span></label><audio controls preload="none" src="F4_01_1.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_01" value="2"><span class="num">2</span></label><audio controls preload="none" src="F4_01_2.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_01" value="3"><span class="num">3</span></label><audio controls preload="none" src="F4_01_3.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_01" value="4"><span class="num">4</span></label><audio controls preload="none" src="F4_01_4.mp3"></audio></div>
+<label class="pick none"><input type="radio" name="p_F4_01" value="none">None is close</label>
+<label class="nl" for="n_F4_01">What is still different from the target? (your own words)</label>
+<textarea class="w" id="n_F4_01" rows="2" dir="auto" placeholder="e.g. تخدعهم stretched · less excited · sounds read, not spoken"></textarea></section><section class="grp" data-k="F4_05" data-name="Female line 5"><p class="lab">Female (copy of Voice 4) · line 5</p><p class="txt" dir="rtl" lang="ar">ثلاثة… اثنين… واحد… ارفع يدك.</p>
+<div class="target"><span class="tl">Target (ElevenLabs)</span><audio controls preload="none" src="F4_05_target.mp3"></audio></div>
+<p class="hint">Tap the number of the take closest to the target:</p><div class="take"><label class="pick"><input type="radio" name="p_F4_05" value="1"><span class="num">1</span></label><audio controls preload="none" src="F4_05_1.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_05" value="2"><span class="num">2</span></label><audio controls preload="none" src="F4_05_2.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_05" value="3"><span class="num">3</span></label><audio controls preload="none" src="F4_05_3.mp3"></audio></div>
+<label class="pick none"><input type="radio" name="p_F4_05" value="none">None is close</label>
+<label class="nl" for="n_F4_05">What is still different from the target? (your own words)</label>
+<textarea class="w" id="n_F4_05" rows="2" dir="auto" placeholder="e.g. تخدعهم stretched · less excited · sounds read, not spoken"></textarea></section><section class="grp" data-k="F4_08" data-name="Female line 8"><p class="lab">Female (copy of Voice 4) · line 8</p><p class="txt" dir="rtl" lang="ar">تبدون بالتصويت على الشخص اللي شاكين فيه… وإذا أغلبكم اختار المتخفي… إنمسك.</p>
+<div class="target"><span class="tl">Target (ElevenLabs)</span><audio controls preload="none" src="F4_08_target.mp3"></audio></div>
+<p class="hint">Tap the number of the take closest to the target:</p><div class="take"><label class="pick"><input type="radio" name="p_F4_08" value="1"><span class="num">1</span></label><audio controls preload="none" src="F4_08_1.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_08" value="2"><span class="num">2</span></label><audio controls preload="none" src="F4_08_2.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_08" value="3"><span class="num">3</span></label><audio controls preload="none" src="F4_08_3.mp3"></audio></div>
+<label class="pick none"><input type="radio" name="p_F4_08" value="none">None is close</label>
+<label class="nl" for="n_F4_08">What is still different from the target? (your own words)</label>
+<textarea class="w" id="n_F4_08" rows="2" dir="auto" placeholder="e.g. تخدعهم stretched · less excited · sounds read, not spoken"></textarea></section><section class="grp" data-k="F4_12" data-name="Female line 12"><p class="lab">Female (copy of Voice 4) · line 12</p><p class="txt" dir="rtl" lang="ar">الحين السؤال… تقدر تخدعهم؟… خلك طبيعي.</p>
+<div class="target"><span class="tl">Target (ElevenLabs)</span><audio controls preload="none" src="F4_12_target.mp3"></audio></div>
+<p class="hint">Tap the number of the take closest to the target:</p><div class="take"><label class="pick"><input type="radio" name="p_F4_12" value="1"><span class="num">1</span></label><audio controls preload="none" src="F4_12_1.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_12" value="2"><span class="num">2</span></label><audio controls preload="none" src="F4_12_2.mp3"></audio></div><div class="take"><label class="pick"><input type="radio" name="p_F4_12" value="3"><span class="num">3</span></label><audio controls preload="none" src="F4_12_3.mp3"></audio></div>
+<label class="pick none"><input type="radio" name="p_F4_12" value="none">None is close</label>
+<label class="nl" for="n_F4_12">What is still different from the target? (your own words)</label>
+<textarea class="w" id="n_F4_12" rows="2" dir="auto" placeholder="e.g. تخدعهم stretched · less excited · sounds read, not spoken"></textarea></section>
+<div class="out"><p>Your answers appear here as you go. Tap Copy, or press and hold the text to copy it, and paste it in the chat.</p>
+<textarea id="out" rows="4" readonly></textarea><button id="copy" type="button">Copy</button></div>
+</main>
+<script>
+const K="khalik-local-r2",G=[...document.querySelectorAll(".grp")];
+function summary(){return G.map(g=>{const k=g.dataset.k,p=g.querySelector("input[name=p_"+k+"]:checked"),n=document.getElementById("n_"+k).value.trim();
+if(!p&&!n)return null;return g.dataset.name+": "+(p?(p.value==="none"?"none close":"take "+p.value):"-")+(n?" | "+n:"");}).filter(Boolean).join("\n");}
+function upd(){document.getElementById("out").value=summary()||"(nothing yet)";try{const st={};G.forEach(g=>{const k=g.dataset.k,p=g.querySelector("input[name=p_"+k+"]:checked");st[k]={p:p?p.value:null,n:document.getElementById("n_"+k).value};});localStorage.setItem(K,JSON.stringify(st));}catch(e){}}
+try{const st=JSON.parse(localStorage.getItem(K)||"{}");G.forEach(g=>{const k=g.dataset.k,v=st[k];if(!v)return;if(v.p){const r=g.querySelector("input[name=p_"+k+"][value='"+v.p+"']");if(r)r.checked=true;}document.getElementById("n_"+k).value=v.n||"";});}catch(e){}
+document.addEventListener("input",upd);document.addEventListener("change",upd);upd();
+document.addEventListener("play",e=>{document.querySelectorAll("audio").forEach(a=>{if(a!==e.target)a.pause();});},true);
+document.getElementById("copy").addEventListener("click",()=>{const o=document.getElementById("out"),b=document.getElementById("copy");o.focus();o.select();
+navigator.clipboard.writeText(o.value).then(()=>{b.textContent="Copied";setTimeout(()=>b.textContent="Copy",1500);}).catch(()=>{try{document.execCommand("copy");b.textContent="Copied";}catch(e){b.textContent="Press and hold the text to copy";}});});
+</script>
