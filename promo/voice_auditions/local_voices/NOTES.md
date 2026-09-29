@@ -58,3 +58,23 @@
 `{"F4_01_1":"bank_s1","F4_01_2":"bank_s3","F4_01_3":"round1_pick_B_s2","F4_01_4":"bank_s2","F4_05_1":"bank_s1","F4_05_2":"bank_s3","F4_05_3":"bank_s2","F4_08_1":"bank_s3","F4_08_2":"bank_s1","F4_08_3":"bank_s2","F4_12_1":"bank_s1","F4_12_2":"bank_s3","F4_12_3":"bank_s2"}`
 
 </details>
+
+## Delivery copy ("prosody transplant"), owner's idea
+- **Owner's note after round 2:** "still the same issue". Measure how Voice 4 says each word (length, ups and downs, loudness) and copy it onto the local take.
+- **Tool:** `transplant.py`.
+  - MMS_FA letter alignment of the same text in both recordings.
+  - Praat PSOLA: each letter and pause is stretched to the target length, and the target pitch curve (octave errors folded) is moved into the take's register.
+  - Per-word gain toward the target's loudness shape (±6 dB).
+- **This deliberately breaks the old "no time-stretch / no pitch-shift" rule, at the owner's request.** The owner's ear judges the artifacts.
+- **Result:**
+  - Word timing is within about 10–15 ms of the target.
+  - Word-level melody correlation with Voice 4, before → after copy:
+
+    | Line | Before | After |
+    |---|---|---|
+    | 1 | 0.64 | 0.99 |
+    | 5 | 0.33 | 0.99 |
+    | 8 | 0.70 | 0.90 |
+    | 12 | 0.54 | 0.85 («الحين» rise only partly transferred) |
+- **Page:** `transplant_r1/index.html`. For each line it plays the target, the local take before and the local take after, and shows the pitch chart and a per-word table.
+- **For new lines** there is no Voice 4 reading to copy. The target can be the owner's own phone reading, which gives the owner's delivery in the local Voice 4 timbre.

@@ -1,0 +1,97 @@
+<title>Voice 4 Delivery Copy</title>
+<style>
+/* Layout: one column; per line: three players, a pitch chart (time runs right→left like the text), a per-word table, a pick */
+:root{--bg:#fcfcfb;--card:#ffffff;--fg:#1b1d1c;--muted:#5f625f;--faint:#e6e7e4;--grid:#eeefec;--accent:#2a78d6;
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--sel:#e8f0fb;
+--ui:"IBM Plex Sans",system-ui,sans-serif;--ar:"IBM Plex Sans Arabic",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--card:#1a1a19;--fg:#ffffff;--muted:#c3c2b7;--faint:#2c2c2a;--grid:#262624;--accent:#3987e5;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--sel:#1b2a3d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141413;--card:#1a1a19;--fg:#ffffff;--muted:#c3c2b7;--faint:#2c2c2a;--grid:#262624;--accent:#3987e5;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--sel:#1b2a3d;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:15px;line-height:1.45}
+main{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:24px 64px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:1.5rem;text-wrap:balance} .lead{margin:0;color:var(--muted);max-width:65ch}
+.line{background:var(--card);border:1px solid var(--faint);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.lab{margin:0;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.txt{margin:0;font-family:var(--ar);font-weight:600;font-size:1.15rem}
+.players{display:grid;grid-template-columns:1fr;gap:6px}
+.pl{display:flex;align-items:center;gap:8px;min-width:0} .pl audio{flex:1;min-width:0;height:38px}
+.key{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;min-width:9.5em;color:var(--fg)}
+.sw{width:18px;height:0;border-top:2px solid}
+.sw.s1{border-color:var(--s1)} .sw.s2{border-color:var(--s2);border-top-style:dashed} .sw.s3{border-color:var(--s3)}
+.chart{position:relative;overflow-x:auto} svg{display:block;width:100%;height:auto}
+.tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--faint);border-radius:6px;padding:6px 8px;font-size:.78rem;color:var(--fg);box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap}
+.tip[hidden]{display:none}
+.note{margin:0;font-size:.8rem;color:var(--muted)}
+details summary{cursor:pointer;font-size:.85rem;color:var(--muted)}
+.tbl{overflow-x:auto} table{border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums;width:100%}
+th,td{padding:4px 6px;border-bottom:1px solid var(--faint);text-align:right} th{color:var(--muted);font-weight:600} td.w{font-family:var(--ar)}
+.pick{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:.9rem} .pick input{accent-color:var(--accent)}
+.w{font:inherit;font-family:var(--ar),var(--ui);padding:8px;border:1px solid var(--faint);border-radius:8px;background:var(--bg);color:var(--fg);resize:vertical}
+.out{position:sticky;bottom:0;background:var(--bg);padding-block:8px calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px}
+#out{font-family:var(--mono);font-size:.78rem;border:1px solid var(--faint);border-radius:8px;background:var(--card);color:var(--fg);padding:8px}
+button{font:inherit;font-weight:600;padding:10px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<main>
+<h1>Copying Voice 4's delivery</h1>
+<p class="lead">For each line: the real Voice 4, our local take as it came out, and the same take after copying her timing, melody and loudness word by word. The chart shows the pitch of all three. Higher means a higher voice, time runs right to left like the text, and the shaded bands are her words. Listen first, then look.</p>
+<div id="lines"></div>
+<div class="out"><textarea id="out" rows="4" readonly></textarea><button id="copy" type="button">Copy</button></div>
+</main>
+<script>
+const NAMES={"01":"Line 1","05":"Line 5","08":"Line 8","12":"Line 12"};
+const S=[["target","Voice 4 (target)","s1"],["take","Local, before","s2"],["result","Local, after copy","s3"]];
+const K="khalik-tp-r1";let STATE={};try{STATE=JSON.parse(localStorage.getItem(K)||"{}")}catch(e){}
+function save(){try{localStorage.setItem(K,JSON.stringify(STATE))}catch(e){}}
+function summary(){return Object.keys(NAMES).map(n=>{const s=STATE[n]||{};if(!s.p&&!s.n)return null;return NAMES[n]+": "+(s.p||"-")+(s.n?" | "+s.n:"")}).filter(Boolean).join("\n")||"(nothing yet)"}
+function upd(){document.getElementById("out").value=summary();save()}
+fetch("analysis.json").then(r=>r.json()).then(D=>{
+ const host=document.getElementById("lines");
+ Object.keys(D).sort().forEach(n=>{
+  const d=D[n];const sec=document.createElement("section");sec.className="line";
+  sec.innerHTML=`<p class="lab">${NAMES[n]}</p><p class="txt" dir="rtl" lang="ar">${d.text}</p>
+  <div class="players">${S.map(([k,lab,c])=>`<div class="pl"><span class="key"><span class="sw ${c}"></span>${lab}</span><audio controls preload="none" src="F4_${n}_${k}.mp3"></audio></div>`).join("")}</div>
+  <div class="chart"><div class="tip" hidden></div></div>
+  <p class="note">Pitch in semitones. The target is shown in the local voice's own register, so compare the shapes, not the height.</p>
+  <details><summary>Per word: length (s) and average pitch (semitones)</summary><div class="tbl"><table><thead><tr><th>Word</th><th>Length: target</th><th>before</th><th>after</th><th>Pitch: target</th><th>before</th><th>after</th></tr></thead><tbody>
+  ${d.table.map(r=>`<tr><td class="w">${r.w}</td><td>${r.dur_target.toFixed(2)}</td><td>${r.dur_take.toFixed(2)}</td><td>${r.dur_result.toFixed(2)}</td><td>${r.pitch_st_target.toFixed(1)}</td><td>${r.pitch_st_take.toFixed(1)}</td><td>${r.pitch_st_result.toFixed(1)}</td></tr>`).join("")}</tbody></table></div></details>
+  <div class="pick"><span>Closest to Voice 4:</span>${["before","after copy","same"].map(v=>`<label><input type="radio" name="p${n}" value="${v}"> ${v}</label>`).join("")}</div>
+  <textarea class="w" id="n${n}" rows="2" dir="auto" placeholder="What is still different? (your words)"></textarea>`;
+  host.appendChild(sec);
+  drawChart(sec.querySelector(".chart"),d);
+  const s=STATE[n]||{};if(s.p){const r=sec.querySelector(`input[value="${s.p}"]`);if(r)r.checked=true}sec.querySelector("textarea").value=s.n||"";
+  sec.addEventListener("change",e=>{if(e.target.name==="p"+n){STATE[n]=Object.assign(STATE[n]||{},{p:e.target.value});upd()}});
+  sec.querySelector("textarea").addEventListener("input",e=>{STATE[n]=Object.assign(STATE[n]||{},{n:e.target.value.trim()});upd()});
+ });
+ upd();
+});
+function drawChart(host,d){
+ const W=720,H=260,m={l:34,r:12,t:12,b:40},iw=W-m.l-m.r,ih=H-m.t-m.b;
+ const all=[];S.forEach(([k])=>d[k][1].forEach(v=>{if(v!==null)all.push(v)}));
+ let lo=Math.floor(Math.min(...all)/3)*3-1,hi=Math.ceil(Math.max(...all)/3)*3+1;
+ const X=t=>m.l+iw-(t/d.dur)*iw, Y=v=>m.t+ih-(v-lo)/(hi-lo)*ih;
+ const ns="http://www.w3.org/2000/svg";const svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("role","img");
+ svg.setAttribute("aria-label","Pitch over time for Voice 4, the local take before and after the copy");
+ let g="";
+ d.words.forEach((w,i)=>{const x1=X(w.e),x2=X(w.s);g+=`<rect x="${x1}" y="${m.t}" width="${Math.max(1,x2-x1)}" height="${ih}" fill="var(--grid)" opacity="${i%2?0.55:1}"/>`;
+  g+=`<text x="${(x1+x2)/2}" y="${H-m.b+16}" font-size="12" text-anchor="middle" fill="var(--fg)" font-family="IBM Plex Sans Arabic, system-ui">${w.w}</text>`;});
+ for(let v=lo+1;v<hi;v+=3){g+=`<line x1="${m.l}" x2="${m.l+iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--faint)" stroke-width="1"/><text x="${m.l-6}" y="${Y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${v}</text>`}
+ g+=`<text x="${m.l+iw}" y="${H-6}" font-size="10" text-anchor="end" fill="var(--muted)">start</text><text x="${m.l}" y="${H-6}" font-size="10" fill="var(--muted)">end</text>`;
+ S.forEach(([k,,c])=>{const [ts,vs]=d[k];let p="",pen=false;ts.forEach((t,i)=>{const v=vs[i];if(v===null||t<0||t>d.dur){pen=false;return}p+=(pen?"L":"M")+X(t).toFixed(1)+","+Y(v).toFixed(1);pen=true});
+  g+=`<path d="${p}" fill="none" stroke="var(--${c})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${c==="s2"?'stroke-dasharray="5 4"':""}/>`});
+ g+=`<line class="xh" x1="0" x2="0" y1="${m.t}" y2="${m.t+ih}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
+ g+=`<rect class="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
+ svg.innerHTML=g;host.insertBefore(svg,host.firstChild);
+ const tip=host.querySelector(".tip"),xh=svg.querySelector(".xh");
+ function near(k,t){const [ts,vs]=d[k];let b=null,bd=0.03;ts.forEach((x,i)=>{const dd=Math.abs(x-t);if(dd<bd&&vs[i]!==null){bd=dd;b=vs[i]}});return b}
+ svg.querySelector(".hit").addEventListener("pointermove",e=>{const r=svg.getBoundingClientRect();const px=(e.clientX-r.left)*W/r.width;const t=(m.l+iw-px)/iw*d.dur;
+  xh.setAttribute("x1",px);xh.setAttribute("x2",px);xh.setAttribute("visibility","visible");
+  const w=d.words.find(w=>t>=w.s&&t<=w.e);
+  tip.innerHTML=`<b>${t.toFixed(2)} s</b>${w?" · "+w.w:""}<br>`+S.map(([k,lab])=>{const v=near(k,t);return `${lab}: ${v===null?"–":v.toFixed(1)}`}).join("<br>");
+  tip.hidden=false;const hr=host.getBoundingClientRect();let lx=e.clientX-hr.left+12;if(lx>hr.width-170)lx=e.clientX-hr.left-170;tip.style.left=lx+"px";tip.style.top="8px"});
+ svg.querySelector(".hit").addEventListener("pointerleave",()=>{tip.hidden=true;xh.setAttribute("visibility","hidden")});
+}
+document.addEventListener("play",e=>{document.querySelectorAll("audio").forEach(a=>{if(a!==e.target)a.pause()})},true);
+document.getElementById("copy").addEventListener("click",()=>{const o=document.getElementById("out"),b=document.getElementById("copy");o.focus();o.select();
+ navigator.clipboard.writeText(o.value).then(()=>{b.textContent="Copied";setTimeout(()=>b.textContent="Copy",1500)}).catch(()=>{try{document.execCommand("copy");b.textContent="Copied"}catch(e){b.textContent="Press and hold the text to copy"}})});
+</script>
