@@ -78,3 +78,15 @@
     | 12 | 0.54 | 0.85 («الحين» rise only partly transferred) |
 - **Page:** `transplant_r1/index.html`. For each line it plays the target, the local take before and the local take after, and shows the pitch chart and a per-word table.
 - **For new lines** there is no Voice 4 reading to copy. The target can be the owner's own phone reading, which gives the owner's delivery in the local Voice 4 timbre.
+
+**Owner verdict on the delivery copy:** "before" was much better. After the copy the audio sounded artificial, with an echo and a thick sound.
+- **Causes:** PSOLA phasiness, and the take being resampled to 16 kHz.
+- **The approach is dropped:** no post-processing of local audio.
+
+## Round 3: the analysis picks, it doesn't operate
+- **Takes:** 8 clean takes per line (mode B with the line-matched prompt, seeds 4–11), for lines 1, 5, 8 and 12. Together with round 2 that makes 11 takes per line.
+- **Scoring:** each take is scored against Voice 4:
+  - per-word timing error;
+  - word-melody correlation;
+  - pause match.
+- **What the owner hears:** the 2 best takes per line, untouched.
