@@ -90,3 +90,15 @@
   - word-melody correlation;
   - pause match.
 - **What the owner hears:** the 2 best takes per line, untouched.
+
+**Round 3 result:**
+- **Pool:** 44 takes (rounds 2 and 3, 11 per line).
+- **Screen:** dropped 8 for missing or altered words (e.g. «خليك», «شكين», «المسك»). Three others were only Whisper formatting (digits, «ان مسك») and were kept.
+- **Scoring:** `pick_takes.py` on the 36 left. Scores are in `test_r3/scores.json`.
+- **Page:** the top 2 per line, untouched audio (48 kHz, loudness-matched gain only), in `test_r3/index.html`.
+
+<details><summary><b>SEALED round 3 mapping: don't open before the owner has picked</b></summary>
+
+`{"F4_01_1":"F4_01_bank_s3.wav","F4_01_2":"F4_01_bank_s11.wav","F4_05_1":"F4_05_bank_s9.wav","F4_05_2":"F4_05_bank_s1.wav","F4_08_1":"F4_08_bank_s3.wav","F4_08_2":"F4_08_bank_s6.wav","F4_12_1":"F4_12_bank_s7.wav","F4_12_2":"F4_12_bank_s10.wav"}`
+
+</details>

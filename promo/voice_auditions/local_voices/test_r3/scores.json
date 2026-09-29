@@ -1,0 +1,394 @@
+{
+ "01": {
+  "all": [
+   {
+    "take": "F4_01_bank_s11.wav",
+    "timing": 0.039,
+    "melody": 0.851,
+    "pauses": 0.016,
+    "timing_rank": 1,
+    "melody_rank": 2,
+    "pauses_rank": 1,
+    "rank": 1.33
+   },
+   {
+    "take": "F4_01_bank_s3.wav",
+    "timing": 0.057,
+    "melody": 0.867,
+    "pauses": 0.026,
+    "timing_rank": 7,
+    "melody_rank": 1,
+    "pauses_rank": 3,
+    "rank": 3.67
+   },
+   {
+    "take": "F4_01_bank_s10.wav",
+    "timing": 0.047,
+    "melody": 0.636,
+    "pauses": 0.026,
+    "timing_rank": 4,
+    "melody_rank": 6,
+    "pauses_rank": 2,
+    "rank": 4.0
+   },
+   {
+    "take": "F4_01_bank_s5.wav",
+    "timing": 0.045,
+    "melody": 0.767,
+    "pauses": 0.032,
+    "timing_rank": 3,
+    "melody_rank": 4,
+    "pauses_rank": 5,
+    "rank": 4.0
+   },
+   {
+    "take": "F4_01_bank_s2.wav",
+    "timing": 0.045,
+    "melody": 0.674,
+    "pauses": 0.052,
+    "timing_rank": 2,
+    "melody_rank": 5,
+    "pauses_rank": 6,
+    "rank": 4.33
+   },
+   {
+    "take": "F4_01_bank_s6.wav",
+    "timing": 0.056,
+    "melody": 0.327,
+    "pauses": 0.03,
+    "timing_rank": 6,
+    "melody_rank": 9,
+    "pauses_rank": 4,
+    "rank": 6.33
+   },
+   {
+    "take": "F4_01_bank_s7.wav",
+    "timing": 0.06,
+    "melody": 0.813,
+    "pauses": 0.07,
+    "timing_rank": 8,
+    "melody_rank": 3,
+    "pauses_rank": 8,
+    "rank": 6.33
+   },
+   {
+    "take": "F4_01_bank_s8.wav",
+    "timing": 0.054,
+    "melody": 0.492,
+    "pauses": 0.074,
+    "timing_rank": 5,
+    "melody_rank": 8,
+    "pauses_rank": 9,
+    "rank": 7.33
+   },
+   {
+    "take": "F4_01_bank_s4.wav",
+    "timing": 0.066,
+    "melody": 0.504,
+    "pauses": 0.052,
+    "timing_rank": 9,
+    "melody_rank": 7,
+    "pauses_rank": 7,
+    "rank": 7.67
+   }
+  ],
+  "picks": [
+   "F4_01_bank_s11.wav",
+   "F4_01_bank_s3.wav"
+  ]
+ },
+ "05": {
+  "all": [
+   {
+    "take": "F4_05_bank_s1.wav",
+    "timing": 0.046,
+    "melody": 0.753,
+    "pauses": 0.065,
+    "timing_rank": 4,
+    "melody_rank": 3,
+    "pauses_rank": 1,
+    "rank": 2.67
+   },
+   {
+    "take": "F4_05_bank_s9.wav",
+    "timing": 0.031,
+    "melody": 0.478,
+    "pauses": 0.075,
+    "timing_rank": 1,
+    "melody_rank": 6,
+    "pauses_rank": 2,
+    "rank": 3.0
+   },
+   {
+    "take": "F4_05_bank_s4.wav",
+    "timing": 0.036,
+    "melody": 0.65,
+    "pauses": 0.11,
+    "timing_rank": 2,
+    "melody_rank": 5,
+    "pauses_rank": 4,
+    "rank": 3.67
+   },
+   {
+    "take": "F4_05_bank_s3.wav",
+    "timing": 0.045,
+    "melody": 0.335,
+    "pauses": 0.109,
+    "timing_rank": 3,
+    "melody_rank": 7,
+    "pauses_rank": 3,
+    "rank": 4.33
+   },
+   {
+    "take": "F4_05_bank_s8.wav",
+    "timing": 0.073,
+    "melody": 0.879,
+    "pauses": 0.135,
+    "timing_rank": 8,
+    "melody_rank": 1,
+    "pauses_rank": 6,
+    "rank": 5.0
+   },
+   {
+    "take": "F4_05_bank_s5.wav",
+    "timing": 0.067,
+    "melody": 0.296,
+    "pauses": 0.111,
+    "timing_rank": 6,
+    "melody_rank": 8,
+    "pauses_rank": 5,
+    "rank": 6.33
+   },
+   {
+    "take": "F4_05_bank_s2.wav",
+    "timing": 0.067,
+    "melody": -0.098,
+    "pauses": 0.145,
+    "timing_rank": 5,
+    "melody_rank": 10,
+    "pauses_rank": 7,
+    "rank": 7.33
+   },
+   {
+    "take": "F4_05_bank_s7.wav",
+    "timing": 0.083,
+    "melody": 0.742,
+    "pauses": 0.169,
+    "timing_rank": 9,
+    "melody_rank": 4,
+    "pauses_rank": 10,
+    "rank": 7.67
+   },
+   {
+    "take": "F4_05_bank_s11.wav",
+    "timing": 0.121,
+    "melody": 0.856,
+    "pauses": 0.195,
+    "timing_rank": 11,
+    "melody_rank": 2,
+    "pauses_rank": 11,
+    "rank": 8.0
+   },
+   {
+    "take": "F4_05_bank_s10.wav",
+    "timing": 0.068,
+    "melody": -0.723,
+    "pauses": 0.159,
+    "timing_rank": 7,
+    "melody_rank": 11,
+    "pauses_rank": 9,
+    "rank": 9.0
+   },
+   {
+    "take": "F4_05_bank_s6.wav",
+    "timing": 0.09,
+    "melody": -0.043,
+    "pauses": 0.145,
+    "timing_rank": 10,
+    "melody_rank": 9,
+    "pauses_rank": 8,
+    "rank": 9.0
+   }
+  ],
+  "picks": [
+   "F4_05_bank_s1.wav",
+   "F4_05_bank_s9.wav"
+  ]
+ },
+ "08": {
+  "all": [
+   {
+    "take": "F4_08_bank_s3.wav",
+    "timing": 0.025,
+    "melody": 0.695,
+    "pauses": 0.009,
+    "timing_rank": 2,
+    "melody_rank": 2,
+    "pauses_rank": 1,
+    "rank": 1.67
+   },
+   {
+    "take": "F4_08_bank_s6.wav",
+    "timing": 0.024,
+    "melody": 0.57,
+    "pauses": 0.036,
+    "timing_rank": 1,
+    "melody_rank": 4,
+    "pauses_rank": 4,
+    "rank": 3.0
+   },
+   {
+    "take": "F4_08_bank_s10.wav",
+    "timing": 0.034,
+    "melody": 0.043,
+    "pauses": 0.036,
+    "timing_rank": 3,
+    "melody_rank": 7,
+    "pauses_rank": 3,
+    "rank": 4.33
+   },
+   {
+    "take": "F4_08_bank_s7.wav",
+    "timing": 0.039,
+    "melody": 0.681,
+    "pauses": 0.033,
+    "timing_rank": 8,
+    "melody_rank": 3,
+    "pauses_rank": 2,
+    "rank": 4.33
+   },
+   {
+    "take": "F4_08_bank_s8.wav",
+    "timing": 0.037,
+    "melody": 0.702,
+    "pauses": 0.056,
+    "timing_rank": 6,
+    "melody_rank": 1,
+    "pauses_rank": 7,
+    "rank": 4.67
+   },
+   {
+    "take": "F4_08_bank_s4.wav",
+    "timing": 0.034,
+    "melody": 0.426,
+    "pauses": 0.051,
+    "timing_rank": 4,
+    "melody_rank": 6,
+    "pauses_rank": 6,
+    "rank": 5.33
+   },
+   {
+    "take": "F4_08_bank_s1.wav",
+    "timing": 0.036,
+    "melody": -0.074,
+    "pauses": 0.045,
+    "timing_rank": 5,
+    "melody_rank": 8,
+    "pauses_rank": 5,
+    "rank": 6.0
+   },
+   {
+    "take": "F4_08_bank_s2.wav",
+    "timing": 0.038,
+    "melody": 0.54,
+    "pauses": 0.062,
+    "timing_rank": 7,
+    "melody_rank": 5,
+    "pauses_rank": 8,
+    "rank": 6.67
+   }
+  ],
+  "picks": [
+   "F4_08_bank_s3.wav",
+   "F4_08_bank_s6.wav"
+  ]
+ },
+ "12": {
+  "all": [
+   {
+    "take": "F4_12_bank_s7.wav",
+    "timing": 0.017,
+    "melody": 0.741,
+    "pauses": 0.02,
+    "timing_rank": 1,
+    "melody_rank": 3,
+    "pauses_rank": 2,
+    "rank": 2.0
+   },
+   {
+    "take": "F4_12_bank_s10.wav",
+    "timing": 0.026,
+    "melody": 0.74,
+    "pauses": 0.0,
+    "timing_rank": 3,
+    "melody_rank": 4,
+    "pauses_rank": 1,
+    "rank": 2.67
+   },
+   {
+    "take": "F4_12_bank_s1.wav",
+    "timing": 0.024,
+    "melody": 0.544,
+    "pauses": 0.032,
+    "timing_rank": 2,
+    "melody_rank": 7,
+    "pauses_rank": 3,
+    "rank": 4.0
+   },
+   {
+    "take": "F4_12_bank_s3.wav",
+    "timing": 0.046,
+    "melody": 0.785,
+    "pauses": 0.088,
+    "timing_rank": 5,
+    "melody_rank": 2,
+    "pauses_rank": 6,
+    "rank": 4.33
+   },
+   {
+    "take": "F4_12_bank_s4.wav",
+    "timing": 0.041,
+    "melody": 0.727,
+    "pauses": 0.076,
+    "timing_rank": 4,
+    "melody_rank": 5,
+    "pauses_rank": 4,
+    "rank": 4.33
+   },
+   {
+    "take": "F4_12_bank_s6.wav",
+    "timing": 0.059,
+    "melody": 0.9,
+    "pauses": 0.104,
+    "timing_rank": 7,
+    "melody_rank": 1,
+    "pauses_rank": 7,
+    "rank": 5.0
+   },
+   {
+    "take": "F4_12_bank_s9.wav",
+    "timing": 0.051,
+    "melody": 0.206,
+    "pauses": 0.076,
+    "timing_rank": 6,
+    "melody_rank": 8,
+    "pauses_rank": 5,
+    "rank": 6.33
+   },
+   {
+    "take": "F4_12_bank_s2.wav",
+    "timing": 0.073,
+    "melody": 0.67,
+    "pauses": 0.112,
+    "timing_rank": 8,
+    "melody_rank": 6,
+    "pauses_rank": 8,
+    "rank": 7.33
+   }
+  ],
+  "picks": [
+   "F4_12_bank_s7.wav",
+   "F4_12_bank_s10.wav"
+  ]
+ }
+}
