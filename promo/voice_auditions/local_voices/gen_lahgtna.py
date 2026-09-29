@@ -10,6 +10,8 @@ out = sys.argv[1]; os.makedirs(out, exist_ok=True)
 lines = (sys.argv[2] if len(sys.argv) > 2 else "01,05,08,12").split(","); seeds = [int(s) for s in (sys.argv[3] if len(sys.argv) > 3 else "1,2,3,4").split(",")]
 VOICE = os.environ.get("VOICE", "F4"); ref = os.path.join(H, "ref", f"{VOICE}_ref.wav")
 torch.set_num_threads(os.cpu_count())
+_load = torch.load  # checkpoints were saved on CUDA; this machine is CPU-only
+torch.load = lambda *a, **k: _load(*a, **{**k, "map_location": k.get("map_location") or "cpu"})
 ck = snapshot_download("oddadmix/lahgtna-chatterbox-v1", allow_patterns=["ve.pt", "t3_mtl23ls_v2.safetensors", "s3gen.pt", "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json"])
 m = ChatterboxMultilingualTTS.from_checkpoint(str(ck) + "/", "cpu")
 for n in lines:

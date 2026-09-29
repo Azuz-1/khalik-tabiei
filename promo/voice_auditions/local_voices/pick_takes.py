@@ -10,7 +10,9 @@ from transplant import load, align, words_of, fix_octaves, SR
 import parselmouth
 
 H = os.path.dirname(os.path.abspath(__file__)); R = os.path.join(H, "..", "segments", "R_picks")
-def target_of(n): return os.path.join(H, "..", "elevenlabs", "voice4_lines", f"F1_{n}_calm.mp3")
+def target_of(n, male=False):
+    if male: return os.path.join(H, "..", "elevenlabs", "own_lines", f"M_{n}_calm.mp3")  # Voice 2 (male)
+    return os.path.join(H, "..", "elevenlabs", "voice4_lines", f"F1_{n}_calm.mp3")  # Voice 4
 
 def profile(path, words):
     y = load(path); sp = align(y.astype(np.float32), words)
@@ -36,9 +38,11 @@ if __name__ == "__main__":
     files = sorted(glob.glob(os.path.join(sys.argv[1], "*_*_*.wav")))  # <voice/model>_<line>_<take>.wav
     for n in sorted({os.path.basename(f).split("_")[1] for f in files}):
         words = words_of(json.load(open(os.path.join(R, f"{n}.json")))["phrases"][0])
-        tp = profile(target_of(n), words); rows = []
+        rows = []; tps = {}
         for f in [f for f in files if os.path.basename(f).split("_")[1] == n]:
-            rows.append(dict(take=os.path.basename(f), **score(tp, profile(f, words))))
+            male = "M2" in os.path.basename(f).split("_")[0]
+            if male not in tps: tps[male] = profile(target_of(n, male), words)
+            rows.append(dict(take=os.path.basename(f), **score(tps[male], profile(f, words))))
         for k, rev in (("timing", False), ("melody", True), ("pauses", False)):
             for r_, row in enumerate(sorted(rows, key=lambda r: r[k], reverse=rev)): row[k + "_rank"] = r_ + 1
         for row in rows: row["rank"] = round((row["timing_rank"] + row["melody_rank"] + row["pauses_rank"]) / 3, 2)
