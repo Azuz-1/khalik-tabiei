@@ -1,7 +1,7 @@
 # ElevenLabs test (owner-requested, non-commercial)
 
 The owner asked to try ElevenLabs after hearing a Saudi voice on X. The project is personal and non-commercial (a game for friends), and the account is on the free plan.
-- **Free-plan attribution:** credit "Voice by ElevenLabs" wherever this audio is published.
+- **Free-plan attribution:** ElevenLabs' free-plan terms ask for a credit; the owner chose not to add one to the post (2026-09-29). Same caption as the R cut: `out/post_caption.txt`.
 - **Commercial use** would need a paid plan.
 
 ## What the free plan allows through the API (tested 2026-09-29)
