@@ -12,3 +12,4 @@ playwright-report/
 test-results/
 promo/avatar/in/owner_face.png
 promo/avatar/out/*.webp
+promo/avatar/out/*_raw.mp4
