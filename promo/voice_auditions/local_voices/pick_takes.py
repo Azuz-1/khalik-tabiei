@@ -33,7 +33,7 @@ def score(tp, pp):
 
 if __name__ == "__main__":
     top = int(sys.argv[2]) if len(sys.argv) > 2 else 2; out = {}
-    files = sorted(glob.glob(os.path.join(sys.argv[1], "F4_*.wav")))
+    files = sorted(glob.glob(os.path.join(sys.argv[1], "*_*_*.wav")))  # <voice/model>_<line>_<take>.wav
     for n in sorted({os.path.basename(f).split("_")[1] for f in files}):
         words = words_of(json.load(open(os.path.join(R, f"{n}.json")))["phrases"][0])
         tp = profile(target_of(n), words); rows = []
