@@ -10,3 +10,5 @@ server/dist/
 coverage/
 playwright-report/
 test-results/
+promo/avatar/in/owner_face.png
+promo/avatar/out/*.webp
