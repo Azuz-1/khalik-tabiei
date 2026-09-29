@@ -1,0 +1,15 @@
+{
+ "phrases": [
+  "(calm, conversational, lively)مرة ترفع يدك، مرة تِأَشِّر، ومرة تِوَرِّي رقم بصابعك… وكل جولة غير."
+ ],
+ "engine": "ElevenLabs eleven_v4",
+ "voice": "owner-designed 'بنت عربي' (tPQlZxlHLbatonwL593Q)",
+ "tts_text": "[warm] مرة ترفع يدك، مرة تِأَشِّر، ومرة تِوَرِّي رقم بصابعك… وكل جولة غير.",
+ "settings": {
+  "stability": 0.6,
+  "similarity_boost": 0.8,
+  "style": 0.0,
+  "speed": 1.0
+ },
+ "note": "phrases = the same text as R_picks (its style prefix is ignored by the assembler); owner approved Voice 4, round 3"
+}

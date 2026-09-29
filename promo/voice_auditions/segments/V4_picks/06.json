@@ -1,0 +1,15 @@
+{
+ "phrases": [
+  "(calm, conversational, playful)هنا لازم المُتَخَفّي يحاول يگلّدكم… ويحاول ما يَفْضَح نفسه."
+ ],
+ "engine": "ElevenLabs eleven_v4",
+ "voice": "owner-designed 'بنت عربي' (tPQlZxlHLbatonwL593Q)",
+ "tts_text": "[warm] هنا لازم المُتَخَفّي يحاول يگلّدكم… ويحاول ما يَفْضَح نفسه.",
+ "settings": {
+  "stability": 0.6,
+  "similarity_boost": 0.8,
+  "style": 0.0,
+  "speed": 1.0
+ },
+ "note": "phrases = the same text as R_picks (its style prefix is ignored by the assembler); owner approved Voice 4, round 3"
+}

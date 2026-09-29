@@ -91,3 +91,15 @@ All three were designed by the owner with Voice Design; none is cloned from anyo
 `{"M_05_X":"plain","M_05_Y":"tashkeel","M_08_X":"plain","M_08_Y":"tashkeel","M_12_X":"plain","M_12_Y":"tashkeel","F2_05_X":"tashkeel","F2_05_Y":"plain","F2_08_X":"plain","F2_08_Y":"tashkeel","F2_12_X":"tashkeel","F2_12_Y":"plain"}`
 
 </details>
+
+**Tashkeel test result (owner, blind):**
+- **M:** all three pairs sounded the same, and the pronunciation was "much better" than in round 2.
+  - The exception is line 5, where «ارفع يدك» doesn't come out as «يدّك» (the females say it right).
+- **F2:** mostly good, apart from line 5.
+
+**Conclusion:**
+- **Tashkeel was *not* what made M/F2 formal**, because the with and without versions sound the same.
+- The round-2 drift was most likely take-to-take randomness (one take per line) plus the formal «اثنين». Write it «ثنين» for ElevenLabs.
+- **Rule for ElevenLabs:** generate 2–3 takes per line, as with VoxCPM. Tashkeel can stay.
+
+**Owner approved Voice 4 (F1) with no comments.** The video is built with it: `PICKS=V4_picks OUT=khalik-tabiei-promo-v4 ./build.sh`. The R version stays as `khalik-tabiei-promo.mp4`.

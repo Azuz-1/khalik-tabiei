@@ -16,7 +16,7 @@ from torchaudio.pipelines import MMS_FA
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(ROOT, "build"); SR = 48000
-PICKS = os.path.join(ROOT, "voice_auditions", "segments", "R_picks")
+PICKS = os.path.join(ROOT, "voice_auditions", "segments", os.environ.get("PICKS", "R_picks"))  # PICKS=V4_picks for the ElevenLabs voice
 S = json.load(open(os.path.join(ROOT, "script", "short.json")))
 UR = uroman.Uroman(); FA = MMS_FA.get_model(with_star=False).eval(); TOK = MMS_FA.get_tokenizer(); ALN = MMS_FA.get_aligner()
 
@@ -33,7 +33,7 @@ def align(x48, words):
 
 os.makedirs(os.path.join(BUILD, "vo"), exist_ok=True)
 t = S.get("lead_in", 0.12); pieces = [np.zeros(int(t * SR), np.float32)]
-tm = {"beats": [], "chunks": [], "source": "voice_auditions/segments/R_picks (owner-confirmed)"}
+tm = {"beats": [], "chunks": [], "source": f"voice_auditions/segments/{os.path.basename(PICKS)} (owner-confirmed)"}
 for i, seg in enumerate(S["segments"], 1):
     x, sr = sf.read(os.path.join(PICKS, f"{i:02d}.wav"), dtype="float32")
     if sr != SR: x = librosa.resample(x, orig_sr=sr, target_sr=SR)

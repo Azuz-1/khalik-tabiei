@@ -2,6 +2,7 @@
 # Full promo build: voice → frames → score → mix → final MP4.
 # Prereqs: tools/setup.sh has been run once (Python deps + local models).
 set -euo pipefail
+OUT="${OUT:-khalik-tabiei-promo}"   # OUT=khalik-tabiei-promo-v4 PICKS=V4_picks for the ElevenLabs voice
 cd "$(dirname "$0")"
 FF="${FFMPEG:-ffmpeg}"
 
@@ -24,6 +25,6 @@ X264=(-c:v libx264 -preset slow -b:v 2250k -profile:v high -level 4.2 -pix_fmt y
   "${X264[@]}" -maxrate 4500k -bufsize 9000k -pass 2 -passlogfile x264pass \
   -c:a aac -b:a 224k -ar 48000 -af "afade=t=out:st=$FADE:d=0.6" \
   -movflags +faststart -metadata title="خلك طبيعي" -metadata:s:a:0 language=ara \
-  ../out/khalik-tabiei-promo.mp4)
-"$FF" -y -hide_banner -loglevel error -ss 7.6 -i out/khalik-tabiei-promo.mp4 -frames:v 1 -q:v 2 out/cover.jpg
-echo "→ out/khalik-tabiei-promo.mp4"
+  "../out/$OUT.mp4")
+"$FF" -y -hide_banner -loglevel error -ss 7.6 -i "out/$OUT.mp4" -frames:v 1 -q:v 2 "out/${OUT/khalik-tabiei-promo/cover}.jpg"
+echo "→ out/$OUT.mp4"
