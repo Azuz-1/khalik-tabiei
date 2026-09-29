@@ -1,0 +1,170 @@
+[
+ {
+  "voice": "M",
+  "line": 5,
+  "version": "tashkeel",
+  "text": "[warm] ثلاثة… ثنين… واحد… اِرْفَع يِدّكْ.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "F2",
+  "line": 5,
+  "version": "tashkeel",
+  "text": "[warm] ثلاثة… ثنين… واحد… اِرْفَع يِدّكْ.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "line": 5,
+  "version": "plain",
+  "text": "[warm] ثلاثة… ثنين… واحد… ارفع يدك.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "F2",
+  "line": 5,
+  "version": "plain",
+  "text": "[warm] ثلاثة… ثنين… واحد… ارفع يدك.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "line": 8,
+  "version": "tashkeel",
+  "text": "[warm] تبدون بالتصويت على الشخص اللي شاكِّين فيه… وإذا أغلبْكُم اختار المُتَخَفّي… إنْمَسَكْ.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "F2",
+  "line": 8,
+  "version": "tashkeel",
+  "text": "[warm] تبدون بالتصويت على الشخص اللي شاكِّين فيه… وإذا أغلبْكُم اختار المُتَخَفّي… إنْمَسَكْ.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "line": 8,
+  "version": "plain",
+  "text": "[warm] تبدون بالتصويت على الشخص اللي شاكين فيه… وإذا أغلبكم اختار المتخفي… إنمسك.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "F2",
+  "line": 8,
+  "version": "plain",
+  "text": "[warm] تبدون بالتصويت على الشخص اللي شاكين فيه… وإذا أغلبكم اختار المتخفي… إنمسك.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "line": 12,
+  "version": "tashkeel",
+  "text": "[warm] الحين السؤال… تِگْدَر تخدعهم؟… خَلِّك طبيعي.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "F2",
+  "line": 12,
+  "version": "tashkeel",
+  "text": "[warm] الحين السؤال… تِگْدَر تخدعهم؟… خَلِّك طبيعي.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "line": 12,
+  "version": "plain",
+  "text": "[warm] الحين السؤال… تگدر تخدعهم؟… خلك طبيعي.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ },
+ {
+  "voice": "F2",
+  "line": 12,
+  "version": "plain",
+  "text": "[warm] الحين السؤال… تگدر تخدعهم؟… خلك طبيعي.",
+  "seed": 7,
+  "settings": {
+   "stability": 0.6,
+   "similarity_boost": 0.8,
+   "style": 0.0,
+   "speed": 1.0
+  },
+  "status": "ok"
+ }
+]

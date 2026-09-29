@@ -72,3 +72,22 @@ All three were designed by the owner with Voice Design; none is cloned from anyo
 `{"1": "Current", "2": "M", "3": "F2", "4": "F1"}`
 
 </details>
+
+## Round 3: the owner prefers Voice 4 (F1, "بنت عربي")
+**Owner verdict on the six-line comparison:**
+- Voice 4 = F1 has the best pronunciation and is the best overall, beating Current as well.
+- M and F2 start in colloquial Najdi, then drift to formal Arabic.
+- F2 says «اثنين» the formal way.
+
+**Hypothesis:** full tashkeel reads as formal Arabic to ElevenLabs, and F1's casual design anchors her against that pull.
+
+**Generation:**
+- **F1's full narration:** F1's missing lines 2, 4, 7, 9, 10 and 11 were generated with her calm settings (`[warm]`, stability 0.6). They were joined with the owner's gaps into `voice4_full.mp3` (66.7 s).
+- **Tashkeel test:** M and F2 each read lines 5, 8 and 12 at seed 7, once with tashkeel and once as plain text (گ kept). «اثنين» is written «ثنين» in both versions.
+- **Credits:** 4,819 / 10,000 used.
+
+<details><summary><b>SEALED tashkeel-test mapping (X/Y): don't open before the owner answers</b></summary>
+
+`{"M_05_X":"plain","M_05_Y":"tashkeel","M_08_X":"plain","M_08_Y":"tashkeel","M_12_X":"plain","M_12_Y":"tashkeel","F2_05_X":"tashkeel","F2_05_Y":"plain","F2_08_X":"plain","F2_08_Y":"tashkeel","F2_12_X":"tashkeel","F2_12_Y":"plain"}`
+
+</details>
