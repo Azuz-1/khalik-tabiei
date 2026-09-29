@@ -12,15 +12,16 @@ lora = snapshot_download("Wittify/Fasee7-Najdi-Small", allow_patterns=["*.json",
 m = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False, optimize=False, device="cpu",
                            lora_config=LoRAConfig(**json.load(open(f"{lora}/lora_config.json"))["lora_config"]), lora_weights_path=lora)
 bank = json.load(open(os.path.join(H, "ref", "F4_prompt_bank.json")))
+STEPS = int(os.environ.get("STEPS", "20"))  # more diffusion steps = cleaner audio, slower
 for n in lines:
     t = json.load(open(os.path.join(R, f"{n}.json")))["phrases"][0].split(")", 1)[1].strip()
     b = bank[n]
     for seed in seeds:
-        fn = os.path.join(out, f"F4_{n}_bank_s{seed}.wav")
+        fn = os.path.join(out, f"F4_{n}_bank_s{seed}" + (f"_t{STEPS}" if STEPS != 20 else "") + ".wav")
         if os.path.exists(fn): continue
         torch.manual_seed(seed * 100 + 80)
         x = m.generate(text=t, reference_wav_path=os.path.join(H, "ref", "F4_ref.wav"), prompt_wav_path=os.path.join(H, b["prompt_wav"]),
-                       prompt_text=b["prompt_text"], cfg_value=2.0, inference_timesteps=20)
+                       prompt_text=b["prompt_text"], cfg_value=2.0, inference_timesteps=STEPS)
         sf.write(fn, x, m.tts_model.sample_rate)
         json.dump(dict(text=t, seed=seed, prompt_from_line=b["from_line"], mode="B-bank"), open(fn[:-4] + ".json", "w"), ensure_ascii=False)
         print("done", os.path.basename(fn), flush=True)
