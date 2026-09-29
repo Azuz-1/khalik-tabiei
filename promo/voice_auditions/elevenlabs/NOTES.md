@@ -58,3 +58,17 @@ All three were designed by the owner with Voice Design; none is cloned from anyo
 | 12 | A=F2_calm | B=Current | C=F1_calm | D=F2_game | E=M_calm | F=M_game | G=F1_game |
 
 </details>
+
+## Six-line comparison (round 2)
+- **Contents:** lines 1, 3, 5, 6, 8 and 12 joined in order, with the owner's gaps from `script/short.json`.
+- **Takes used:** the *calm* take per voice (no whisper), and R_picks for Current.
+- **Loudness:** −20 dBFS RMS over speech.
+- **Why six lines:** the full 12-line run stopped at the API key's 3,000-credit cap.
+  - Also generated: M lines 1–8 and 11, and F2 lines 11–12 (stability 0.5, style 0.2, no tags).
+  - Still missing for full narrations: M 9–10; F1 2, 4, 7, 9, 10, 11; F2 2, 4, 7, 9, 10.
+
+<details><summary><b>SEALED mapping for voice1..voice4: don't open before the owner has commented</b></summary>
+
+`{"1": "Current", "2": "M", "3": "F2", "4": "F1"}`
+
+</details>

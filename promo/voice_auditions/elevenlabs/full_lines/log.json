@@ -1,0 +1,506 @@
+[
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 1,
+  "text": "تَخَيَّل كلهم يرفعون يِدّهُم… وأنت الوحيد اللي ما تَدري وش السالفة!",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 2,
+  "text": "هذي «خَلِّك طبيعي»… لعبة جماعية، وواحد منكم ما يَدري وش المطلوب.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 3,
+  "text": "تدْخلون من جوالاتكم، بدون تحميل… ولا تسجيل.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 4,
+  "text": "كل واحد يشوف المطلوب بجواله… إلا المُتَخَفّي ما يطلع له شيء.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 5,
+  "text": "ثلاثة… اثنين… واحد… اِرْفَع يِدّكْ.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 6,
+  "text": "هنا لازم المُتَخَفّي يحاول يگلّدكم… ويحاول ما يَفْضَح نفسه.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 7,
+  "text": "بعدها يِنكَشِف المطلوب… وكل واحد يبدأ يِشِكْ بالثاني.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 8,
+  "text": "تبدون بالتصويت على الشخص اللي شاكِّين فيه… وإذا أغلبْكُم اختار المُتَخَفّي… إنْمَسَكْ.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 9,
+  "text": "مرة ترفع يدك، مرة تِأَشِّر، ومرة تِوَرِّي رقم بصابعك… وكل جولة غير.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 49 credits remaining, while 67 credits are required for this '"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 10,
+  "text": "إذا عرفت المُتَخَفّي تَكْسَب نقاط… وإذا گِدَر يِفْلِت، هو اللي يَكْسَب.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 49 credits remaining, while 71 credits are required for this '"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 11,
+  "text": "وبالنهاية… أكثر واحد جمع نقاط هو الفايز.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "M",
+  "voice_id": "YwG5nJLWQ33Z3AKec3RN",
+  "line": 12,
+  "text": "الحين السؤال… تِگْدَر تخدعهم؟… خَلِّك طبيعي.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 44 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 1,
+  "text": "تَخَيَّل كلهم يرفعون يِدّهُم… وأنت الوحيد اللي ما تَدري وش السالفة!",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 67 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 2,
+  "text": "هذي «خَلِّك طبيعي»… لعبة جماعية، وواحد منكم ما يَدري وش المطلوب.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 64 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 3,
+  "text": "تدْخلون من جوالاتكم، بدون تحميل… ولا تسجيل.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 43 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 4,
+  "text": "كل واحد يشوف المطلوب بجواله… إلا المُتَخَفّي ما يطلع له شيء.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 60 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 5,
+  "text": "ثلاثة… اثنين… واحد… اِرْفَع يِدّكْ.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 35 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 6,
+  "text": "هنا لازم المُتَخَفّي يحاول يگلّدكم… ويحاول ما يَفْضَح نفسه.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 59 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 7,
+  "text": "بعدها يِنكَشِف المطلوب… وكل واحد يبدأ يِشِكْ بالثاني.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 53 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 8,
+  "text": "تبدون بالتصويت على الشخص اللي شاكِّين فيه… وإذا أغلبْكُم اختار المُتَخَفّي… إنْمَسَكْ.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 86 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 9,
+  "text": "مرة ترفع يدك، مرة تِأَشِّر، ومرة تِوَرِّي رقم بصابعك… وكل جولة غير.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 67 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 10,
+  "text": "إذا عرفت المُتَخَفّي تَكْسَب نقاط… وإذا گِدَر يِفْلِت، هو اللي يَكْسَب.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 71 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 11,
+  "text": "وبالنهاية… أكثر واحد جمع نقاط هو الفايز.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 40 credits are required for this r'"
+ },
+ {
+  "voice": "F1",
+  "voice_id": "tPQlZxlHLbatonwL593Q",
+  "line": 12,
+  "text": "الحين السؤال… تِگْدَر تخدعهم؟… خَلِّك طبيعي.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 44 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 1,
+  "text": "تَخَيَّل كلهم يرفعون يِدّهُم… وأنت الوحيد اللي ما تَدري وش السالفة!",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 67 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 2,
+  "text": "هذي «خَلِّك طبيعي»… لعبة جماعية، وواحد منكم ما يَدري وش المطلوب.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 64 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 3,
+  "text": "تدْخلون من جوالاتكم، بدون تحميل… ولا تسجيل.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 43 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 4,
+  "text": "كل واحد يشوف المطلوب بجواله… إلا المُتَخَفّي ما يطلع له شيء.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 60 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 5,
+  "text": "ثلاثة… اثنين… واحد… اِرْفَع يِدّكْ.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 35 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 6,
+  "text": "هنا لازم المُتَخَفّي يحاول يگلّدكم… ويحاول ما يَفْضَح نفسه.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 59 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 7,
+  "text": "بعدها يِنكَشِف المطلوب… وكل واحد يبدأ يِشِكْ بالثاني.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 53 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 8,
+  "text": "تبدون بالتصويت على الشخص اللي شاكِّين فيه… وإذا أغلبْكُم اختار المُتَخَفّي… إنْمَسَكْ.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 86 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 9,
+  "text": "مرة ترفع يدك، مرة تِأَشِّر، ومرة تِوَرِّي رقم بصابعك… وكل جولة غير.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 67 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 10,
+  "text": "إذا عرفت المُتَخَفّي تَكْسَب نقاط… وإذا گِدَر يِفْلِت، هو اللي يَكْسَب.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "HTTP 401 b'{\"detail\":{\"type\":\"invalid_request\",\"code\":\"quota_exceeded\",\"message\":\"This request exceeds your API key (Khalik ) quota of 3000. You have 9 credits remaining, while 71 credits are required for this r'"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 11,
+  "text": "وبالنهاية… أكثر واحد جمع نقاط هو الفايز.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ },
+ {
+  "voice": "F2",
+  "voice_id": "gTKrhCj22wWEoax2wtwr",
+  "line": 12,
+  "text": "الحين السؤال… تِگْدَر تخدعهم؟… خَلِّك طبيعي.",
+  "settings": {
+   "stability": 0.5,
+   "similarity_boost": 0.8,
+   "style": 0.2,
+   "speed": 1.0
+  },
+  "model": "eleven_v4",
+  "status": "ok"
+ }
+]
