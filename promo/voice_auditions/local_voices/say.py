@@ -36,12 +36,13 @@ lora = snapshot_download("Wittify/Fasee7-Najdi-Small", allow_patterns=["*.json",
 m = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False, optimize=False, device=a.device,
                            lora_config=LoRAConfig(**json.load(open(f"{lora}/lora_config.json"))["lora_config"]), lora_weights_path=lora)
 kw = dict(reference_wav_path=VOICES[a.voice])
-if a.mode == "B" and a.voice != "R":
+B = a.mode == "B" and a.voice != "R"
+if B:  # continuation mode reads a "(style…)" prefix aloud, so it is removed below
     kw.update(prompt_wav_path=os.path.join(H, "ref", f"{a.voice}_prompt.wav"),
               prompt_text=json.load(open(os.path.join(H, "ref", "prompt_text.json")))["prompt_text"])
 for i, line in enumerate(lines, 1):
     for k in range(1, a.takes + 1):
         torch.manual_seed(k * 100 + 80)
-        x = m.generate(text=line, cfg_value=2.0, inference_timesteps=20, **kw)
+        x = m.generate(text=line.split(")", 1)[1].strip() if B and line.startswith("(") else line, cfg_value=2.0, inference_timesteps=20, **kw)
         fn = os.path.join(a.out, f"{a.voice}_{i:02d}_t{k}.wav"); sf.write(fn, x, m.tts_model.sample_rate)
         print(fn, flush=True)

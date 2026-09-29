@@ -26,8 +26,10 @@ for v in voices:
                 if os.path.exists(fn): continue
                 torch.manual_seed(seed * 100 + 80)
                 kw = dict(reference_wav_path=ref)
-                if mode == "B": kw.update(prompt_wav_path=prm, prompt_text=ptext)
-                x = m.generate(text=text, cfg_value=2.0, inference_timesteps=20, **kw)
+                t = text
+                if mode == "B":  # continuation mode speaks a "(style…)" prefix aloud, so drop it
+                    kw.update(prompt_wav_path=prm, prompt_text=ptext); t = text.split(")", 1)[1].strip() if text.startswith("(") else text
+                x = m.generate(text=t, cfg_value=2.0, inference_timesteps=20, **kw)
                 sf.write(fn, x, sr)
-                json.dump(dict(phrases=[text], gaps_ms=[], seed=seed, engine="VoxCPM2+Fasee7", voice=v, mode=mode), open(fn[:-4] + ".json", "w"), ensure_ascii=False)
+                json.dump(dict(phrases=[t], gaps_ms=[], seed=seed, engine="VoxCPM2+Fasee7", voice=v, mode=mode), open(fn[:-4] + ".json", "w"), ensure_ascii=False)
                 print("done", os.path.basename(fn), flush=True)
