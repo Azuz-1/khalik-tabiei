@@ -293,6 +293,9 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
 
 /* ---- voting --------------------------------------------------------------- */
 
+/** Last-seconds nudge for an unconfirmed ballot; does not change voting rules. */
+const VOTE_NUDGE_MS = 5_000;
+
 function PlayerVote({ view }: { view: ClientView }) {
   const { status, pendingActions } = useGame();
   const submitting = pendingActions.includes("SUBMIT_VOTE");
@@ -305,6 +308,19 @@ function PlayerVote({ view }: { view: ClientView }) {
   useEffect(() => {
     if (picked && !targets.some((target) => target.uid === picked)) setPicked(null);
   }, [picked, targets]);
+
+  // One short buzz as the last seconds start, while this ballot is still not
+  // confirmed. A picked-but-unconfirmed choice is not a vote: in owner trials
+  // 16% of ballots were missed at the deadline. Unsupported devices ignore it.
+  const phaseEndsAt = view.room.phaseEndsAt;
+  const voted = view.myVoteSubmitted === true;
+  useEffect(() => {
+    if (phaseEndsAt === undefined || voted || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    const delay = phaseEndsAt - VOTE_NUDGE_MS - estimatedServerNow();
+    if (delay < 0) return;
+    const timer = window.setTimeout(() => { try { navigator.vibrate(120); } catch { /* unsupported */ } }, delay);
+    return () => window.clearTimeout(timer);
+  }, [phaseEndsAt, voted]);
 
   if (view.voteTargets === undefined && view.myVoteSubmitted === undefined) return <PlayerWatchScreen />;
 
@@ -330,7 +346,12 @@ function PlayerVote({ view }: { view: ClientView }) {
       <main className="player-vote-main">
         <div className="vote-head">
           <h1 className="player-vote-title">مين تحس إنه المتخفي؟</h1>
-          <PhaseCountdown endsAt={view.room.phaseEndsAt} totalMs={TIMERS.VOTING} />
+          <PhaseCountdown
+            endsAt={view.room.phaseEndsAt}
+            totalMs={TIMERS.VOTING}
+            warningAtSeconds={VOTE_NUDGE_MS / 1_000}
+            warningText={picked ? "باقي ثواني — اضغط «أكّد» عشان ينحسب صوتك" : "باقي ثواني — اختر لاعب وأكّد صوتك"}
+          />
         </div>
         <div
           className={`vote-list stage-vote-grid${picked ? " has-pick" : ""}`}

@@ -103,6 +103,10 @@ Rooms and state are single-instance/in-memory. Restart/deployment loses active r
 
 `/healthz` is liveness, `/readyz` is readiness (503 during drain), `/version` returns deployed SHA. Graceful shutdown gives notice without persisting rooms. Defaults of 500 rooms, 4,000 sockets globally and 64 per source IP are admission ceilings, not production capacity promises. See [production operations](docs/production-operations.md) and [measured capacity limitations](docs/release-20260930-security-capacity.md).
 
+**Owner trials.** Open the game once with `?trial=1` (for example `https://<host>/?trial=1`) on each phone used for internal testing. Rooms created from that browser, and its client telemetry, are recorded with analytics environment `test` so launch metrics can exclude them. `?trial=0` removes the mark. It changes nothing in gameplay or identity.
+
+**Link previews.** `index.html` carries Arabic Open Graph tags; the server replaces `__PUBLIC_ORIGIN__` with `PUBLIC_ORIGIN` so WhatsApp gets an absolute image URL (`/og.jpg`).
+
 ## Release evidence
 
 - [Release assessment](docs/release-20260930.md)

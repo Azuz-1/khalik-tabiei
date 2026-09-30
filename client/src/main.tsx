@@ -6,6 +6,7 @@ import "@fontsource/tajawal/700.css";
 import "@fontsource/tajawal/800.css";
 import "@fontsource/tajawal/900.css";
 import { reportClientError } from "./telemetry.js";
+import { applyTrialFlag } from "./trialFlag.js";
 import "./styles.css";
 import "./c-ux.css";
 import "./game-hud.css";
@@ -66,6 +67,10 @@ class RuntimeBoundary extends Component<{ children: ReactNode }, { failed: boole
   componentDidCatch(error: unknown) { reportClientError("react", error); }
   render() { return this.state.failed ? <RuntimeRecovery /> : this.props.children; }
 }
+
+try {
+  applyTrialFlag(location.search, location.protocol === "https:", (cookie) => { document.cookie = cookie; });
+} catch { /* cookies can be unavailable; the owner trial marker is optional */ }
 
 const root = createRoot(document.getElementById("root")!);
 void loadRoot().then((Root) => {

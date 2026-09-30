@@ -1,5 +1,5 @@
 import type { AnalyticsEvent } from "../../shared/types.js";
-import { analyticsPlayerId, sanitizeAnalyticsProps, track, type AnalyticsProps, type AnalyticsTracker } from "./analytics.js";
+import { analyticsPlayerId, sanitizeAnalyticsProps, track, type AnalyticsProps, type AnalyticsTracker, type AnalyticsTrackOptions } from "./analytics.js";
 import { FixedWindowLimiter } from "./security/rateLimit.js";
 
 export { analyticsPlayerId };
@@ -97,7 +97,7 @@ export class ClientTelemetryIngestor {
 
   constructor(private readonly analytics: AnalyticsTracker = track) {}
 
-  ingest(identity: string, body: unknown): { ok: true; count: number } | { ok: false; code: "BAD_REQUEST" | "RATE_LIMITED" } {
+  ingest(identity: string, body: unknown, options: AnalyticsTrackOptions = {}): { ok: true; count: number } | { ok: false; code: "BAD_REQUEST" | "RATE_LIMITED" } {
     if (!this.requests.allow(identity)) return { ok: false, code: "RATE_LIMITED" };
     const events = parseClientTelemetryBatch(body);
     if (!events) return { ok: false, code: "BAD_REQUEST" };
@@ -108,7 +108,7 @@ export class ClientTelemetryIngestor {
         const props = event.event === "client_started" || event.event === "client_session_summary"
           ? { ...event.props, analyticsPlayerId: pseudonymousPlayerId }
           : event.props;
-        this.analytics(event.event, props);
+        this.analytics(event.event, props, options.trial ? { trial: true } : undefined);
       } catch { /* telemetry never affects gameplay */ }
     }
     return { ok: true, count: events.length };

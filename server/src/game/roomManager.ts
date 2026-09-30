@@ -90,6 +90,8 @@ export class RoomManager {
   private readonly timers = new Map<string, Map<string, NodeJS.Timeout>>();
   private readonly requestsByUid = new Map<string, Map<string, CachedRequest>>();
   private readonly analyticsByRoom = new WeakMap<RoomState, RoomAnalyticsState>();
+  /** Room sessions created by an owner trial device; their events are labelled "test". */
+  private readonly trialRoomSessions = new Set<string>();
   private draining = false;
   private readonly deps: Deps;
   private readonly gcTimer: NodeJS.Timeout;
@@ -291,7 +293,7 @@ export class RoomManager {
     switch (message.t) {
       case "HELLO": throw new GameError("BAD_REQUEST", "connection already authenticated");
       case "PING": return;
-      case "CREATE_ROOM": return this.createRoom(uid, message.name);
+      case "CREATE_ROOM": return this.createRoom(uid, message.name, conn.trial);
       case "JOIN_ROOM": return this.joinRoom(uid, message.code, message.name);
       case "LEAVE_ROOM": return this.leaveRoom(uid);
       case "SET_SETTINGS": return this.withRoom(uid, (room) => {
@@ -345,7 +347,7 @@ export class RoomManager {
     }
   }
 
-  private createRoom(uid: string, rawName?: string): void {
+  private createRoom(uid: string, rawName?: string, trial = false): void {
     if (this.uidToRoomCode.has(uid)) throw new GameError("ALREADY_IN_ROOM");
     this.reclaimExpiredRooms();
     if (this.rooms.size >= this.deps.maxRooms) throw new GameError("RATE_LIMITED");
@@ -376,6 +378,7 @@ export class RoomManager {
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
     const analytics = this.analyticsState(room);
+    if (trial) this.trialRoomSessions.add(analytics.roomSessionId);
     this.emitAnalytics("room_created", { roomSessionId: analytics.roomSessionId });
     if (rawName !== undefined) {
       this.emitAnalytics("room_participant_joined", {
@@ -1154,6 +1157,7 @@ export class RoomManager {
       if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
     }
     this.clearTimers(room.code);
+    this.forgetTrialRoom(room);
     this.rooms.delete(room.code);
   }
 
@@ -1280,10 +1284,17 @@ export class RoomManager {
 
   private emitAnalytics(event: AnalyticsEvent, props: AnalyticsProps = {}): void {
     try {
-      this.deps.analytics(event, props);
+      const trial = typeof props.roomSessionId === "string" && this.trialRoomSessions.has(props.roomSessionId);
+      if (trial) this.deps.analytics(event, props, { trial: true });
+      else this.deps.analytics(event, props);
     } catch {
       // Analytics is never allowed to block or roll back gameplay.
     }
+  }
+
+  private forgetTrialRoom(room: RoomState): void {
+    const sessionId = this.analyticsByRoom.get(room)?.roomSessionId;
+    if (sessionId) this.trialRoomSessions.delete(sessionId);
   }
 
   private attachAll(uid: string, code: string): void {
@@ -1371,6 +1382,7 @@ export class RoomManager {
         }
         this.clearTimers(room.code);
         for (const uid of memberUids) if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
+        this.forgetTrialRoom(room);
         this.rooms.delete(room.code);
       }
     }
@@ -1434,6 +1446,7 @@ export class RoomManager {
     clearInterval(this.gcTimer);
     for (const code of this.timers.keys()) this.clearTimers(code);
     this.rooms.clear();
+    this.trialRoomSessions.clear();
     this.uidToRoomCode.clear();
     this.connsByUid.clear();
     this.requestsByUid.clear();

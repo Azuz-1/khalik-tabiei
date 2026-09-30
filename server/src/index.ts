@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import express from "express";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
@@ -21,7 +22,7 @@ import {
 import { decodePromptNoveltyFilter } from "./game/promptNovelty.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
-import { ensureAnonymousSession, readAnonymousSession } from "./auth/session.js";
+import { ensureAnonymousSession, isTrialRequest, readAnonymousSession } from "./auth/session.js";
 import { canonicalOrigin, isAllowedWebSocketOrigin } from "./security/origin.js";
 import { parseClientMessage } from "./security/messages.js";
 import { AbuseGuard, clientIp } from "./security/rateLimit.js";
@@ -39,6 +40,7 @@ const clientDist = clientDistCandidates.find((candidate) => existsSync(candidate
 
 type ConnectionKind = "participant" | "display";
 interface UpgradeContext {
+  trial?: boolean;
   uid: string;
   origin: string;
   ip: string;
@@ -85,6 +87,11 @@ function bearerSecret(value: string | undefined): string | null {
   if (!value) return null;
   const match = /^Bearer ([A-Za-z0-9_-]{16,256})$/.exec(value);
   return match?.[1] ?? null;
+}
+
+/** Replaces the build placeholder with the configured origin (empty when unset). */
+export function withPublicOrigin(html: string, origin: string | null | undefined): string {
+  return html.replaceAll("__PUBLIC_ORIGIN__", origin ?? "");
 }
 
 export function createGameServer(options: GameServerOptions = {}) {
@@ -349,7 +356,7 @@ export function createGameServer(options: GameServerOptions = {}) {
       res.status(401).json({ ok: false, code: "UNAUTHORIZED" });
       return;
     }
-    const result = clientTelemetry.ingest(session.uid, req.body);
+    const result = clientTelemetry.ingest(session.uid, req.body, { trial: isTrialRequest(req) });
     if (result.ok) {
       res.status(204).end();
       return;
@@ -384,13 +391,21 @@ export function createGameServer(options: GameServerOptions = {}) {
     res.status(status).json({ ok: false, code: result.code });
   });
 
-  app.use(express.static(clientDist));
-  app.get("*", (req, res) => {
+  // index.html is served through the fallback so link previews (WhatsApp,
+  // iMessage) get an absolute og:image URL; crawlers ignore relative ones.
+  app.get("/index.html", (_req, res) => res.redirect(301, "/"));
+  app.use(express.static(clientDist, { index: false }));
+  let indexHtml: string | null = null;
+  app.get("*", async (req, res) => {
     const ip = clientIp(req, config.clientIpMode);
     if (!abuse.allowHttpFallback(ip)) return void res.status(429).type("text/plain").send("Too Many Requests");
-    res.sendFile(join(clientDist, "index.html"), (error) => {
-      if (error && !res.headersSent) res.status(503).send("Client build unavailable.");
-    });
+    try {
+      indexHtml ??= withPublicOrigin(await readFile(join(clientDist, "index.html"), "utf8"), config.publicOrigin);
+      res.setHeader("Cache-Control", "no-cache");
+      res.type("html").send(indexHtml);
+    } catch {
+      if (!res.headersSent) res.status(503).send("Client build unavailable.");
+    }
   });
 
   server.on("upgrade", (req, socket, head) => {
@@ -440,6 +455,7 @@ export function createGameServer(options: GameServerOptions = {}) {
           ip,
           lease,
           kind,
+          trial: isTrialRequest(req),
           ...(displayCode ? { displayCode } : {}),
         });
         wss.emit("connection", ws, req);
@@ -454,6 +470,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     const context = contexts.get(ws);
     if (!context) return ws.close(1008, "missing connection context");
     const conn = new Connection(ws, context.origin, context.ip, config.maxBufferedBytes);
+    conn.trial = context.trial === true;
     connections.set(ws, conn);
     conn.startAuthenticationTimeout(config.authTimeoutMs);
     let displayTimer: NodeJS.Timeout | undefined;
