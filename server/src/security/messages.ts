@@ -74,6 +74,7 @@ export function validateClientMessage(
     case "NEXT_ROUND":
     case "CLOSE_ROOM":
     case "REMATCH":
+    case "RETURN_TO_LOBBY":
       return actionNoFields(value) ? (value as ClientMessage) : null;
 
     case "PING":

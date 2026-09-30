@@ -322,6 +322,7 @@ export class RoomManager {
       case "NEXT_ROUND": return this.nextRound(uid);
       case "KICK_PLAYER": return this.kick(uid, message.uid);
       case "CLOSE_ROOM": return this.closeRoom(uid);
+      case "RETURN_TO_LOBBY": return this.returnToLobby(uid);
       case "REMATCH": return this.withRoom(uid, (room) => {
         if (room.hostUid !== uid) throw new GameError("NOT_HOST");
         if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
@@ -646,16 +647,19 @@ export class RoomManager {
     this.withRoom(uid, (room) => {
       const round = room.round;
       const player = room.players.get(uid);
+      const ignore = (reason: "CLOSED" | "STALE_CHALLENGE") => {
+        conn.send({ t: "VOTE_IGNORED", reason, ...this.ridField(message) });
+        this.sendState(conn);
+      };
+      // A ballot still in flight when the owner ended the match belongs to no
+      // challenge any more. It is a benign race for a seated member, not an error.
+      if (!round && player?.connected && !player.pendingRemoval && message.voteContext) return ignore("STALE_CHALLENGE");
       // Never classify a non-member or an ineligible identity as a benign race.
       if (!player || !player.connected || player.pendingRemoval || !round?.participantUids.includes(uid)) throw new GameError("NOT_PLAYER");
       if (!message.voteContext) {
         if (room.phase !== "VOTING" && room.phase !== "RESULT" && room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
         throw new GameError("CLIENT_UPDATE_REQUIRED");
       }
-      const ignore = (reason: "CLOSED" | "STALE_CHALLENGE") => {
-        conn.send({ t: "VOTE_IGNORED", reason, ...this.ridField(message) });
-        this.sendState(conn);
-      };
       if (message.voteContext !== round.voteContext) return ignore("STALE_CHALLENGE");
       if (room.phase === "VOTING" && !room.pause && room.phaseEndsAt !== undefined && this.deps.now() >= room.phaseEndsAt) {
         this.timeoutVoting(room, round);
@@ -1089,6 +1093,26 @@ export class RoomManager {
     }
   }
 
+  /**
+   * Ends the current match without closing the room: every seat, the room code
+   * and the settings survive, so the owner can adjust settings and start again
+   * without everyone rejoining. Scores and challenge state of the ended match
+   * are discarded exactly as other lobby aborts do.
+   */
+  private returnToLobby(uid: string): void {
+    this.withRoom(uid, (room) => {
+      if (room.hostUid !== uid) throw new GameError("NOT_HOST");
+      if (room.phase === "LOBBY" || room.phase === "CLOSED") throw new GameError("INVALID_PHASE");
+      this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+      if (room.phase !== "GAME_OVER") this.emitGameAbandoned(room, "ended_to_lobby");
+      engine.abortToLobby(room, this.deps);
+      room.readyRecoveryDeadline = undefined;
+      this.prunePendingPlayers(room);
+      this.markMeaningful(room);
+      this.broadcast(room);
+    });
+  }
+
   private closeRoom(uid: string): void {
     const room = this.roomOf(uid);
     if (!room) return;
@@ -1416,7 +1440,9 @@ export class RoomManager {
   }
 
   get roomCount(): number { return this.rooms.size; }
-  roomForTests(code: string): RoomState | undefined { return this.rooms.get(code); }
+  /** Server-internal lookup for transport/display wiring; never exposed over HTTP. */
+  roomByCode(code: string): RoomState | undefined { return this.rooms.get(code); }
+  roomForTests(code: string): RoomState | undefined { return this.roomByCode(code); }
   roomCodeForUidForTests(uid: string): string | undefined { return this.uidToRoomCode.get(uid); }
   connectionCountForUidForTests(uid: string): number { return this.connsByUid.get(uid)?.size ?? 0; }
   runGcForTests(): void { this.gcIdleRooms(); }

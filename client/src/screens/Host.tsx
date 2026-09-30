@@ -15,7 +15,7 @@ export interface ConfirmActionRequest {
   title: string;
   description: string;
   confirmLabel: string;
-  actionType: "KICK_PLAYER" | "CLOSE_ROOM" | "LEAVE_ROOM" | "NEXT_ROUND";
+  actionType: "KICK_PLAYER" | "CLOSE_ROOM" | "LEAVE_ROOM" | "NEXT_ROUND" | "RETURN_TO_LOBBY";
   targetUid?: string;
   run: () => string | null;
 }
@@ -36,7 +36,9 @@ export function Host({ view, confirmAction }: { view: ClientView; confirmAction:
   }
 }
 
-function requestClose(confirmAction: ConfirmAction, description = "بتنقفل الغرفة على الكل وتنتهي اللعبة الحالية.") {
+const CLOSE_ROOM_DESCRIPTION = "بتنقفل الغرفة على الكل، وأي أحد يبي يلعب بعدها لازم يدخل من جديد برمز غرفة جديدة.";
+
+function requestClose(confirmAction: ConfirmAction, description = CLOSE_ROOM_DESCRIPTION) {
   confirmAction({
     title: "إغلاق الغرفة؟",
     description,
@@ -255,7 +257,7 @@ function HostGameOver({ view, confirmAction }: { view: ClientView; confirmAction
       <div className="owner-dock">
         <div className="owner-dock-row">
           <button className="btn btn-primary" onClick={() => actions.rematch()}>العبوا مرة ثانية</button>
-          <button className="btn btn-secondary" onClick={() => requestClose(confirmAction, "بتقفل الغرفة الحالية وترجع الكل للرئيسية.")}>إغلاق الغرفة</button>
+          <button className="btn btn-secondary" onClick={() => requestClose(confirmAction, `${CLOSE_ROOM_DESCRIPTION} إذا تبون تلعبون مرة ثانية بنفس الغرفة، اختر «العبوا مرة ثانية» بدل الإغلاق.`)}>إغلاق الغرفة</button>
         </div>
       </div>
     </div>

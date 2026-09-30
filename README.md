@@ -16,6 +16,10 @@ The room owner is a real named player with a phone, private role and vote. Manag
 
 Choose any nonempty mode subset. Digital controls mark readiness and cast votes; physical responses happen together on the authoritative action cue. Phones start behind a role-neutral privacy curtain. The impostor knows the mode and their role, but receives no prompt before public reveal.
 
+## Joining
+
+The owner creates a room and names themselves. Players join from the lobby's QR code, a shared or copied `/join/CODE` link, or by typing the 5-character room code on the home screen, then enter a name. There is no account, email or password. Reconnecting with the same browser session restores the same seat.
+
 ## Current rules
 
 - 3–10 players, including the named owner.
@@ -38,6 +42,8 @@ Choose any nonempty mode subset. Digital controls mark readiness and cast votes;
 | Intermediate survived RESULT | 4 seconds. |
 | Full stint RESULT | 20 seconds, or owner advances. |
 | GAME_OVER | Match scores and rematch controls. |
+
+The owner can end a running match at any time with «إنهاء اللعبة». Everyone returns to the lobby of the same room with their seats kept, so settings can change and a new match can start without rejoining. The ended match's points are discarded and any in-flight ballot from it is ignored. «إغلاق الغرفة» (from the lobby or game over) is separate: it closes the room and everyone must join a new room.
 
 Owner disconnect does not pause the game clock. Authority transfers after 60 seconds to an eligible connected successor; the old owner returns as a player. Existing membership/redeal/abstention policies govern other departures.
 

@@ -149,7 +149,7 @@ test("open sheets and dialogs make every background layer inert, nest safely, an
 
     await menu.click();
     await sheet.getByRole("button", { name: "إنهاء اللعبة" }).click();
-    const end = page.getByRole("dialog", { name: "إنهاء اللعبة؟" });
+    const end = page.getByRole("dialog", { name: "إنهاء اللعبة الحالية؟" });
     await expect(end).toBeVisible();
     expect(await isInert(page.locator(".game-hud")), "the HUD rail is not reachable behind the confirm").toBe(true);
     expect(await isInert(page.locator("[data-app-content]"))).toBe(true);

@@ -117,7 +117,7 @@ export function createGameServer(options: GameServerOptions = {}) {
   const pruneDisplayEpochs = () => {
     for (const key of displayEpochs.keys()) {
       const [code, createdAt] = key.split(":");
-      const room = manager.roomForTests(code!);
+      const room = manager.roomByCode(code!);
       if (!room || room.closed || room.createdAt !== Number(createdAt)) displayEpochs.delete(key);
     }
   };
@@ -145,7 +145,7 @@ export function createGameServer(options: GameServerOptions = {}) {
 
   const applyPromptNovelty = (conn: Connection, novelty: Parameters<typeof decodePromptNoveltyFilter>[0]) => {
     if (!conn.uid || !conn.roomCode) return;
-    const room = manager.roomForTests(conn.roomCode);
+    const room = manager.roomByCode(conn.roomCode);
     if (!room || room.closed || !room.players.has(conn.uid)) return;
     const decoded = decodePromptNoveltyFilter(novelty);
     if (!decoded) return;
@@ -230,7 +230,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     }
 
     const binding = pairing.binding;
-    const room = manager.roomForTests(binding.roomCode);
+    const room = manager.roomByCode(binding.roomCode);
     const currentEpoch = room ? displayEpoch(room.code, room.createdAt) : -1;
     if (
       !room
@@ -277,7 +277,7 @@ export function createGameServer(options: GameServerOptions = {}) {
         return;
       }
       const code = normalizeCode(req.params.code);
-      const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
+      const room = code.length === ROOM_CODE_LENGTH ? manager.roomByCode(code) : undefined;
       if (!room || room.closed || room.hostUid !== session.uid) {
         res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
         return;
@@ -312,7 +312,7 @@ export function createGameServer(options: GameServerOptions = {}) {
       res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
       return;
     }
-    const room = manager.roomForTests(code);
+    const room = manager.roomByCode(code);
     if (!room || room.closed || room.hostUid !== session.uid) {
       // Do not reveal whether a valid room code belongs to someone else.
       res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
@@ -333,7 +333,7 @@ export function createGameServer(options: GameServerOptions = {}) {
       return;
     }
     const code = normalizeCode(req.params.code);
-    const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
+    const room = code.length === ROOM_CODE_LENGTH ? manager.roomByCode(code) : undefined;
     if (!room || room.closed || room.hostUid !== session.uid) {
       res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
       return;
@@ -461,7 +461,7 @@ export function createGameServer(options: GameServerOptions = {}) {
 
     const pushDisplayState = () => {
       if (context.kind !== "display" || !context.displayCode || !conn.uid) return;
-      const room = manager.roomForTests(context.displayCode);
+      const room = manager.roomByCode(context.displayCode);
       const currentEpoch = room ? displayEpoch(room.code, room.createdAt) : -1;
       if (
         !room
@@ -525,7 +525,7 @@ export function createGameServer(options: GameServerOptions = {}) {
           return;
         }
         if (context.kind === "display") {
-          const room = context.displayCode ? manager.roomForTests(context.displayCode) : undefined;
+          const room = context.displayCode ? manager.roomByCode(context.displayCode) : undefined;
           const epoch = room ? displayEpoch(room.code, room.createdAt) : -1;
           if (
             !room

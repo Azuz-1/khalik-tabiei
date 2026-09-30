@@ -251,6 +251,8 @@ export type ClientMessage =
   | ({ t: "KICK_PLAYER"; uid: string } & RequestMeta)
   | ({ t: "CLOSE_ROOM" } & RequestMeta)
   | ({ t: "REMATCH" } & RequestMeta)
+  /** Owner ends the current match mid-game; everyone stays seated in the same room. */
+  | ({ t: "RETURN_TO_LOBBY" } & RequestMeta)
   /** Best-effort UX hint only; never trusted for gameplay authority or analytics. */
   | { t: "SYNC_NOVELTY"; novelty: PromptNoveltyFilter }
   | { t: "PING"; sampleId?: string; clientMonoMs?: number };

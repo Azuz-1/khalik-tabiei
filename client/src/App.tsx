@@ -105,6 +105,10 @@ export function App() {
       setConfirmRequest(null);
       return;
     }
+    if (confirmRequest.actionType === "RETURN_TO_LOBBY" && confirmRequest.pending && view.room.phase === "LOBBY") {
+      setConfirmRequest(null);
+      return;
+    }
     if ((confirmRequest.actionType === "NEXT_ROUND" || confirmRequest.actionType === "REDEAL_CHALLENGE") && confirmRequest.pending) {
       const progressed = view.room.phase !== confirmRequest.phaseBaseline ||
         view.room.currentRound !== confirmRequest.roundBaseline ||
@@ -255,11 +259,11 @@ export function App() {
             <RoomExitButton
               label="إنهاء اللعبة"
               onClick={() => openConfirm({
-                title: "إنهاء اللعبة؟",
-                description: "بتنقفل الغرفة على الكل وتنتهي اللعبة الحالية.",
-                confirmLabel: "إنهاء اللعبة",
-                actionType: "CLOSE_ROOM",
-                run: actions.closeRoom,
+                title: "إنهاء اللعبة الحالية؟",
+                description: "بترجعون كلكم لشاشة الانتظار في نفس الغرفة وبنفس اللاعبين، وتقدر تغيّر الإعدادات وتبدأ لعبة جديدة. نقاط اللعبة الحالية ما تنحسب. ولو تبي تقفل الغرفة نهائيًا، تلقى «إغلاق الغرفة» في شاشة الانتظار.",
+                confirmLabel: "إنهاء والرجوع للانتظار",
+                actionType: "RETURN_TO_LOBBY",
+                run: actions.returnToLobby,
               })}
             />
           ) : null}

@@ -63,6 +63,8 @@ const ACTION_TIMEOUT_MS = 10_000;
 const HEARTBEAT_MS = 10_000;
 const STALE_BACKGROUND_MS = 45_000;
 const STALE_HEARTBEAT_MS = 25_000;
+/** After resume/online, an OPEN socket must prove it is alive this quickly. */
+const LIVENESS_PROBE_MS = 3_000;
 
 function set(patch: Partial<GameState>): void {
   state = { ...state, ...patch };
@@ -165,6 +167,7 @@ function actionCompleted(entry: PendingAction, view: ClientView, previous: Clien
     case "KICK_PLAYER":
       return !view.players.some((player) => player.uid === message.uid);
     case "REMATCH":
+    case "RETURN_TO_LOBBY":
       return view.room.phase === "LOBBY" && view.room.currentRound === 0;
     case "LEAVE_ROOM":
     case "CLOSE_ROOM":
@@ -184,6 +187,28 @@ function sendClockSample(socket: WebSocket): void {
   const clientMonoMs = serverClock.beginSample(sampleId);
   try { socket.send(JSON.stringify({ t: "PING", sampleId, clientMonoMs } satisfies ClientMessage)); }
   catch { recoverSocket(socket, "heartbeat send failed"); }
+}
+
+let livenessProbeTimer: number | undefined;
+
+/**
+ * A socket can look OPEN after the phone slept or switched networks while its
+ * path is already dead. On resume/online, ping at once and recover if nothing
+ * arrives within LIVENESS_PROBE_MS instead of waiting for the slow heartbeat.
+ */
+function probeLiveness(): void {
+  const socket = ws;
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    connect();
+    return;
+  }
+  if (state.status !== "online") return;
+  const probeStartedAt = performance.now();
+  sendClockSample(socket);
+  window.clearTimeout(livenessProbeTimer);
+  livenessProbeTimer = window.setTimeout(() => {
+    if (socket === ws && lastInboundMono < probeStartedAt) recoverSocket(socket, "liveness probe timeout");
+  }, LIVENESS_PROBE_MS);
 }
 
 function syncPromptNovelty(socket: WebSocket, view: ClientView): void {
@@ -472,12 +497,14 @@ if (typeof window !== "undefined") {
       window.clearInterval(heartbeatTimer);
       connect();
     } else {
-      sendClockSample(socket);
+      probeLiveness();
       window.setTimeout(() => sendClockSample(socket), 350);
       window.setTimeout(() => sendClockSample(socket), 1_000);
     }
   });
-  window.addEventListener("online", connect);
+  window.addEventListener("online", probeLiveness);
+  // Restoring a page from the back/forward cache fires pageshow, not visibilitychange.
+  window.addEventListener("pageshow", probeLiveness);
 
   window.addEventListener("offline", () => {
     // Losing connectivity does not close an idle WebSocket: nothing is flowing,
@@ -527,7 +554,9 @@ export const actions = {
     const view = state.view;
     if (!view || view.room.phase !== "VOTING" || !voteContext || voteContext !== view.voteContext || view.myVoteSubmitted ||
       !view.voteTargets?.some((target) => target.uid === targetUid) ||
-      (view.room.phaseEndsAt !== undefined && serverClock.now() >= view.room.phaseEndsAt)) {
+      // Only pre-empt the deadline with a server-anchored clock. An unsynchronized
+      // device clock can be far off; the server's own deadline stays authoritative.
+      (view.room.phaseEndsAt !== undefined && serverClock.isSynchronized() && serverClock.now() >= view.room.phaseEndsAt)) {
       feedback("التصويت هذا مو متاح الحين. انتظر تحديث حالة اللعبة.");
       return null;
     }
@@ -537,4 +566,5 @@ export const actions = {
   kick: (uid: string) => sendAction({ t: "KICK_PLAYER", uid }),
   closeRoom: () => sendAction({ t: "CLOSE_ROOM" }),
   rematch: () => sendAction({ t: "REMATCH" }),
+  returnToLobby: () => sendAction({ t: "RETURN_TO_LOBBY" }),
 };
