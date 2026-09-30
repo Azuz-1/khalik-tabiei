@@ -3,8 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import express from "express";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
@@ -92,6 +91,14 @@ function bearerSecret(value: string | undefined): string | null {
 /** Replaces the build placeholder with the configured origin (empty when unset). */
 export function withPublicOrigin(html: string, origin: string | null | undefined): string {
   return html.replaceAll("__PUBLIC_ORIGIN__", origin ?? "");
+}
+
+function loadIndexHtml(origin: string | null | undefined): string | null {
+  try {
+    return withPublicOrigin(readFileSync(join(clientDist, "index.html"), "utf8"), origin);
+  } catch {
+    return null;
+  }
 }
 
 export function createGameServer(options: GameServerOptions = {}) {
@@ -395,17 +402,14 @@ export function createGameServer(options: GameServerOptions = {}) {
   // iMessage) get an absolute og:image URL; crawlers ignore relative ones.
   app.get("/index.html", (_req, res) => res.redirect(301, "/"));
   app.use(express.static(clientDist, { index: false }));
-  let indexHtml: string | null = null;
-  app.get("*", async (req, res) => {
+  // Read once at startup: request handlers never touch the file system.
+  const indexHtml = loadIndexHtml(config.publicOrigin);
+  app.get("*", (req, res) => {
     const ip = clientIp(req, config.clientIpMode);
     if (!abuse.allowHttpFallback(ip)) return void res.status(429).type("text/plain").send("Too Many Requests");
-    try {
-      indexHtml ??= withPublicOrigin(await readFile(join(clientDist, "index.html"), "utf8"), config.publicOrigin);
-      res.setHeader("Cache-Control", "no-cache");
-      res.type("html").send(indexHtml);
-    } catch {
-      if (!res.headersSent) res.status(503).send("Client build unavailable.");
-    }
+    if (indexHtml === null) return void res.status(503).send("Client build unavailable.");
+    res.setHeader("Cache-Control", "no-cache");
+    res.type("html").send(indexHtml);
   });
 
   server.on("upgrade", (req, socket, head) => {
