@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -133,8 +134,8 @@ test("all participants voting resolves immediately before the global voting time
     const votingDeadline = setup.room.phaseEndsAt!;
     const impostor = setup.players.find((player) => player.uid === setup.room.round!.impostorUid)!;
     const normals = setup.players.filter((player) => player.uid !== impostor.uid);
-    setup.manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
-    for (const normal of normals) setup.manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(setup.manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+    for (const normal of normals) submitVoteWithContext(setup.manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     assert.equal(setup.room.phase, "RESULT");
     assert.ok(Date.now() < votingDeadline, "early resolution should not wait for the 15-second timer");
     assert.equal(setup.room.round!.abstainedUids?.size, 0);
@@ -204,7 +205,7 @@ test("voting timeout records aggregate abstentions and one cast vote can catch a
     await readyToVoting(setup);
     const impostor = setup.players.find((player) => player.uid === setup.room.round!.impostorUid)!;
     const voter = setup.players.find((player) => player.uid !== impostor.uid)!;
-    setup.manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(setup.manager, voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     await waitForPhase(setup.room, "RESULT");
 
     const round = setup.room.round!;
@@ -280,8 +281,8 @@ test("full reveal stays stable until the host explicitly advances", async () => 
     await readyToVoting(setup);
     const impostor = setup.players.find((player) => player.uid === setup.room.round!.impostorUid)!;
     const normals = setup.players.filter((player) => player.uid !== impostor.uid);
-    for (const normal of normals) setup.manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-    setup.manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+    for (const normal of normals) submitVoteWithContext(setup.manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(setup.manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
     assert.equal(setup.room.phase, "RESULT");
     assert.equal(setup.room.round!.roundComplete, true);
     assert.equal(setup.room.phaseEndsAt, undefined);

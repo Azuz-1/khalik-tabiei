@@ -1,0 +1,28 @@
+[
+  {
+    "label": "khalik-baseline",
+    "jsChunks": 13,
+    "allJsBytes": 316078,
+    "allJsGzipBytes": 104208,
+    "entry": [
+      [
+        "index-B7Xvyuv5.js",
+        151944,
+        49674
+      ]
+    ]
+  },
+  {
+    "label": "khalik-tabiei",
+    "jsChunks": 13,
+    "allJsBytes": 320092,
+    "allJsGzipBytes": 105950,
+    "entry": [
+      [
+        "index-lMWbF-d0.js",
+        154117,
+        50754
+      ]
+    ]
+  }
+]

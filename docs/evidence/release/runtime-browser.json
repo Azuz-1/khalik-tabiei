@@ -1,0 +1,227 @@
+{
+  "config": {
+    "configFile": "/workspace/scratch/aa60808fbb3a/khalik-tabiei/playwright.release.config.mjs",
+    "rootDir": "/workspace/scratch/aa60808fbb3a/khalik-tabiei/browser-tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/workspace/scratch/aa60808fbb3a/khalik-tabiei/test-results/browser",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/workspace/scratch/aa60808fbb3a/khalik-tabiei/browser-tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/workspace/scratch/aa60808fbb3a/evidence/runtime-browser.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": {
+      "command": "npm start",
+      "url": "http://127.0.0.1:8085/healthz",
+      "timeout": 30000,
+      "reuseExistingServer": false,
+      "env": {
+        "PUBLIC_ORIGIN": "http://127.0.0.1:8085",
+        "SESSION_SECRET": "browser-test-secret-0123456789-abcdef",
+        "NODE_ENV": "development",
+        "PORT": "8085"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "runtime-diagnostics.spec.mjs",
+      "file": "runtime-diagnostics.spec.mjs",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "unsupported UUID API and denied session storage do not prevent Home boot",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6388,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T09:25:03.232Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "061c3e44a65d436f8e09-373cefddea46c00b7451",
+          "file": "runtime-diagnostics.spec.mjs",
+          "line": 3,
+          "column": 1
+        },
+        {
+          "title": "a render failure shows recoverable Arabic UI and reload restores Home",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6021,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T09:25:09.763Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "061c3e44a65d436f8e09-fe4d34b8ca0cb4a2bb34",
+          "file": "runtime-diagnostics.spec.mjs",
+          "line": 22,
+          "column": 1
+        },
+        {
+          "title": "a failed participant chunk import shows startup recovery and can be retried",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6610,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T09:25:15.797Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "061c3e44a65d436f8e09-3807c982cdfca29b45bf",
+          "file": "runtime-diagnostics.spec.mjs",
+          "line": 44,
+          "column": 1
+        },
+        {
+          "title": "runtime diagnostics stay bounded and strip private URLs and exception names",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5442,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T09:25:22.419Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "061c3e44a65d436f8e09-18447dd363750187f650",
+          "file": "runtime-diagnostics.spec.mjs",
+          "line": 60,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-30T09:25:01.273Z",
+    "duration": 26840.728000000003,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

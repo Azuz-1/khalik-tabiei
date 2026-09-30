@@ -1,0 +1,12 @@
+[analytics] player_reconnected {"roomSessionId":"b4a35420-f85d-4c3c-a410-384b10ce00bd","matchId":"948c6579-3bb4-42ed-b7cd-1218bfb6b860","matchOrdinal":1,"phase":"VOTING","duringMatch":true,"analyticsPlayerId":"ap2_fad65a7227d42e403705beb50b4fdcf3"}
+[analytics] challenge_completed {"roomSessionId":"b4a35420-f85d-4c3c-a410-384b10ce00bd","matchId":"948c6579-3bb4-42ed-b7cd-1218bfb6b860","matchOrdinal":1,"targetChallenges":9,"challengeOrdinal":1,"challengeWithinStint":1,"challengeIndex":1,"stintOrdinal":1,"stintMaxChallenges":2,"participantCount":4,"votesCast":4,"abstentionCount":0,"timedOut":false,"maxVotesOnOneTarget":3,"mode":"POINT","promptId":"P01","caught":true,"stintComplete":true,"impostorVotes":3,"impostorVoted":true,"singleVoteCatch":false,"requiredVotes":3,"topNormalVotes":1,"distinctTargets":2,"voteMargin":0,"allNormalsVotedImpostor":true,"readySeconds":0,"discussionSeconds":0,"votingSeconds":0,"challengeSeconds":0,"rulesVersion":"competitive-cast-vote-majority-v4","contentVersion":"imitation-900-novelty-v1"}
+SESSION_SECRET is missing/weak; using an ephemeral development secret.
+✔ malformed WebSocket upgrades release their capacity lease (25.023641ms)
+ℹ tests 401
+ℹ suites 0
+ℹ pass 401
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6556.516104

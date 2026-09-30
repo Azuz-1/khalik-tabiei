@@ -25,7 +25,8 @@ test("voting is compact, confirms explicitly, and becomes a waiting state after 
     "تأكيد التصويت",
     "تم تسجيل صوتك",
     "بانتظار الباقين…",
-    "actions.submitVote(picked)",
+    "actions.submitVote(picked, view.voteContext)",
+    "pendingActions.includes(\"SUBMIT_VOTE\")",
   ]) {
     assert.ok(player.includes(marker), `Player voting must keep ${marker}`);
   }

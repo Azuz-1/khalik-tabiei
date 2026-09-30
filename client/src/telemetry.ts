@@ -1,3 +1,5 @@
+import { assetName, errorClass, sourceCoordinate } from "./clientErrorDiagnostics.js";
+
 type ClientEvent =
   | "client_started"
   | "client_performance"
@@ -12,15 +14,32 @@ const CLIENT_SESSION_STORAGE_KEY = "kt_analytics_client_session_v1";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function newClientSessionId(): string {
+  try {
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  } catch { /* older browser or restricted context */ }
+  const bytes = new Uint8Array(16);
+  try {
+    crypto.getRandomValues(bytes);
+  } catch {
+    // A page-session analytics label is never used for authentication/security.
+    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function loadClientSessionId(): string {
   try {
     const existing = sessionStorage.getItem(CLIENT_SESSION_STORAGE_KEY);
     if (existing && UUID_RE.test(existing)) return existing;
-    const next = crypto.randomUUID();
+    const next = newClientSessionId();
     sessionStorage.setItem(CLIENT_SESSION_STORAGE_KEY, next);
     return next;
   } catch {
-    return crypto.randomUUID();
+    return newClientSessionId();
   }
 }
 
@@ -291,10 +310,35 @@ function emitSummary(): void {
   resetSummaryWindow();
 }
 
-function emitClientError(kind: string): void {
+let errorContext = { surface: "unknown", phase: "none" };
+
+export function setClientErrorContext(surface: "home" | "host" | "player" | "spectator", phase: string): void {
+  errorContext = { surface, phase };
+}
+
+export function reportClientError(
+  kind: "runtime" | "resource" | "promise" | "react" | "bootstrap",
+  reason?: unknown,
+  source?: { filename?: string; lineno?: number; colno?: number },
+): void {
   if (errorEvents >= 10) return;
   errorEvents += 1;
-  enqueue("client_error", { kind, routeBucket: routeBucket(), online: navigator.onLine });
+  const props: Record<string, TelemetryValue> = {
+    kind, routeBucket: routeBucket(), online: navigator.onLine,
+    errorClass: errorClass(reason), surface: errorContext.surface, phase: errorContext.phase,
+  };
+  const bundle = document.querySelector<HTMLScriptElement>('script[type="module"][src]');
+  const bundleId = bundle ? assetName(bundle.src, location.origin) : undefined;
+  const sourceAsset = source?.filename ? assetName(source.filename, location.origin) : undefined;
+  if (bundleId) props.bundleId = bundleId;
+  if (sourceAsset) {
+    props.sourceAsset = sourceAsset;
+    const line = sourceCoordinate(source?.lineno);
+    const column = sourceCoordinate(source?.colno);
+    if (line !== undefined) props.line = line;
+    if (column !== undefined) props.column = column;
+  }
+  enqueue("client_error", props);
 }
 
 if (typeof window !== "undefined") {
@@ -321,8 +365,8 @@ if (typeof window !== "undefined") {
       orientationChanges = Math.min(1_000, orientationChanges + 1);
     }
   }, { passive: true });
-  window.addEventListener("error", (event) => emitClientError(event.target === window ? "runtime" : "resource"), true);
-  window.addEventListener("unhandledrejection", () => emitClientError("promise"));
+  window.addEventListener("error", (event) => reportClientError(event.target === window ? "runtime" : "resource", event.error, event), true);
+  window.addEventListener("unhandledrejection", (event) => reportClientError("promise", event.reason));
 
   window.setInterval(() => {
     emitVitals();

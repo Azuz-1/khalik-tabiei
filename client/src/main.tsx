@@ -1,11 +1,11 @@
-import { StrictMode, type ComponentType } from "react";
+import { Component, StrictMode, type ComponentType, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/tajawal/400.css";
 import "@fontsource/tajawal/500.css";
 import "@fontsource/tajawal/700.css";
 import "@fontsource/tajawal/800.css";
 import "@fontsource/tajawal/900.css";
-import "./telemetry.js";
+import { reportClientError } from "./telemetry.js";
 import "./styles.css";
 import "./c-ux.css";
 import "./game-hud.css";
@@ -50,10 +50,31 @@ async function loadRoot(): Promise<ComponentType> {
   };
 }
 
+function RuntimeRecovery() {
+  return (
+    <main className="screen stack center" role="alert">
+      <h1 className="title">صار خطأ في عرض اللعبة</h1>
+      <p className="subtitle">حدّث الصفحة ونحاول نرجعك للغرفة إذا مكانك محفوظ.</p>
+      <button type="button" className="btn btn-primary" onClick={() => location.reload()}>تحديث الصفحة</button>
+    </main>
+  );
+}
+
+class RuntimeBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: unknown) { reportClientError("react", error); }
+  render() { return this.state.failed ? <RuntimeRecovery /> : this.props.children; }
+}
+
+const root = createRoot(document.getElementById("root")!);
 void loadRoot().then((Root) => {
-  createRoot(document.getElementById("root")!).render(
+  root.render(
     <StrictMode>
-      <Root />
+      <RuntimeBoundary><Root /></RuntimeBoundary>
     </StrictMode>,
   );
+}).catch((error: unknown) => {
+  reportClientError("bootstrap", error);
+  root.render(<RuntimeRecovery />);
 });

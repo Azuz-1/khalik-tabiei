@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RoomManager } from "../src/game/roomManager.js";
@@ -37,9 +38,9 @@ async function completedIndividualResult() {
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
   for (const normal of normals) {
-    manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
   }
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0].uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0].uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, true);

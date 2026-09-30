@@ -1,0 +1,789 @@
+Executing integration.mjs (development protocol)
+Connecting competitive E2E host + 3 players…
+  ✓ single product ruleset is competitive scoring
+  ✓ match advertises exact nine-Challenge default
+  ✓ three-player impostor stint has one-Challenge maximum
+
+[first stint] C1 survival completes the three-player stint and scores immediately:
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C1: private prompt mode matches Challenge
+  ✓ C1: prompt stays secret in countdown
+  ✓ سلمان reconnect keeps the same uid
+  ✓ C1: reconnected normal restores private prompt
+  ✓ C1: prompt stays secret at ACTION
+  ✓ C1: prompt stays secret during HOLD
+  ✓ C1: prompt becomes public after HOLD
+  ✓ C1: voting starts with zero submitted ballots
+  ✓ C1: voting progress reports all participants
+  ✓ C1: live progress exposes no quorum target
+  ✓ C1: Host receives no live target tally
+  ✓ C1: player receives no live target tally
+  ✓ C1: player receives no live target tally
+  ✓ C1: player receives no live target tally
+  ✓ C1: target totals remain hidden after vote 1
+  ✓ C1: target totals remain hidden after vote 2
+  ✓ C1: one correct normal is below majority
+  ✓ C1: three-player stint completes after one Challenge
+  ✓ C1: completed one-Challenge stint reveals impostor identity
+  ✓ C1: completed stint reveals aggregate vote distribution
+  ✓ C1: completed stint reveals scoreboard
+  ✓ C1: result has no auto-advance deadline
+  ✓ HOST C1: no voterUid
+  ✓ HOST C1: no voterName
+  ✓ HOST C1: no voter-to-target mapping
+  ✓ HOST C1: no voteBreakdown
+  ✓ HOST C1: no hidden score streak state
+  ✓ HOST C1: no pending score state
+  ✓ سلمان C1: no voterUid
+  ✓ سلمان C1: no voterName
+  ✓ سلمان C1: no voter-to-target mapping
+  ✓ سلمان C1: no voteBreakdown
+  ✓ سلمان C1: no hidden score streak state
+  ✓ سلمان C1: no pending score state
+  ✓ ناصر C1: no voterUid
+  ✓ ناصر C1: no voterName
+  ✓ ناصر C1: no voter-to-target mapping
+  ✓ ناصر C1: no voteBreakdown
+  ✓ ناصر C1: no hidden score streak state
+  ✓ ناصر C1: no pending score state
+  ✓ فيصل C1: no voterUid
+  ✓ فيصل C1: no voterName
+  ✓ فيصل C1: no voter-to-target mapping
+  ✓ فيصل C1: no voteBreakdown
+  ✓ فيصل C1: no hidden score streak state
+  ✓ فيصل C1: no pending score state
+  ✓ C1 increments completed Challenge count
+  ✓ one correct vote in a one-Challenge stint gets +1
+  ✓ impostor gets +1 for surviving the one-Challenge stint
+  ✓ a new three-player stint restarts at Challenge 1
+  ✓ the new stint keeps the one-Challenge cap
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C2: private prompt mode matches Challenge
+  ✓ C2: prompt stays secret in countdown
+  ✓ C2: prompt stays secret at ACTION
+  ✓ C2: prompt stays secret during HOLD
+  ✓ C2: prompt becomes public after HOLD
+  ✓ C2: voting starts with zero submitted ballots
+  ✓ C2: voting progress reports all participants
+  ✓ C2: live progress exposes no quorum target
+  ✓ C2: Host receives no live target tally
+  ✓ C2: player receives no live target tally
+  ✓ C2: player receives no live target tally
+  ✓ C2: player receives no live target tally
+  ✓ C2: target totals remain hidden after vote 1
+  ✓ C2: target totals remain hidden after vote 2
+  ✓ C2: majority catches impostor
+  ✓ C2: catch ends impostor stint
+  ✓ C2: completed stint reveals scoreboard
+  ✓ C2: stint-end aggregate includes all participants
+  ✓ C2: full reveal waits for Host input
+  ✓ HOST C2: no voterUid
+  ✓ HOST C2: no voterName
+  ✓ HOST C2: no voter-to-target mapping
+  ✓ HOST C2: no voteBreakdown
+  ✓ HOST C2: no hidden score streak state
+  ✓ HOST C2: no pending score state
+  ✓ سلمان C2: no voterUid
+  ✓ سلمان C2: no voterName
+  ✓ سلمان C2: no voter-to-target mapping
+  ✓ سلمان C2: no voteBreakdown
+  ✓ سلمان C2: no hidden score streak state
+  ✓ سلمان C2: no pending score state
+  ✓ ناصر C2: no voterUid
+  ✓ ناصر C2: no voterName
+  ✓ ناصر C2: no voter-to-target mapping
+  ✓ ناصر C2: no voteBreakdown
+  ✓ ناصر C2: no hidden score streak state
+  ✓ ناصر C2: no pending score state
+  ✓ فيصل C2: no voterUid
+  ✓ فيصل C2: no voterName
+  ✓ فيصل C2: no voter-to-target mapping
+  ✓ فيصل C2: no voteBreakdown
+  ✓ فيصل C2: no hidden score streak state
+  ✓ فيصل C2: no pending score state
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C3: private prompt mode matches Challenge
+  ✓ C3: prompt stays secret in countdown
+  ✓ C3: prompt stays secret at ACTION
+  ✓ C3: prompt stays secret during HOLD
+  ✓ C3: prompt becomes public after HOLD
+  ✓ C3: voting starts with zero submitted ballots
+  ✓ C3: voting progress reports all participants
+  ✓ C3: live progress exposes no quorum target
+  ✓ C3: Host receives no live target tally
+  ✓ C3: player receives no live target tally
+  ✓ C3: player receives no live target tally
+  ✓ C3: player receives no live target tally
+  ✓ C3: target totals remain hidden after vote 1
+  ✓ C3: target totals remain hidden after vote 2
+  ✓ C3: majority catches impostor
+  ✓ C3: catch ends impostor stint
+  ✓ C3: completed stint reveals scoreboard
+  ✓ C3: stint-end aggregate includes all participants
+  ✓ C3: full reveal waits for Host input
+  ✓ HOST C3: no voterUid
+  ✓ HOST C3: no voterName
+  ✓ HOST C3: no voter-to-target mapping
+  ✓ HOST C3: no voteBreakdown
+  ✓ HOST C3: no hidden score streak state
+  ✓ HOST C3: no pending score state
+  ✓ سلمان C3: no voterUid
+  ✓ سلمان C3: no voterName
+  ✓ سلمان C3: no voter-to-target mapping
+  ✓ سلمان C3: no voteBreakdown
+  ✓ سلمان C3: no hidden score streak state
+  ✓ سلمان C3: no pending score state
+  ✓ ناصر C3: no voterUid
+  ✓ ناصر C3: no voterName
+  ✓ ناصر C3: no voter-to-target mapping
+  ✓ ناصر C3: no voteBreakdown
+  ✓ ناصر C3: no hidden score streak state
+  ✓ ناصر C3: no pending score state
+  ✓ فيصل C3: no voterUid
+  ✓ فيصل C3: no voterName
+  ✓ فيصل C3: no voter-to-target mapping
+  ✓ فيصل C3: no voteBreakdown
+  ✓ فيصل C3: no hidden score streak state
+  ✓ فيصل C3: no pending score state
+  ✓ completed Challenge count reaches 3
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C4: private prompt mode matches Challenge
+  ✓ C4: prompt stays secret in countdown
+  ✓ C4: prompt stays secret at ACTION
+  ✓ C4: prompt stays secret during HOLD
+  ✓ C4: prompt becomes public after HOLD
+  ✓ C4: voting starts with zero submitted ballots
+  ✓ C4: voting progress reports all participants
+  ✓ C4: live progress exposes no quorum target
+  ✓ C4: Host receives no live target tally
+  ✓ C4: player receives no live target tally
+  ✓ C4: player receives no live target tally
+  ✓ C4: player receives no live target tally
+  ✓ C4: target totals remain hidden after vote 1
+  ✓ C4: target totals remain hidden after vote 2
+  ✓ C4: majority catches impostor
+  ✓ C4: catch ends impostor stint
+  ✓ C4: completed stint reveals scoreboard
+  ✓ C4: stint-end aggregate includes all participants
+  ✓ C4: full reveal waits for Host input
+  ✓ HOST C4: no voterUid
+  ✓ HOST C4: no voterName
+  ✓ HOST C4: no voter-to-target mapping
+  ✓ HOST C4: no voteBreakdown
+  ✓ HOST C4: no hidden score streak state
+  ✓ HOST C4: no pending score state
+  ✓ سلمان C4: no voterUid
+  ✓ سلمان C4: no voterName
+  ✓ سلمان C4: no voter-to-target mapping
+  ✓ سلمان C4: no voteBreakdown
+  ✓ سلمان C4: no hidden score streak state
+  ✓ سلمان C4: no pending score state
+  ✓ ناصر C4: no voterUid
+  ✓ ناصر C4: no voterName
+  ✓ ناصر C4: no voter-to-target mapping
+  ✓ ناصر C4: no voteBreakdown
+  ✓ ناصر C4: no hidden score streak state
+  ✓ ناصر C4: no pending score state
+  ✓ فيصل C4: no voterUid
+  ✓ فيصل C4: no voterName
+  ✓ فيصل C4: no voter-to-target mapping
+  ✓ فيصل C4: no voteBreakdown
+  ✓ فيصل C4: no hidden score streak state
+  ✓ فيصل C4: no pending score state
+  ✓ completed Challenge count reaches 4
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C5: private prompt mode matches Challenge
+  ✓ C5: prompt stays secret in countdown
+  ✓ C5: prompt stays secret at ACTION
+  ✓ C5: prompt stays secret during HOLD
+  ✓ C5: prompt becomes public after HOLD
+  ✓ C5: voting starts with zero submitted ballots
+  ✓ C5: voting progress reports all participants
+  ✓ C5: live progress exposes no quorum target
+  ✓ C5: Host receives no live target tally
+  ✓ C5: player receives no live target tally
+  ✓ C5: player receives no live target tally
+  ✓ C5: player receives no live target tally
+  ✓ C5: target totals remain hidden after vote 1
+  ✓ C5: target totals remain hidden after vote 2
+  ✓ C5: majority catches impostor
+  ✓ C5: catch ends impostor stint
+  ✓ C5: completed stint reveals scoreboard
+  ✓ C5: stint-end aggregate includes all participants
+  ✓ C5: full reveal waits for Host input
+  ✓ HOST C5: no voterUid
+  ✓ HOST C5: no voterName
+  ✓ HOST C5: no voter-to-target mapping
+  ✓ HOST C5: no voteBreakdown
+  ✓ HOST C5: no hidden score streak state
+  ✓ HOST C5: no pending score state
+  ✓ سلمان C5: no voterUid
+  ✓ سلمان C5: no voterName
+  ✓ سلمان C5: no voter-to-target mapping
+  ✓ سلمان C5: no voteBreakdown
+  ✓ سلمان C5: no hidden score streak state
+  ✓ سلمان C5: no pending score state
+  ✓ ناصر C5: no voterUid
+  ✓ ناصر C5: no voterName
+  ✓ ناصر C5: no voter-to-target mapping
+  ✓ ناصر C5: no voteBreakdown
+  ✓ ناصر C5: no hidden score streak state
+  ✓ ناصر C5: no pending score state
+  ✓ فيصل C5: no voterUid
+  ✓ فيصل C5: no voterName
+  ✓ فيصل C5: no voter-to-target mapping
+  ✓ فيصل C5: no voteBreakdown
+  ✓ فيصل C5: no hidden score streak state
+  ✓ فيصل C5: no pending score state
+  ✓ completed Challenge count reaches 5
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C6: private prompt mode matches Challenge
+  ✓ C6: prompt stays secret in countdown
+  ✓ C6: prompt stays secret at ACTION
+  ✓ C6: prompt stays secret during HOLD
+  ✓ C6: prompt becomes public after HOLD
+  ✓ C6: voting starts with zero submitted ballots
+  ✓ C6: voting progress reports all participants
+  ✓ C6: live progress exposes no quorum target
+  ✓ C6: Host receives no live target tally
+  ✓ C6: player receives no live target tally
+  ✓ C6: player receives no live target tally
+  ✓ C6: player receives no live target tally
+  ✓ C6: target totals remain hidden after vote 1
+  ✓ C6: target totals remain hidden after vote 2
+  ✓ C6: majority catches impostor
+  ✓ C6: catch ends impostor stint
+  ✓ C6: completed stint reveals scoreboard
+  ✓ C6: stint-end aggregate includes all participants
+  ✓ C6: full reveal waits for Host input
+  ✓ HOST C6: no voterUid
+  ✓ HOST C6: no voterName
+  ✓ HOST C6: no voter-to-target mapping
+  ✓ HOST C6: no voteBreakdown
+  ✓ HOST C6: no hidden score streak state
+  ✓ HOST C6: no pending score state
+  ✓ سلمان C6: no voterUid
+  ✓ سلمان C6: no voterName
+  ✓ سلمان C6: no voter-to-target mapping
+  ✓ سلمان C6: no voteBreakdown
+  ✓ سلمان C6: no hidden score streak state
+  ✓ سلمان C6: no pending score state
+  ✓ ناصر C6: no voterUid
+  ✓ ناصر C6: no voterName
+  ✓ ناصر C6: no voter-to-target mapping
+  ✓ ناصر C6: no voteBreakdown
+  ✓ ناصر C6: no hidden score streak state
+  ✓ ناصر C6: no pending score state
+  ✓ فيصل C6: no voterUid
+  ✓ فيصل C6: no voterName
+  ✓ فيصل C6: no voter-to-target mapping
+  ✓ فيصل C6: no voteBreakdown
+  ✓ فيصل C6: no hidden score streak state
+  ✓ فيصل C6: no pending score state
+  ✓ completed Challenge count reaches 6
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C7: private prompt mode matches Challenge
+  ✓ C7: prompt stays secret in countdown
+  ✓ C7: prompt stays secret at ACTION
+  ✓ C7: prompt stays secret during HOLD
+  ✓ C7: prompt becomes public after HOLD
+  ✓ C7: voting starts with zero submitted ballots
+  ✓ C7: voting progress reports all participants
+  ✓ C7: live progress exposes no quorum target
+  ✓ C7: Host receives no live target tally
+  ✓ C7: player receives no live target tally
+  ✓ C7: player receives no live target tally
+  ✓ C7: player receives no live target tally
+  ✓ C7: target totals remain hidden after vote 1
+  ✓ C7: target totals remain hidden after vote 2
+  ✓ C7: majority catches impostor
+  ✓ C7: catch ends impostor stint
+  ✓ C7: completed stint reveals scoreboard
+  ✓ C7: stint-end aggregate includes all participants
+  ✓ C7: full reveal waits for Host input
+  ✓ HOST C7: no voterUid
+  ✓ HOST C7: no voterName
+  ✓ HOST C7: no voter-to-target mapping
+  ✓ HOST C7: no voteBreakdown
+  ✓ HOST C7: no hidden score streak state
+  ✓ HOST C7: no pending score state
+  ✓ سلمان C7: no voterUid
+  ✓ سلمان C7: no voterName
+  ✓ سلمان C7: no voter-to-target mapping
+  ✓ سلمان C7: no voteBreakdown
+  ✓ سلمان C7: no hidden score streak state
+  ✓ سلمان C7: no pending score state
+  ✓ ناصر C7: no voterUid
+  ✓ ناصر C7: no voterName
+  ✓ ناصر C7: no voter-to-target mapping
+  ✓ ناصر C7: no voteBreakdown
+  ✓ ناصر C7: no hidden score streak state
+  ✓ ناصر C7: no pending score state
+  ✓ فيصل C7: no voterUid
+  ✓ فيصل C7: no voterName
+  ✓ فيصل C7: no voter-to-target mapping
+  ✓ فيصل C7: no voteBreakdown
+  ✓ فيصل C7: no hidden score streak state
+  ✓ فيصل C7: no pending score state
+  ✓ completed Challenge count reaches 7
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C8: private prompt mode matches Challenge
+  ✓ C8: prompt stays secret in countdown
+  ✓ C8: prompt stays secret at ACTION
+  ✓ C8: prompt stays secret during HOLD
+  ✓ C8: prompt becomes public after HOLD
+  ✓ C8: voting starts with zero submitted ballots
+  ✓ C8: voting progress reports all participants
+  ✓ C8: live progress exposes no quorum target
+  ✓ C8: Host receives no live target tally
+  ✓ C8: player receives no live target tally
+  ✓ C8: player receives no live target tally
+  ✓ C8: player receives no live target tally
+  ✓ C8: target totals remain hidden after vote 1
+  ✓ C8: target totals remain hidden after vote 2
+  ✓ C8: majority catches impostor
+  ✓ C8: catch ends impostor stint
+  ✓ C8: completed stint reveals scoreboard
+  ✓ C8: stint-end aggregate includes all participants
+  ✓ C8: full reveal waits for Host input
+  ✓ HOST C8: no voterUid
+  ✓ HOST C8: no voterName
+  ✓ HOST C8: no voter-to-target mapping
+  ✓ HOST C8: no voteBreakdown
+  ✓ HOST C8: no hidden score streak state
+  ✓ HOST C8: no pending score state
+  ✓ سلمان C8: no voterUid
+  ✓ سلمان C8: no voterName
+  ✓ سلمان C8: no voter-to-target mapping
+  ✓ سلمان C8: no voteBreakdown
+  ✓ سلمان C8: no hidden score streak state
+  ✓ سلمان C8: no pending score state
+  ✓ ناصر C8: no voterUid
+  ✓ ناصر C8: no voterName
+  ✓ ناصر C8: no voter-to-target mapping
+  ✓ ناصر C8: no voteBreakdown
+  ✓ ناصر C8: no hidden score streak state
+  ✓ ناصر C8: no pending score state
+  ✓ فيصل C8: no voterUid
+  ✓ فيصل C8: no voterName
+  ✓ فيصل C8: no voter-to-target mapping
+  ✓ فيصل C8: no voteBreakdown
+  ✓ فيصل C8: no hidden score streak state
+  ✓ فيصل C8: no pending score state
+  ✓ completed Challenge count reaches 8
+  ✓ exactly one player is privately marked as the impostor
+  ✓ the other two players are privately normal
+  ✓ normal receives a private prompt
+  ✓ normals share the current prompt
+  ✓ impostor receives no private prompt
+  ✓ Host receives no private prompt
+  ✓ prompt is not public in QUESTION
+  ✓ impostor raw wire contains no secret prompt text
+  ✓ impostor raw wire contains no promptId
+  ✓ Host raw wire contains no secret prompt text
+  ✓ C9: private prompt mode matches Challenge
+  ✓ C9: prompt stays secret in countdown
+  ✓ C9: prompt stays secret at ACTION
+  ✓ C9: prompt stays secret during HOLD
+  ✓ C9: prompt becomes public after HOLD
+  ✓ C9: voting starts with zero submitted ballots
+  ✓ C9: voting progress reports all participants
+  ✓ C9: live progress exposes no quorum target
+  ✓ C9: Host receives no live target tally
+  ✓ C9: player receives no live target tally
+  ✓ C9: player receives no live target tally
+  ✓ C9: player receives no live target tally
+  ✓ C9: target totals remain hidden after vote 1
+  ✓ C9: target totals remain hidden after vote 2
+  ✓ C9: majority catches impostor
+  ✓ C9: catch ends impostor stint
+  ✓ C9: completed stint reveals scoreboard
+  ✓ C9: stint-end aggregate includes all participants
+  ✓ C9: full reveal waits for Host input
+  ✓ HOST C9: no voterUid
+  ✓ HOST C9: no voterName
+  ✓ HOST C9: no voter-to-target mapping
+  ✓ HOST C9: no voteBreakdown
+  ✓ HOST C9: no hidden score streak state
+  ✓ HOST C9: no pending score state
+  ✓ سلمان C9: no voterUid
+  ✓ سلمان C9: no voterName
+  ✓ سلمان C9: no voter-to-target mapping
+  ✓ سلمان C9: no voteBreakdown
+  ✓ سلمان C9: no hidden score streak state
+  ✓ سلمان C9: no pending score state
+  ✓ ناصر C9: no voterUid
+  ✓ ناصر C9: no voterName
+  ✓ ناصر C9: no voter-to-target mapping
+  ✓ ناصر C9: no voteBreakdown
+  ✓ ناصر C9: no hidden score streak state
+  ✓ ناصر C9: no pending score state
+  ✓ فيصل C9: no voterUid
+  ✓ فيصل C9: no voterName
+  ✓ فيصل C9: no voter-to-target mapping
+  ✓ فيصل C9: no voteBreakdown
+  ✓ فيصل C9: no hidden score streak state
+  ✓ فيصل C9: no pending score state
+  ✓ completed Challenge count reaches 9
+  ✓ GAME_OVER keeps nine-Challenge target
+  ✓ GAME_OVER reports exactly nine completed Challenges
+  ✓ GAME_OVER exposes final ranking
+  ✓ final ranking has numeric ranks
+  ✓ HOST GAME_OVER: no voterUid
+  ✓ HOST GAME_OVER: no voterName
+  ✓ HOST GAME_OVER: no voter-to-target mapping
+  ✓ HOST GAME_OVER: no voteBreakdown
+  ✓ HOST GAME_OVER: no hidden score streak state
+  ✓ HOST GAME_OVER: no pending score state
+  ✓ HOST: promptId never appears on wire
+  ✓ سلمان GAME_OVER: no voterUid
+  ✓ سلمان GAME_OVER: no voterName
+  ✓ سلمان GAME_OVER: no voter-to-target mapping
+  ✓ سلمان GAME_OVER: no voteBreakdown
+  ✓ سلمان GAME_OVER: no hidden score streak state
+  ✓ سلمان GAME_OVER: no pending score state
+  ✓ سلمان: promptId never appears on wire
+  ✓ ناصر GAME_OVER: no voterUid
+  ✓ ناصر GAME_OVER: no voterName
+  ✓ ناصر GAME_OVER: no voter-to-target mapping
+  ✓ ناصر GAME_OVER: no voteBreakdown
+  ✓ ناصر GAME_OVER: no hidden score streak state
+  ✓ ناصر GAME_OVER: no pending score state
+  ✓ ناصر: promptId never appears on wire
+  ✓ فيصل GAME_OVER: no voterUid
+  ✓ فيصل GAME_OVER: no voterName
+  ✓ فيصل GAME_OVER: no voter-to-target mapping
+  ✓ فيصل GAME_OVER: no voteBreakdown
+  ✓ فيصل GAME_OVER: no hidden score streak state
+  ✓ فيصل GAME_OVER: no pending score state
+  ✓ فيصل: promptId never appears on wire
+
+COMPETITIVE E2E PASSED
+Executing integration-individual.mjs (development protocol)
+Connecting five-player competitive scoring E2E…
+  ✓ one competitive ruleset is active
+  ✓ five-player stint allows three Challenges
+  ✓ five-player stint has exactly one private impostor
+  ✓ five-player stint has four normals
+  ✓ C1: normal prompt exists
+  ✓ C1: normals share prompt
+  ✓ C1: impostor has no prompt
+  ✓ C1: Host has no prompt before reveal
+  ✓ C1: impostor raw wire has no secret prompt
+  ✓ C1: impostor raw wire has no promptId
+  ✓ C1: prompt reveals only after physical sequence
+  ✓ C1: voting starts with zero submitted ballots
+  ✓ C1: voting progress reports all participants
+  ✓ C1: live progress exposes no quorum target
+  ✓ C1: Host sees no live target totals
+  ✓ C1: result waits for the Host
+  ✓ HOST-SCORING C1: no voterUid
+  ✓ HOST-SCORING C1: no voterName
+  ✓ HOST-SCORING C1: no voter-to-target mapping
+  ✓ HOST-SCORING C1: no voteBreakdown
+  ✓ HOST-SCORING C1: no hidden streak state
+  ✓ HOST-SCORING C1: no pending score state
+  ✓ سلمان C1: no voterUid
+  ✓ سلمان C1: no voterName
+  ✓ سلمان C1: no voter-to-target mapping
+  ✓ سلمان C1: no voteBreakdown
+  ✓ سلمان C1: no hidden streak state
+  ✓ سلمان C1: no pending score state
+  ✓ ناصر C1: no voterUid
+  ✓ ناصر C1: no voterName
+  ✓ ناصر C1: no voter-to-target mapping
+  ✓ ناصر C1: no voteBreakdown
+  ✓ ناصر C1: no hidden streak state
+  ✓ ناصر C1: no pending score state
+  ✓ فيصل C1: no voterUid
+  ✓ فيصل C1: no voterName
+  ✓ فيصل C1: no voter-to-target mapping
+  ✓ فيصل C1: no voteBreakdown
+  ✓ فيصل C1: no hidden streak state
+  ✓ فيصل C1: no pending score state
+  ✓ خالد C1: no voterUid
+  ✓ خالد C1: no voterName
+  ✓ خالد C1: no voter-to-target mapping
+  ✓ خالد C1: no voteBreakdown
+  ✓ خالد C1: no hidden streak state
+  ✓ خالد C1: no pending score state
+  ✓ تركي C1: no voterUid
+  ✓ تركي C1: no voterName
+  ✓ تركي C1: no voter-to-target mapping
+  ✓ تركي C1: no voteBreakdown
+  ✓ تركي C1: no hidden streak state
+  ✓ تركي C1: no pending score state
+  ✓ one correct vote is below majority in C1
+  ✓ stint continues after C1
+  ✓ C1 keeps all scoring hidden
+  ✓ C1 keeps aggregate distribution hidden
+  ✓ Challenge 2: Host is advancing from RESULT
+  ✓ five-player stint has exactly one private impostor
+  ✓ five-player stint has four normals
+  ✓ C2: normal prompt exists
+  ✓ C2: normals share prompt
+  ✓ C2: impostor has no prompt
+  ✓ C2: Host has no prompt before reveal
+  ✓ C2: impostor raw wire has no secret prompt
+  ✓ C2: impostor raw wire has no promptId
+  ✓ C2: prompt reveals only after physical sequence
+  ✓ same impostor remains in C2
+  ✓ normal roster remains stable in stint
+  ✓ C2: voting starts with zero submitted ballots
+  ✓ C2: voting progress reports all participants
+  ✓ C2: live progress exposes no quorum target
+  ✓ C2: Host sees no live target totals
+  ✓ C2: result waits for the Host
+  ✓ HOST-SCORING C2: no voterUid
+  ✓ HOST-SCORING C2: no voterName
+  ✓ HOST-SCORING C2: no voter-to-target mapping
+  ✓ HOST-SCORING C2: no voteBreakdown
+  ✓ HOST-SCORING C2: no hidden streak state
+  ✓ HOST-SCORING C2: no pending score state
+  ✓ سلمان C2: no voterUid
+  ✓ سلمان C2: no voterName
+  ✓ سلمان C2: no voter-to-target mapping
+  ✓ سلمان C2: no voteBreakdown
+  ✓ سلمان C2: no hidden streak state
+  ✓ سلمان C2: no pending score state
+  ✓ ناصر C2: no voterUid
+  ✓ ناصر C2: no voterName
+  ✓ ناصر C2: no voter-to-target mapping
+  ✓ ناصر C2: no voteBreakdown
+  ✓ ناصر C2: no hidden streak state
+  ✓ ناصر C2: no pending score state
+  ✓ فيصل C2: no voterUid
+  ✓ فيصل C2: no voterName
+  ✓ فيصل C2: no voter-to-target mapping
+  ✓ فيصل C2: no voteBreakdown
+  ✓ فيصل C2: no hidden streak state
+  ✓ فيصل C2: no pending score state
+  ✓ خالد C2: no voterUid
+  ✓ خالد C2: no voterName
+  ✓ خالد C2: no voter-to-target mapping
+  ✓ خالد C2: no voteBreakdown
+  ✓ خالد C2: no hidden streak state
+  ✓ خالد C2: no pending score state
+  ✓ تركي C2: no voterUid
+  ✓ تركي C2: no voterName
+  ✓ تركي C2: no voter-to-target mapping
+  ✓ تركي C2: no voteBreakdown
+  ✓ تركي C2: no hidden streak state
+  ✓ تركي C2: no pending score state
+  ✓ two correct votes are still below four-player majority
+  ✓ stint continues after C2
+  ✓ C2 still hides scoring
+  ✓ Challenge 3: Host is advancing from RESULT
+  ✓ five-player stint has exactly one private impostor
+  ✓ five-player stint has four normals
+  ✓ C3: normal prompt exists
+  ✓ C3: normals share prompt
+  ✓ C3: impostor has no prompt
+  ✓ C3: Host has no prompt before reveal
+  ✓ C3: impostor raw wire has no secret prompt
+  ✓ C3: impostor raw wire has no promptId
+  ✓ C3: prompt reveals only after physical sequence
+  ✓ same impostor remains through C3
+  ✓ C3: voting starts with zero submitted ballots
+  ✓ C3: voting progress reports all participants
+  ✓ C3: live progress exposes no quorum target
+  ✓ C3: Host sees no live target totals
+  ✓ C3: result waits for the Host
+  ✓ HOST-SCORING C3: no voterUid
+  ✓ HOST-SCORING C3: no voterName
+  ✓ HOST-SCORING C3: no voter-to-target mapping
+  ✓ HOST-SCORING C3: no voteBreakdown
+  ✓ HOST-SCORING C3: no hidden streak state
+  ✓ HOST-SCORING C3: no pending score state
+  ✓ سلمان C3: no voterUid
+  ✓ سلمان C3: no voterName
+  ✓ سلمان C3: no voter-to-target mapping
+  ✓ سلمان C3: no voteBreakdown
+  ✓ سلمان C3: no hidden streak state
+  ✓ سلمان C3: no pending score state
+  ✓ ناصر C3: no voterUid
+  ✓ ناصر C3: no voterName
+  ✓ ناصر C3: no voter-to-target mapping
+  ✓ ناصر C3: no voteBreakdown
+  ✓ ناصر C3: no hidden streak state
+  ✓ ناصر C3: no pending score state
+  ✓ فيصل C3: no voterUid
+  ✓ فيصل C3: no voterName
+  ✓ فيصل C3: no voter-to-target mapping
+  ✓ فيصل C3: no voteBreakdown
+  ✓ فيصل C3: no hidden streak state
+  ✓ فيصل C3: no pending score state
+  ✓ خالد C3: no voterUid
+  ✓ خالد C3: no voterName
+  ✓ خالد C3: no voter-to-target mapping
+  ✓ خالد C3: no voteBreakdown
+  ✓ خالد C3: no hidden streak state
+  ✓ خالد C3: no pending score state
+  ✓ تركي C3: no voterUid
+  ✓ تركي C3: no voterName
+  ✓ تركي C3: no voter-to-target mapping
+  ✓ تركي C3: no voteBreakdown
+  ✓ تركي C3: no hidden streak state
+  ✓ تركي C3: no pending score state
+  ✓ three correct normals catch the impostor in C3
+  ✓ C3 catch completes the stint
+  ✓ stint-end aggregate tally lists all five participants
+  ✓ stint end exposes scoreboard
+  ✓ normal correct continuously from C1 gets +3
+  ✓ normal whose streak begins in C2 gets +2
+  ✓ normal whose streak begins in C3 gets +1
+  ✓ impostor gets +2 for surviving C1 and C2
+  ✓ HOST-SCORING final stint result: no voterUid
+  ✓ HOST-SCORING final stint result: no voterName
+  ✓ HOST-SCORING final stint result: no voter-to-target mapping
+  ✓ HOST-SCORING final stint result: no voteBreakdown
+  ✓ HOST-SCORING final stint result: no hidden streak state
+  ✓ HOST-SCORING final stint result: no pending score state
+  ✓ HOST-SCORING: promptId never appears on wire
+  ✓ سلمان final stint result: no voterUid
+  ✓ سلمان final stint result: no voterName
+  ✓ سلمان final stint result: no voter-to-target mapping
+  ✓ سلمان final stint result: no voteBreakdown
+  ✓ سلمان final stint result: no hidden streak state
+  ✓ سلمان final stint result: no pending score state
+  ✓ سلمان: promptId never appears on wire
+  ✓ ناصر final stint result: no voterUid
+  ✓ ناصر final stint result: no voterName
+  ✓ ناصر final stint result: no voter-to-target mapping
+  ✓ ناصر final stint result: no voteBreakdown
+  ✓ ناصر final stint result: no hidden streak state
+  ✓ ناصر final stint result: no pending score state
+  ✓ ناصر: promptId never appears on wire
+  ✓ فيصل final stint result: no voterUid
+  ✓ فيصل final stint result: no voterName
+  ✓ فيصل final stint result: no voter-to-target mapping
+  ✓ فيصل final stint result: no voteBreakdown
+  ✓ فيصل final stint result: no hidden streak state
+  ✓ فيصل final stint result: no pending score state
+  ✓ فيصل: promptId never appears on wire
+  ✓ خالد final stint result: no voterUid
+  ✓ خالد final stint result: no voterName
+  ✓ خالد final stint result: no voter-to-target mapping
+  ✓ خالد final stint result: no voteBreakdown
+  ✓ خالد final stint result: no hidden streak state
+  ✓ خالد final stint result: no pending score state
+  ✓ خالد: promptId never appears on wire
+  ✓ تركي final stint result: no voterUid
+  ✓ تركي final stint result: no voterName
+  ✓ تركي final stint result: no voter-to-target mapping
+  ✓ تركي final stint result: no voteBreakdown
+  ✓ تركي final stint result: no hidden streak state
+  ✓ تركي final stint result: no pending score state
+  ✓ تركي: promptId never appears on wire
+
+5P SCORING E2E ALL PASSED ✅
+Executing integration-transport.mjs (development protocol)
+Transport hardening real-WebSocket suite
+  ✓ host session bootstrap succeeds
+  ✓ player session bootstrap succeeds
+  ✓ fresh session bootstrap succeeds
+  ✓ host negotiates protocol v2
+  ✓ host receives a server clock anchor
+  ✓ player negotiates protocol v2
+  ✓ player receives a server clock anchor
+  ✓ fresh negotiates protocol v2
+  ✓ fresh receives a server clock anchor
+  ✓ CREATE_ROOM returns correlated ACK
+  ✓ exact request-ID retry is idempotently acknowledged
+  ✓ conflicting request-ID reuse is rejected
+  ✓ heartbeat echoes sample ID with server timestamp
+  ✓ player joins with correlated ACK
+  ✓ Host can lock admission
+  ✓ fresh signed identity is blocked by Lobby lock
+  ✓ Host kick is acknowledged
+  ✓ same kicked UID cannot immediately rejoin
+  ✓ Host can explicitly unblock signed identity
+  ✓ Host can reopen admission
+  ✓ unblocked identity can be readmitted once admission is open
+  ✓ close action receives ACK without client replay
+TRANSPORT ALL PASSED ✅
+Executing integration-drain.mjs (development protocol)
+Graceful drain real-process suite
+  ✓ session bootstrap works before drain
+  ✓ existing clients receive a future drain deadline
+  ✓ readiness flips to 503 during drain
+  ✓ liveness remains 200 during drain
+  ✓ session bootstrap is rejected during drain
+  ✓ pre-drain upgraded socket cannot authenticate after drain begins
+  ✓ new game start is rejected with SERVER_RESTARTING
+  ✓ new WebSocket admission stops during drain
+  ✓ existing WebSocket closes with service-restart code at deadline
+  ✓ server exits cleanly after drain deadline
+DRAIN ALL PASSED ✅

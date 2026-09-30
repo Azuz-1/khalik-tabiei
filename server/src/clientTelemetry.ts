@@ -43,6 +43,27 @@ function telemetryScalar(value: unknown): string | number | boolean | undefined 
   return undefined;
 }
 
+function sanitizeClientErrorDiagnostics(props: AnalyticsProps): void {
+  const enums: Record<string, readonly string[]> = {
+    kind: ["runtime", "resource", "promise", "react", "bootstrap"],
+    routeBucket: ["home", "join", "other"],
+    surface: ["unknown", "home", "host", "player", "spectator"],
+    phase: ["none", "LOBBY", "QUESTION", "ANSWERING", "REVEAL", "COUNTDOWN", "ACTION", "HOLD", "PROMPT_REVEAL", "DISCUSSION", "VOTING", "RESULT", "GAME_OVER", "CLOSED"],
+    errorClass: ["unknown", "Error", "TypeError", "ReferenceError", "SyntaxError", "RangeError", "URIError", "EvalError", "AggregateError", "AbortError", "SecurityError", "QuotaExceededError", "NetworkError", "NotSupportedError", "InvalidStateError"],
+  };
+  for (const [key, values] of Object.entries(enums)) {
+    if (typeof props[key] !== "string" || !values.includes(props[key] as string)) delete props[key];
+  }
+  for (const key of ["bundleId", "sourceAsset"]) {
+    if (typeof props[key] !== "string" || !/^[A-Za-z][A-Za-z0-9_-]{0,32}-[A-Za-z0-9_-]{8,16}\.js$/.test(props[key] as string)) delete props[key];
+  }
+  for (const key of ["line", "column"]) {
+    const value = props[key];
+    if (!props.sourceAsset || typeof value !== "number" || !Number.isInteger(value) || value <= 0 || value > 1_000_000) delete props[key];
+  }
+  if (typeof props.online !== "boolean") delete props.online;
+}
+
 export function parseClientTelemetryBatch(value: unknown): TelemetryEnvelope[] | null {
   if (!isObject(value) || Object.keys(value).some((key) => key !== "events") || !Array.isArray(value.events)) return null;
   if (value.events.length < 1 || value.events.length > MAX_EVENTS_PER_BATCH) return null;
@@ -65,6 +86,7 @@ export function parseClientTelemetryBatch(value: unknown): TelemetryEnvelope[] |
       props[key] = scalar;
     }
     const event = raw.event as ClientTelemetryEvent;
+    if (event === "client_error") sanitizeClientErrorDiagnostics(props);
     parsed.push({ event, props: sanitizeAnalyticsProps(event, props) });
   }
   return parsed;

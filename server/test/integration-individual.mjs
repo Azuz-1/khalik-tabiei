@@ -55,7 +55,7 @@ class Client {
   }
 
   send(message) {
-    this.ws.send(JSON.stringify(message));
+    this.ws.send(JSON.stringify(message.t === "SUBMIT_VOTE" ? { ...message, voteContext: message.voteContext ?? this.view?.voteContext } : message));
   }
 
   phase() {

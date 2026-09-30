@@ -22,7 +22,7 @@ export function Player({ view }: { view: ClientView }) {
     case "HOLD": return <PlayerHold view={view} />;
     case "PROMPT_REVEAL": return <PlayerPromptReveal view={view} />;
     case "DISCUSSION": return <PlayerDiscussion view={view} />;
-    case "VOTING": return <PlayerVote view={view} />;
+    case "VOTING": return <PlayerVote key={view.voteContext} view={view} />;
     case "RESULT": return <PlayerResult view={view} />;
     case "GAME_OVER": return <PlayerGameOver view={view} />;
     default: return <PlayerWatchScreen />;
@@ -294,6 +294,8 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
 /* ---- voting --------------------------------------------------------------- */
 
 function PlayerVote({ view }: { view: ClientView }) {
+  const { status, pendingActions } = useGame();
+  const submitting = pendingActions.includes("SUBMIT_VOTE");
   const [picked, setPicked] = useState<string | null>(null);
   const targets = view.voteTargets ?? [];
   const progress = view.votesProgress ?? { submitted: 0, total: 0 };
@@ -345,6 +347,7 @@ function PlayerVote({ view }: { view: ClientView }) {
                 role="radio"
                 aria-checked={selected}
                 className={`vote-opt stage-vote-option${selected ? " picked" : ""}`}
+                disabled={status !== "online" || submitting}
                 onClick={() => setPicked(selected ? null : target.uid)}
               >
                 <span className="stage-vote-avatar">
@@ -362,8 +365,8 @@ function PlayerVote({ view }: { view: ClientView }) {
           {pickedName ? <>صوتك لـ <strong dir="auto">{pickedName}</strong></> : "اختر لاعب، وبعدها أكّد."}
         </div>
         <div className="stage-vote-actions">
-          <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{pickedName ? `أكّد التصويت على ${pickedName}` : "تأكيد التصويت"}</button>
-          {picked ? <button type="button" className="btn btn-quiet btn-sm stage-vote-undo" onClick={() => setPicked(null)}>تراجع</button> : null}
+          <button className="btn btn-primary" disabled={!picked || status !== "online" || submitting} onClick={() => picked && actions.submitVote(picked, view.voteContext)}>{submitting ? "جارٍ تسجيل صوتك…" : pickedName ? `أكّد التصويت على ${pickedName}` : "تأكيد التصويت"}</button>
+          {picked ? <button type="button" className="btn btn-quiet btn-sm stage-vote-undo" disabled={submitting} onClick={() => setPicked(null)}>تراجع</button> : null}
         </div>
         <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
       </div>

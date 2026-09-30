@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RoomManager } from "../src/game/roomManager.js";
@@ -39,10 +40,10 @@ test("removed player with an earlier correct streak never becomes a ghost scoreb
 
   // Two correct guesses are below the 4-player majority of three. Their C1
   // starts are hidden server-only streak state; the impostor earns +1 survival.
-  manager.handle(normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(departing.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+  submitVoteWithContext(manager, normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, departing.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, false);
@@ -66,9 +67,9 @@ test("removed player with an earlier correct streak never becomes a ghost scoreb
   manager.handle(host.conn, { t: "START_VOTING" });
 
   const remainingNormals = remaining.filter((player) => player.uid !== impostor.uid);
-  manager.handle(remainingNormals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(remainingNormals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: remainingNormals[0]!.uid });
+  submitVoteWithContext(manager, remainingNormals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, remainingNormals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: remainingNormals[0]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, true);

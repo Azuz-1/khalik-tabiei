@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -164,7 +165,7 @@ test("transport reconnect after a committed correct vote preserves one ballot an
   const normals = players.filter((player) => player.uid !== impostor.uid);
   const voter = normals[0]!;
 
-  manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
   assert.equal(room.round!.votes.get(voter.uid), impostor.uid);
 
   manager.disconnect(voter.conn);
@@ -176,8 +177,8 @@ test("transport reconnect after a committed correct vote preserves one ballot an
   assert.equal(votingView.room.phase, "VOTING");
   assert.equal(votingView.myVoteSubmitted, true, "reconnect restores submitted-vote state");
 
-  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  submitVoteWithContext(manager, normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.groupFound, true);
@@ -196,13 +197,13 @@ test("two live tabs for one player cannot submit two votes or double-score", asy
   const voter = normals[0]!;
   const secondTab = authenticatedConnection(manager, voter.uid);
 
-  manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(secondTab.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+  submitVoteWithContext(manager, voter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, secondTab.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
   assert.equal(lastMessage(secondTab.socket, "ERROR")?.code, "VOTE_ALREADY_SUBMITTED");
   assert.equal(room.round!.votes.get(voter.uid), impostor.uid, "first committed ballot wins");
 
-  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+  submitVoteWithContext(manager, normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.players.get(voter.uid)?.score, 1);
@@ -216,9 +217,9 @@ test("Host reconnect on a completed scored RESULT preserves the exact scoreboard
 
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  manager.handle(normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  submitVoteWithContext(manager, normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
   assert.equal(room.phase, "RESULT");
 
   const before = lastMessage(host.socket, "STATE")!.view;
@@ -253,10 +254,10 @@ test("impostor leaving after hidden Challenge state aborts to a clean Lobby", as
 
   // Two correct guesses are below the four-player majority of three. Their
   // streak starts stay secret, while the impostor gets one hidden survival point.
-  manager.handle(normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(normals[2]!.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+  submitVoteWithContext(manager, normals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, normals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, normals[2]!.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, false);
@@ -292,9 +293,9 @@ test("seat reconnecting after a new impostor stint started gets an explicit wait
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
   for (const normal of normals) {
-    manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
   }
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round!.roundComplete, true);
 

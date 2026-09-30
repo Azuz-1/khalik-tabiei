@@ -1,499 +1,108 @@
-# خلك طبيعي — Real-time Arabic Social Deception Party Game
-
-**خلك طبيعي** is a browser-based multiplayer party game for Saudi/Gulf groups
-playing together in the same room. The current product has three physical modes:
-
-- **🙋 HANDS — ارفع**
-- **👉 POINT — أشر**
-- **🔢 NUMBER — كم؟**
-
-A full **Game** contains several **Rounds**. Each Round has one fixed impostor and
-up to three **Challenges**. Every Challenge gets one mode, one private prompt, a
-synchronized physical response, a public prompt reveal, discussion, and secret
-voting. The impostor stays the same inside the Round, while the mode may rotate
-between Challenges.
-
-The impostor knows they are the impostor and knows the current mode/action, but
-does not receive the prompt before it becomes public after the physical
-response.
-
-There are **no player points, rankings, or individual winners** in the current
-version. At Game Over the shared screen summarizes how many rounds the group
-caught the impostor and how many rounds the impostor survived.
-
-**No app, no account, no email, no password.** Open the host screen on a TV or
-laptop, scan the QR from player phones, type a name, and play.
-
-- Player-facing UI is **Arabic + RTL**.
-- Multiplayer is authoritative and real-time over WebSockets.
-- Private prompts and roles are projected per recipient on the server.
-- The active bank contains **900 imitation prompts**: 300 HANDS, 300 POINT,
-  and 300 NUMBER.
-- The repository still contains **110 legacy TEXT_PAIR pairs** across 9
-  categories. They are retained as legacy content but are **not selectable in
-  the current UI/settings**.
-- CHOOSE is not part of the current product.
-
----
-
-## Core terms
-
-- **GAME** — the complete session containing the configured number of Rounds.
-- **ROUND** — one fixed impostor + up to 3 Challenges.
-- **CHALLENGE** — one mode + one prompt + ready + countdown + physical action +
-  hold + prompt reveal + discussion + secret vote.
-
-Catching an impostor ends the **Round**, not the **Game**. If more configured
-Rounds remain, the host advances to a new Round with a new fair impostor.
-
----
-
-## Device roles
-
-### Shared host screen
-
-The TV/laptop/tablet:
-
-- creates the room and shows the QR/player list;
-- lets the host choose any non-empty subset of HANDS / POINT / NUMBER;
-- explains each physical mode clearly in the Lobby before play;
-- chooses the Round count;
-- acts as the Game Director during play;
-- shows the current Challenge's short mode label, 5-second countdown, action
-  moment, hold, prompt reveal, discussion, live anonymous voting board, Round
-  Result, and Game Over group summary.
-
-The host screen is **not a player** and receives no private prompt before the
-prompt-reveal phase.
-
-### Player phone
-
-During the private phase:
-
-- a **normal player** receives the current Challenge mode, private prompt, and
-  action instruction;
-- the **impostor** receives the current mode/action and `isImpostor: true`, but
-  receives neither prompt text nor `promptId`;
-- every player presses **جاهز**.
-
-After Ready, the phone tells the player to look at the shared screen. There is
-no digital HANDS/POINT/NUMBER response and no countdown on player phones.
-
-Reconnect with the same anonymous session restores the same seat. Before the
-action, normal reconnect restores the current private prompt while impostor
-reconnect still receives no prompt.
-
----
-
-## Current gameplay flow
-
-1. Host creates a room and players join from phones.
-2. Host selects one, two, or all three active modes and a Round count.
-3. Server starts Round 1 and chooses a fair impostor.
-4. Challenge 1 consumes the next mode from the balanced Challenge-level mode
-   bag and gets a new prompt from that mode's bank.
-5. Normal players see the prompt privately. The impostor sees only their role,
-   current mode, and action instruction.
-6. Everyone presses Ready.
-7. The shared screen runs:
-   - **5-second COUNTDOWN** (`5 → 4 → 3 → 2 → 1`)
-   - **ACTION** (`ارفعوا!`, `أشروا!`, or `ورّونا!`)
-   - **HOLD** for about 2 seconds (`ثبّتوا… 👀`)
-   - **PROMPT_REVEAL** (`المطلوب كان…` + the actual prompt)
-8. From PROMPT_REVEAL onward, that Challenge's prompt is public. The next
-   Challenge's prompt has not been selected/sent yet.
-9. Discussion has no timer. The shared TV keeps the public prompt visible while
-   the group discusses. The host decides when to open voting.
-10. Every player votes secretly for another participant from their phone.
-11. During VOTING, the shared host screen deliberately shows a **live aggregate
-    tally**: every participant remains in a fixed card position while only their
-    votes-received counter changes. Late voters can see this TV state; that is an
-    intentional current playtest decision.
-12. The impostor is caught only if they receive a true majority:
-
-```text
-requiredVotes = floor(participantCount / 2) + 1
-```
-
-13. If the impostor gets the majority, the Round ends immediately.
-14. If the impostor gets less than the majority — even if another player gets a
-    majority — the impostor survives that Challenge.
-15. After Challenge 1/2 survival, the **same impostor and participants** continue,
-    but the next Challenge consumes the next balanced mode and gets a fresh
-    prompt from that mode.
-16. If the impostor survives Challenge 3, the Round ends as an escape.
-17. If more Rounds remain, a new Round starts with a new/fair impostor. Mode
-    rotation continues at Challenge level rather than being tied to Round
-    boundaries.
-18. Only after the configured Round count is complete does the Game enter
-    `GAME_OVER`.
-
----
-
-## Majority examples
-
-| Players | Votes required to catch impostor |
-| ---: | ---: |
-| 3 | 2 |
-| 4 | 3 |
-| 5 | 3 |
-| 6 | 4 |
-| 7 | 4 |
-| 8 | 5 |
-| 9 | 5 |
-| 10 | 6 |
+# خلك طبيعي
 
-A unique-highest vote is **not enough** by itself. A wrong majority on a normal
-player also does not catch the impostor.
+Arabic RTL browser party game for Saudi/Gulf groups playing in the same place. No account or installed app is required. The Node server owns membership, roles, prompts, clocks, votes and results; phones use authenticated anonymous WebSocket sessions.
 
----
+This README describes the existing deployed competitive rules at `70fc5c47` and the proposed reliability candidate. Earlier documentation describing no points, an obligatory nonplaying host, untimed discussion or live target totals is superseded by the current code. The candidate preserves the existing rules.
 
-## Voting board and privacy
+## Devices and modes
 
-### Live Host/TV tally during VOTING
+The room owner is a real named player with a phone, private role and vote. Management controls appear on safe surfaces. An optional public TV/laptop display joins by six-digit pairing or a revocable capability link. The display cannot control the game or receive private prompts. The legacy separate-host wire path remains supported.
 
-The server keeps the authoritative internal vote map for result computation, but
-the Host receives only this kind of aggregate projection:
+| Mode | Physical response |
+| --- | --- |
+| HANDS — ارفع يدك | Raise a hand when the prompt applies; otherwise keep it down. |
+| POINT — أشر على شخص | Point at the person matching the prompt. |
+| NUMBER — ارفع أصابعك | Answer from 0 to 5 with fingers; zero is a closed fist. |
 
-```ts
-liveVoteTally: Array<{
-  uid: string;
-  name: string;
-  votes: number;
-}>;
-```
+Choose any nonempty mode subset. Digital controls mark readiness and cast votes; physical responses happen together on the authoritative action cue. Phones start behind a role-neutral privacy curtain. The impostor knows the mode and their role, but receives no prompt before public reveal.
 
-The array stays in stable participant order so cards do not jump when counts
-change. It includes zero-vote players and updates after every submitted vote.
-Player phones do **not** receive `liveVoteTally`.
+## Current rules
 
-The wire does not serialize `voterUid`, `voterName`, `targetUid`, `voteBreakdown`,
-`voterTarget`, or any voter → target map.
+- 3–10 players, including the named owner.
+- Match length is exactly **3, 6, 9 or 12 challenges**, default 9. The legacy settings field `totalRounds` carries this challenge total.
+- One fixed impostor per stint: at most 1 challenge with 3 players, 2 with 4 players, and 3 with 5–10 players. Capture or the match limit can end it earlier.
+- Each challenge selects a fresh prompt and consumes a balanced shuffled mode bag. Reconnect/redeal preserves the selected mode.
+- Capture requires a strict majority of **ballots actually cast**, including the impostor's ballot. Zero ballots never catch anyone. Missing ballots become abstentions at the deadline. One correct ballot can catch if it is the only ballot cast.
+- The impostor earns one point per survived challenge. Normal players earn the length of their uninterrupted correct-vote streak ending at the final vote of that stint. A wrong or missing vote breaks the streak. Points settle at stint end; result screens explain changes and display rankings.
+- Live voting shows submitted/total only. Target totals and voter mappings are hidden. Intermediate survived results hide impostor identity/tally; final stint results reveal identity and an anonymous aggregate tally.
 
-### Intermediate result (Challenge 1/2 survival)
+| Stage | Duration / progression |
+| --- | --- |
+| QUESTION | Private reading/readiness; role-blind recovery for an unready disconnected participant after 30 seconds. |
+| COUNTDOWN | 5 seconds. |
+| ACTION | 1 second. |
+| HOLD | 5 seconds to look around. |
+| PROMPT_REVEAL | 2.5 seconds. |
+| DISCUSSION | 45 seconds, then automatic voting. |
+| VOTING | 15 seconds, or earlier once all ballots resolve. |
+| Intermediate survived RESULT | 4 seconds. |
+| Full stint RESULT | 20 seconds, or owner advances. |
+| GAME_OVER | Match scores and rematch controls. |
 
-Once all votes are submitted and the group did not catch the impostor, the
-intermediate Result communicates only that the same impostor continues.
+Owner disconnect does not pause the game clock. Authority transfers after 60 seconds to an eligible connected successor; the old owner returns as a player. Existing membership/redeal/abstention policies govern other departures.
 
-It does **not** expose:
+## Prompts and replayability
 
-- impostor identity;
-- result tally;
-- voter identities;
-- voter → target mappings;
-- points, scoreboard, or ranking.
+900 active imitation prompts: 300 per mode. The 110 legacy TEXT_PAIR pairs remain in source but are not selectable. CHOOSE, Face and runtime AI generation are not part of the product.
 
-The previous Challenge prompt is already public because it was revealed before
-discussion.
+Current-match duplicate protection and exact room-session history remain separate. Room-session history survives rematches and roster/mode changes; exhausting a mode recycles only that mode. Browsers keep a bounded versioned exact-bitset of publicly revealed prompts. The server unions validated current-participant histories as an advisory freshness preference. Malformed, unavailable or exhausted history fails open without blocking play. The hint has no authority over identity, roles, voting or timers. See [cross-room novelty](docs/cross-room-novelty.md).
 
-### Round-end result
+## Security and reliability
 
-When the Round actually ends, the result shows:
+- HMAC-authenticated anonymous identity in an HttpOnly, SameSite cookie; production uses Secure cookies and persistent strong secrets.
+- Exact production Origin checks, strict runtime schemas, size limits, quotas, policy-close guards, admission limits and outbound backpressure.
+- Recipient-specific serialized views enforce pre-reveal secrecy; internal prompt IDs and future prompts are not sent. UI hiding adds protection.
+- Candidate ballots use an opaque challenge UUID, given only to eligible voting participants. Stale/closed ballots report an explicit ignored outcome; same-target duplicates are idempotent. Changed targets and unauthorized actions remain failures.
+- Mutations are never automatically replayed after reconnect. Pending controls provide feedback and suppress rapid duplicate taps. Candidate heartbeat recovery replaces silent OPEN sockets without waiting for a close handshake.
+- Candidate render/import recovery gives Arabic reload UI. Bounded diagnostics retain error class, surface/phase and same-origin hashed source coordinates, without raw messages, stacks, private URLs or gameplay content.
 
-- caught vs escaped;
-- impostor name;
-- challenge number where the Round ended;
-- an **anonymous aggregate tally** for the final Challenge only.
+Deploy matching client/server builds together. Cached older tabs cannot supply the new ballot context and must refresh; their generic error copy cannot be retroactively changed. See [transport release notes](docs/release-20260930-transport.md).
 
-The Round-end tally reuses the same participant-card board presentation and
-stable participant ordering. It includes every participant, including zero-vote
-players. It contains only player identity + votes received, never voter
-identity/mapping.
+## Run and verify
 
----
+Node.js 20.19+; CI uses Node 22.
 
-## Game Over
-
-After the final configured Round, the shared screen shows a group summary such
-as:
-
-```text
-خلصت اللعبة 🎉
-مسكتوا المتخفي في 3 من 5 جولات 👏
-✅ انكشف: 3
-😈 نجا: 2
-```
-
-There is no points table, ranking, or individual winner.
-
----
-
-## Mode onboarding and behavior
-
-The Home screen and Host Lobby use full labels/descriptions for first-time
-players. During active play the UI can use the shorter labels because the group
-has already learned the interactions.
-
-### 🙋 HANDS — ارفع يدك
-
-- If the prompt applies to you, raise your hand.
-- Otherwise keep your hand down.
-- Hold the position until the prompt reveal.
-
-Short in-game label: **🙋 ارفع**.
-
-### 👉 POINT — أشر على شخص
-
-- Read the prompt and choose the person you think matches it.
-- At `أشروا!`, everyone points at the same time.
-- Hold the point until the prompt reveal.
-
-Short in-game label: **👉 أشر**.
-
-### 🔢 NUMBER — ورّنا الرقم
-
-- Show a number from 0 to 5 using your fingers.
-- `0` means a closed fist.
-- At `ورّونا!`, everyone reveals the number at the same time.
-
-Short in-game label: **🔢 كم؟**.
-
----
-
-## Mode and prompt rotation
-
-### Mode selection
-
-The host may select any non-empty subset of HANDS / POINT / NUMBER.
-
-The server uses a balanced shuffled mode bag **per Challenge**:
-
-- only selected modes enter the bag;
-- every selected mode is consumed once before refill where applicable;
-- when alternatives exist, the first mode after refill is adjusted to avoid an
-  immediate repeat of the previous Challenge mode;
-- with one selected mode, that mode naturally repeats every Challenge;
-- reconnect/disconnect redeals preserve the already-selected current Challenge
-  mode and do not consume another bag entry.
-
-The same impostor remains fixed for all Challenges in a Round regardless of
-mode changes.
-
-### Prompt history
-
-Every Challenge receives a prompt from its current mode's 300-prompt bank.
-
-`usedPromptIds` is exact **current-match** duplicate protection. It resets for a
-new match or abort back to the lobby. Separately, the server keeps an exact
-in-memory room-session prompt history that survives rematches, selected-mode
-changes, and roster changes while the room exists. That room-session history is
-a secondary freshness preference; after all 300 prompts in one mode have been
-seen in the room session, only that mode's session history is recycled.
-
-Participant browsers keep a versioned bounded **exact bitset (v2)** for prompts
-that actually became public on that browser: 1,536 bits / 192 raw bytes / 256
-base64url characters. Active prompt IDs map deterministically to distinct stable
-history slots, independent of prompt-array ordering, with reserved append room
-inside each mode block. Before a normal browser persistence write, the client ORs
-the latest valid stored value with its current in-memory history and the newly
-seen contribution, so stale tabs cannot normally clear bits written by another
-tab.
-
-On create/join and after a new public reveal, the browser sends this exact history
-as an advisory, untrusted novelty hint. The server validates it and unions the
-histories of the current Challenge participants. If any exact-unseen prompt
-remains in the selected mode, selection is restricted to those unseen prompts;
-room-session history is then applied only as a secondary preference inside that
-eligible pool.
-
-Browser history has no authority over authentication, membership, host status,
-roles, prompt secrecy, voting, scoring, timers, or game transitions. Malformed,
-stale, unavailable-storage, or malicious all-ones histories fail open: they may
-reduce novelty preference, but if the preferred unseen pool is exhausted the
-picker safely falls back to the normal current-match/room-session eligible pool
-and gameplay continues.
-
-The stable novelty token is revealed to participant clients only once the prompt
-itself is public. Internal `promptId` values remain server-only. Clearing site
-data, private browsing, or switching browser/device starts a new local history.
-A brand-new room starts with an empty server-side room-session history.
-
----
-
-## Security model
-
-Secret-state protection is enforced at the server/wire boundary, not by React
-component hiding.
-
-- **Server-authoritative state.** The server owns room membership, phases,
-  impostor selection, mode selection, prompt selection, votes, timers, and
-  Round/Game transitions.
-- **Anonymous authenticated sessions.** `/api/session` issues a cryptographically
-  random HMAC-authenticated token in an `HttpOnly`, `SameSite=Lax` cookie
-  (`Secure` in production).
-- **Exact Origin enforcement.** WebSocket upgrades validate browser Origin
-  against configured allowed origins.
-- **Strict runtime message validation.** Unknown or malformed WebSocket messages
-  are rejected before game state mutation.
-- **Per-recipient views.** `server/src/game/view.ts` is the only projection from
-  internal secret room state to client payloads.
-- **Pre-reveal secrecy.** During QUESTION / COUNTDOWN / ACTION / HOLD, the host
-  and impostor receive no prompt text or `promptId`. Normal participants may
-  receive their own current private prompt for reconnect recovery.
-- **Public reveal boundary.** The current Challenge prompt becomes public only
-  when the authoritative server enters `PROMPT_REVEAL` after HOLD.
-- **No future prompt leak.** A later Challenge's mode/prompt is prepared only
-  when the host intentionally advances after the intermediate result.
-- **Vote privacy.** The server keeps the internal voter → target Map only for
-  authoritative computation. Host VOTING projection is aggregate-only; result
-  projection is aggregate-only; player phones never receive live aggregate
-  counts or voter identities.
-- Existing connection caps, rate limiting, backpressure protection, session
-  validation, and disconnect grace behavior remain in place.
-
-### Disconnect/reconnect policy
-
-The participant set is stable during a Challenge. A transient socket drop marks
-presence but does not immediately remove the seat.
-
-If a disconnected participant reconnects inside the grace period, the current
-seat/private view is restored. If grace expires during an incomplete Round, the
-current Round is safely redealt if enough players remain. A redeal keeps the
-already-selected **current Challenge mode** so it does not consume an extra
-Challenge-mode bag slot.
-
----
-
-## Prompt content
-
-Active prompts are assembled from:
-
-```text
-server/src/game/imitationPrompts.data.ts
-server/src/game/imitationPrompts.extra.*.ts
-server/src/game/imitationPrompts.expansion.*.ts
-```
-
-The active bank has 900 items:
-
-- 300 HANDS
-- 300 POINT
-- 300 NUMBER
-
-Do not add Face, CHOOSE, TEXT_PAIR UI, or runtime AI generation without a
-separate product decision.
-
-### Legacy TEXT_PAIR
-
-`server/src/game/questions.data.ts` still contains the 110 curated TEXT_PAIR
-pairs and `questions.ts` still contains their selection service. This is legacy
-content retained for future work. Current authoritative settings reject category
-activation and the current client does not expose TEXT_PAIR.
-
----
-
-## Quick start
-
-Requirements: **Node.js 20.19+**. CI uses Node 22.
-
-```bash
+```sh
 npm ci
-npm run build
-npm start
-```
-
-Open `http://localhost:8080` on the host screen. Player phones can open the same
-reachable origin or scan the QR.
-
-Development mode:
-
-```bash
-npm run dev
-```
-
----
-
-## Testing
-
-Run the normal checks:
-
-```bash
 npm run typecheck
 npm test
 npm run build
-npm audit --omit=dev --audit-level=high
-```
-
-The real WebSocket E2E requires a running server:
-
-```bash
-PUBLIC_ORIGIN=http://localhost:8080 \
-SESSION_SECRET='integration-test-secret-0123456789-abcdef' \
 npm start
-
-npm run test:integration
 ```
 
-GitHub CI starts the real server automatically and runs the integration test.
-The E2E covers room creation/join, selected modes, same-impostor Round behavior,
-Challenge-level balanced mode rotation, mode-matched prompts, prompt secrecy,
-reconnect secrecy, 5-second countdown, ACTION, HOLD, public prompt reveal,
-untimed discussion, live Host aggregate vote updates after individual votes,
-zero-vote rows, stable tally order, absence of voter identities/mappings on the
-wire, majority voting, Challenge continuation, Round/Game boundaries,
-Round-end aggregate tally, no-points payloads, and Game Over group summary.
+Open `http://localhost:8080`; development mode is `npm run dev`. There is no lint script.
 
-There is currently **no lint script** in the repository package scripts.
+Run real protocol suites and their server in one local network namespace:
 
----
-
-## Project structure
-
-```text
-shared/
-  types.ts              Wire contract and shared types
-  constants.ts          Modes, player limits, Round options, timers
-  promptNovelty.ts      Versioned exact-bitset wire/storage primitives
-
-server/
-  src/
-    auth/session.ts     Anonymous HMAC session identities
-    game/
-      imitationPrompts.data.ts  Active 900-prompt bank entry point
-      imitationPrompts.expansion.*.ts  570-prompt expansion
-      promptNovelty.ts          Stable history-slot tokens + exact server helpers
-      questions.data.ts         110 legacy TEXT_PAIR pairs
-      questions.ts              Legacy TEXT_PAIR selector
-      state.ts                  Internal room/round secret state
-      engine.ts                 Pure game rules and transitions
-      view.ts                   Per-recipient security projection
-      roomManager.ts            Connections, timers, reconnect, broadcasts
-    security/messages.ts        Strict runtime WebSocket validation
-  test/
-    engine.test.ts
-    imitation-prompts.test.ts
-    prompt-history-rematch.test.ts
-    prompt-novelty.test.ts
-    prompt-novelty-view-security.test.ts
-    room-manager.test.ts
-    view-security.test.ts
-    intermediate-result-security.test.ts
-    security.test.ts
-    integration.mjs             Real server + WebSocket E2E
-
-client/
-  src/
-    net/socket.ts
-    net/promptNovelty.ts
-    screens/Home.tsx
-    screens/Host.tsx
-    screens/Player.tsx
-    components/Bits.tsx         Shared Result + VoteBoard presentation
+```sh
+node server/test/run-release-integration.mjs
+node server/test/run-release-integration.mjs --production
 ```
 
----
+The existing `npm run test:integration` and `npm run test:integration:multigroup` also work with an externally started local server. `playwright.config.mjs` is the CI browser suite; `playwright.release.config.mjs` adds isolated local ports/output folders and optional `PLAYWRIGHT_CHROMIUM_PATH`. Browser emulation is not real iPhone/Android validation.
 
-## Deployment environment
+## Operations
 
-| Variable | Requirement |
+Rooms and state are single-instance/in-memory. Restart/deployment loses active rooms; signed identity cannot recreate them. Independent instances behind a load balancer are unsupported. Announce/drain active rooms before an approved production deployment.
+
+| Setting | Production requirement |
 | --- | --- |
-| `NODE_ENV` | Set to `production` in production. |
-| `SESSION_SECRET` | Required in production; at least 32 high-entropy bytes and persistent. |
-| `PUBLIC_ORIGIN` | Required in production; exact canonical origin. |
-| `ALLOWED_ORIGINS` | Optional comma-separated additional exact origins. |
-| `PORT`, `HOST` | Optional listener settings; defaults are `8080` and `0.0.0.0`. |
-| `TRUST_PROXY` | Configure only for the trusted terminating proxy topology. |
+| NODE_ENV | `production`. |
+| SESSION_SECRET | Strong persistent secret, at least 32 bytes. |
+| ANALYTICS_SECRET | Strong persistent separate secret unless `ANALYTICS=off`. |
+| PUBLIC_ORIGIN | Exact canonical HTTPS origin; Render hostname can provide it. |
+| ALLOWED_ORIGINS | Optional additional exact HTTPS origins. |
+| PORT / HOST | Defaults `8080` / `0.0.0.0`; local runner binds loopback. |
+| TRUST_PROXY / RENDER | Match trusted edge topology. |
 
-The current architecture is deliberately single-instance and in-memory. A
-server restart destroys active rooms; horizontal multi-instance persistence is
-not implemented in this version.
+`/healthz` is liveness, `/readyz` is readiness (503 during drain), `/version` returns deployed SHA. Graceful shutdown gives notice without persisting rooms. Defaults of 500 rooms, 4,000 sockets globally and 64 per source IP are admission ceilings, not production capacity promises. See [production operations](docs/production-operations.md) and [measured capacity limitations](docs/release-20260930-security-capacity.md).
+
+## Release evidence
+
+- [Release assessment](docs/release-20260930.md)
+- [External benchmark](docs/release-20260930-benchmark.md)
+- [Ballot/reconnect corrections](docs/release-20260930-transport.md)
+- [Runtime attribution/diagnostics](docs/release-20260930-runtime.md)
+- [Security/capacity assessment](docs/release-20260930-security-capacity.md)
+
+Automated/simulated persona testing does not establish market demand or replace real Saudi group playtests.

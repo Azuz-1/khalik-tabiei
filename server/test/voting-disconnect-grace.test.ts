@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RoomManager } from "../src/game/roomManager.js";
@@ -44,9 +45,9 @@ test("a disconnected non-voter becomes an abstention only at the global voting d
     manager.disconnect(disconnected.conn);
 
     for (const normal of normals.slice(1)) {
-      manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+      submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     }
-    manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+    submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
     assert.equal(room.phase, "VOTING", "a missing ballot keeps voting open until the one global deadline");
     assert.equal(room.round!.abstainedUids?.has(disconnected.uid), false, "abstention is not declared early");
@@ -73,9 +74,9 @@ test("reconnecting during voting restores the ballot without extending the globa
     manager.disconnect(disconnected.conn);
 
     for (const normal of normals.slice(1)) {
-      manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+      submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     }
-    manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+    submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
     await wait(10);
     const reconnected = authenticatedConnection(manager, disconnected.uid);
@@ -84,7 +85,7 @@ test("reconnecting during voting restores the ballot without extending the globa
     assert.equal(room.round!.abstainedUids?.has(disconnected.uid), false);
     assert.equal(room.round!.resolutionSealed, undefined);
 
-    manager.handle(reconnected.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(manager, reconnected.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     assert.equal(room.phase, "RESULT", "all four ballots resolve immediately before the deadline");
     assert.equal(room.round!.sealedVotes?.size, 4);
     assert.equal(room.round!.resultRequiredVotes, 3);

@@ -66,6 +66,7 @@ export type ErrorCode =
   | "KICKED"
   | "RATE_LIMITED"
   | "BAD_REQUEST"
+  | "CLIENT_UPDATE_REQUIRED"
   | "UNAUTHORIZED"
   | "DISPLAY_IN_USE"
   | "SERVER_RESTARTING"
@@ -208,6 +209,8 @@ export interface ClientView {
   answersProgress?: { submitted: number; total: number };
   reveal?: RevealedAnswer[];
   myVoteSubmitted?: boolean;
+  /** Opaque challenge context, emitted only to an eligible voting participant. */
+  voteContext?: string;
   /** Live voting reveals turnout progress only, never a quorum or target totals. */
   votesProgress?: { submitted: number; total: number };
   /** Deprecated live aggregate tally. New product UI intentionally withholds target totals until stint end. */
@@ -243,7 +246,7 @@ export type ClientMessage =
   | ({ t: "REDEAL_CHALLENGE" } & RequestMeta)
   /** @deprecated Voting starts automatically after the authoritative discussion deadline. */
   | ({ t: "START_VOTING" } & RequestMeta)
-  | ({ t: "SUBMIT_VOTE"; targetUid: string } & RequestMeta)
+  | ({ t: "SUBMIT_VOTE"; targetUid: string; voteContext?: string } & RequestMeta)
   | ({ t: "NEXT_ROUND" } & RequestMeta)
   | ({ t: "KICK_PLAYER"; uid: string } & RequestMeta)
   | ({ t: "CLOSE_ROOM" } & RequestMeta)
@@ -256,6 +259,7 @@ export type ServerMessage =
   | { t: "HELLO_OK"; uid: string; protocolVersion?: 2; serverMs?: number }
   | { t: "STATE"; view: ClientView }
   | { t: "ACK"; rid: RequestId }
+  | { t: "VOTE_IGNORED"; reason: "CLOSED" | "STALE_CHALLENGE"; rid?: RequestId }
   | { t: "ERROR"; code: ErrorCode; message?: string; rid?: RequestId }
   | { t: "ROOM_CLOSED"; reason?: string }
   | { t: "KICKED" }

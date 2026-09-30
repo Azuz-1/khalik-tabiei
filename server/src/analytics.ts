@@ -199,7 +199,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "orientationChanges",
     "routeBucket",
   ],
-  client_error: ["clientSessionId", "kind", "routeBucket", "online"],
+  client_error: ["clientSessionId", "kind", "routeBucket", "online", "errorClass", "surface", "phase", "bundleId", "sourceAsset", "line", "column"],
 };
 
 const queue: AnalyticsRecord[] = [];

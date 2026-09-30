@@ -19,6 +19,7 @@ import { EyesMark } from "./ui/EyesMark.js";
 import { Icon } from "./ui/Icon.js";
 import { inertOutside } from "./ui/inert.js";
 import { useModalFocus } from "./ui/useModalFocus.js";
+import { setClientErrorContext } from "./telemetry.js";
 
 interface RecoveryConfirmActionRequest {
   title: string;
@@ -85,6 +86,10 @@ export function App() {
   const isOwner = view?.self.isOwner === true;
   const legacyHost = view?.self.role === "host";
   const canManageRoom = isOwner || legacyHost;
+
+  useEffect(() => {
+    setClientErrorContext(!view ? "home" : canManageRoom ? "host" : view.self.role === "player" ? "player" : "spectator", view?.room.phase ?? "none");
+  }, [canManageRoom, view]);
 
   useEffect(() => {
     if (!canManageRoom) setShowHostPlayers(false);

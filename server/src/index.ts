@@ -111,6 +111,16 @@ export function createGameServer(options: GameServerOptions = {}) {
   let drainTimer: NodeJS.Timeout | undefined;
 
   const displayRoomKey = (code: string, createdAt: number) => `${code}:${createdAt}`;
+  // Revocation belongs to a room incarnation. Closed/expired rooms can never
+  // authenticate their old capability, so retaining their epochs only leaks
+  // memory across successive parties. Prune both before writes and on heartbeat.
+  const pruneDisplayEpochs = () => {
+    for (const key of displayEpochs.keys()) {
+      const [code, createdAt] = key.split(":");
+      const room = manager.roomForTests(code!);
+      if (!room || room.closed || room.createdAt !== Number(createdAt)) displayEpochs.delete(key);
+    }
+  };
   const displayEpoch = (code: string, createdAt: number) => displayEpochs.get(displayRoomKey(code, createdAt)) ?? 0;
   const displayInUse = (code: string, createdAt: number): boolean => {
     const key = displayRoomKey(code, createdAt);
@@ -121,6 +131,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     return false;
   };
   const revokeDisplay = (code: string, createdAt: number) => {
+    pruneDisplayEpochs();
     const key = displayRoomKey(code, createdAt);
     displayEpochs.set(key, (displayEpochs.get(key) ?? 0) + 1);
     const active = activeDisplays.get(key);
@@ -491,6 +502,17 @@ export function createGameServer(options: GameServerOptions = {}) {
         return;
       }
 
+      // A valid frame is still work before HELLO. Meter it against the signed
+      // upgrade identity (or the IP for sessionless display admission) so the
+      // authentication timeout cannot become an unbounded parsing/write window.
+      if (conn.uid === null && !abuse.allowMessage(
+        context.kind === "participant" ? context.uid : `ip:${conn.ip}`,
+        msg.t,
+      )) {
+        violate("RATE_LIMITED", "rid" in msg ? msg.rid : undefined);
+        return;
+      }
+
       if (msg.t === "HELLO") {
         if (draining) {
           conn.send({ t: "ERROR", code: "SERVER_RESTARTING", ...(msg.rid ? { rid: msg.rid } : {}) });
@@ -616,6 +638,7 @@ export function createGameServer(options: GameServerOptions = {}) {
   });
 
   const heartbeat = setInterval(() => {
+    pruneDisplayEpochs();
     for (const ws of wss.clients) {
       const conn = connections.get(ws);
       if (!conn || !conn.alive) {
@@ -675,6 +698,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     displayPairings,
     dispose,
     capacity,
+    displayEpochCountForTests: () => displayEpochs.size,
     beginDrain,
     finishDrain,
     isReady: () => !draining,

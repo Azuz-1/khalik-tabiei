@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as engine from "../src/game/engine.js";
@@ -158,8 +159,8 @@ async function completeManagerResult(playerCount = 3) {
   manager.handle(host.conn, { t: "START_VOTING" });
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  for (const normal of normals) manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  for (const normal of normals) submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
   assert.equal(room.phase, "RESULT");
   return { manager, host, players, room, impostor, normals };
 }
@@ -281,8 +282,8 @@ test("last offline vote seals participant set and later leave cannot rewrite out
   manager.disconnect(host.conn);
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  for (const normal of normals) manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+  for (const normal of normals) submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
   assert.equal(room.phase, "VOTING");
   assert.equal(room.round!.resolutionSealed, true);
   const sealedNames = room.round!.sealedParticipants!.map((player) => player.name);

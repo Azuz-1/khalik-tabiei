@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as engine from "../src/game/engine.js";
@@ -105,15 +106,15 @@ test("owner receives private ready/vote state and can vote like every other part
     new Set([p2.uid, p3.uid]),
   );
 
-  assert.equal(manager.handle(owner.conn, { t: "SUBMIT_VOTE", targetUid: p2.uid }), true);
+  assert.equal(submitVoteWithContext(manager, owner.conn, { t: "SUBMIT_VOTE", targetUid: p2.uid }), true);
   ownerView = lastMessage(owner.socket, "STATE")!.view;
   assert.equal(ownerView.myVoteSubmitted, true);
   assert.equal(ownerView.votesProgress?.submitted, 1);
   assert.equal(ownerView.votesProgress?.total, 3);
 
   // Both normals catch the owner-impostor; owner ballot participates normally.
-  assert.equal(manager.handle(p2.conn, { t: "SUBMIT_VOTE", targetUid: owner.uid }), true);
-  assert.equal(manager.handle(p3.conn, { t: "SUBMIT_VOTE", targetUid: owner.uid }), true);
+  assert.equal(submitVoteWithContext(manager, p2.conn, { t: "SUBMIT_VOTE", targetUid: owner.uid }), true);
+  assert.equal(submitVoteWithContext(manager, p3.conn, { t: "SUBMIT_VOTE", targetUid: owner.uid }), true);
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round?.groupFound, true);
   assert.equal(room.round?.sealedVotes?.size, 3);

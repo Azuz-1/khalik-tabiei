@@ -318,7 +318,7 @@ export class RoomManager {
         this.beginVoting(room, uid);
         this.markMeaningful(room);
       });
-      case "SUBMIT_VOTE": return this.submitVote(uid, message.targetUid);
+      case "SUBMIT_VOTE": return this.submitVote(conn, message);
       case "NEXT_ROUND": return this.nextRound(uid);
       case "KICK_PLAYER": return this.kick(uid, message.uid);
       case "CLOSE_ROOM": return this.closeRoom(uid);
@@ -396,7 +396,6 @@ export class RoomManager {
     if (room.phase === "CLOSED") throw new GameError("ROOM_CLOSED");
 
     if (indexedCode === code) {
-      if (uid === room.hostUid) throw new GameError("ALREADY_IN_ROOM");
       const existing = room.players.get(uid);
       if (!existing || existing.pendingRemoval) throw new GameError("ALREADY_IN_ROOM");
       existing.disconnectGeneration += 1;
@@ -642,9 +641,33 @@ export class RoomManager {
     this.broadcast(room);
   }
 
-  private submitVote(uid: string, targetUid: string): void {
+  private submitVote(conn: Connection, message: Extract<ClientMessage, { t: "SUBMIT_VOTE" }>): void {
+    const uid = conn.uid!;
     this.withRoom(uid, (room) => {
-      voting.submitVote(room, uid, targetUid, this.deps);
+      const round = room.round;
+      const player = room.players.get(uid);
+      // Never classify a non-member or an ineligible identity as a benign race.
+      if (!player || !player.connected || player.pendingRemoval || !round?.participantUids.includes(uid)) throw new GameError("NOT_PLAYER");
+      if (!message.voteContext) {
+        if (room.phase !== "VOTING" && room.phase !== "RESULT" && room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
+        throw new GameError("CLIENT_UPDATE_REQUIRED");
+      }
+      const ignore = (reason: "CLOSED" | "STALE_CHALLENGE") => {
+        conn.send({ t: "VOTE_IGNORED", reason, ...this.ridField(message) });
+        this.sendState(conn);
+      };
+      if (message.voteContext !== round.voteContext) return ignore("STALE_CHALLENGE");
+      if (room.phase === "VOTING" && !room.pause && room.phaseEndsAt !== undefined && this.deps.now() >= room.phaseEndsAt) {
+        this.timeoutVoting(room, round);
+      }
+      const existing = round.votes.get(uid);
+      if (existing === message.targetUid) {
+        this.sendState(conn);
+        return;
+      }
+      if (existing !== undefined) throw new GameError("VOTE_ALREADY_SUBMITTED");
+      if (round.resolutionSealed || room.phase === "RESULT" || room.phase === "GAME_OVER") return ignore("CLOSED");
+      voting.submitVote(room, uid, message.targetUid, this.deps);
       this.markMeaningful(room);
       this.resolveVotingIfReady(room);
       this.broadcast(room);
@@ -1338,6 +1361,9 @@ export class RoomManager {
 
   private requestContext(uid: string, message: ClientMessage): string {
     const room = this.roomOf(uid);
+    // A vote remains the same action across VOTING -> RESULT. Its challenge
+    // context still prevents old request IDs being reused for a new ballot.
+    if (room && message.t === "SUBMIT_VOTE") return `${room.code}:g${room.matchGeneration}:r${room.round?.index ?? room.currentRound}:c${room.round?.challengeIndex ?? 0}:${room.round?.voteContext ?? "legacy"}`;
     if (room) return `${room.code}:g${room.matchGeneration}:r${room.currentRound}:c${room.round?.challengeIndex ?? 0}:${room.phase}`;
     return message.t === "JOIN_ROOM" ? `join:${normalizeCode(message.code)}` : "outside-room";
   }

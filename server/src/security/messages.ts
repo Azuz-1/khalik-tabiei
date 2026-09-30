@@ -124,7 +124,9 @@ export function validateClientMessage(
         : null;
 
     case "SUBMIT_VOTE":
-      return exactKeys(value, ["t", "targetUid"], ["rid"]) && validRid(value) && typeof value.targetUid === "string" && UID_RE.test(value.targetUid)
+      // A missing context reaches RoomManager for an actionable upgrade error.
+      return exactKeys(value, ["t", "targetUid"], ["rid", "voteContext"]) && validRid(value) && typeof value.targetUid === "string" && UID_RE.test(value.targetUid) &&
+        (value.voteContext === undefined || (typeof value.voteContext === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value.voteContext)))
         ? (value as ClientMessage)
         : null;
 

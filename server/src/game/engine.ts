@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type { CategoryId, GameMode, GamePhase, PlayStyle } from "../../../shared/types.js";
 import {
   BASE_CHALLENGES,
@@ -261,6 +261,7 @@ function prepareChallenge(
     impostorUid,
     participantUids,
     challengeIndex,
+    voteContext: randomUUID(),
     maxChallenges,
     mode,
     promptId: prompt.id,
@@ -315,6 +316,7 @@ export function beginLegacyRound(room: RoomState, deps: EngineDeps = defaultDeps
     impostorUid,
     participantUids: activePlayers(room).map((player) => player.uid),
     challengeIndex: 1,
+    voteContext: randomUUID(),
     maxChallenges: 1,
     mode: "HANDS",
     promptId: "",

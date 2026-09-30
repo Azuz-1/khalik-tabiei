@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -233,9 +234,9 @@ test("kicking a missing normal preserves committed ballots and never creates a g
   const missing = normals.at(-1)!;
   const remainingNormals = normals.filter((player) => player.uid !== missing.uid);
 
-  manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: missing.uid });
-  manager.handle(remainingNormals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-  manager.handle(remainingNormals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: missing.uid });
+  submitVoteWithContext(manager, remainingNormals[0]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+  submitVoteWithContext(manager, remainingNormals[1]!.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
   manager.handle(host.conn, { t: "KICK_PLAYER", uid: missing.uid });
 
   assert.equal(room.phase, "RESULT");

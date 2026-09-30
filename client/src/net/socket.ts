@@ -54,6 +54,7 @@ let bootstrapAbort: AbortController | null = null;
 let lastInboundMono = 0;
 let noveltySyncedSocket: WebSocket | null = null;
 let noveltySyncedBits = "";
+let expectedRoomExit = false;
 
 const BOOTSTRAP_TIMEOUT_MS = 5_000;
 const CONNECT_TIMEOUT_MS = 7_000;
@@ -61,6 +62,7 @@ const HELLO_TIMEOUT_MS = 5_000;
 const ACTION_TIMEOUT_MS = 10_000;
 const HEARTBEAT_MS = 10_000;
 const STALE_BACKGROUND_MS = 45_000;
+const STALE_HEARTBEAT_MS = 25_000;
 
 function set(patch: Partial<GameState>): void {
   state = { ...state, ...patch };
@@ -153,7 +155,7 @@ function actionCompleted(entry: PendingAction, view: ClientView, previous: Clien
     case "START_VOTING":
       return view.room.phase === "VOTING" || view.room.phase === "RESULT";
     case "SUBMIT_VOTE":
-      return view.myVoteSubmitted === true || view.room.phase === "RESULT";
+      return view.voteContext !== message.voteContext || view.myVoteSubmitted === true || view.room.phase !== "VOTING";
     case "NEXT_ROUND":
       return previous !== null && (
         view.room.phase !== "RESULT" ||
@@ -180,14 +182,16 @@ function sendClockSample(socket: WebSocket): void {
   sampleSeq += 1;
   const sampleId = `s-${sampleSeq}`;
   const clientMonoMs = serverClock.beginSample(sampleId);
-  socket.send(JSON.stringify({ t: "PING", sampleId, clientMonoMs } satisfies ClientMessage));
+  try { socket.send(JSON.stringify({ t: "PING", sampleId, clientMonoMs } satisfies ClientMessage)); }
+  catch { recoverSocket(socket, "heartbeat send failed"); }
 }
 
 function syncPromptNovelty(socket: WebSocket, view: ClientView): void {
   if (socket !== ws || socket.readyState !== WebSocket.OPEN || view.self.role !== "player") return;
   const novelty = currentPromptNoveltyFilter();
   if (noveltySyncedSocket === socket && noveltySyncedBits === novelty.bits) return;
-  socket.send(JSON.stringify({ t: "SYNC_NOVELTY", novelty } satisfies ClientMessage));
+  try { socket.send(JSON.stringify({ t: "SYNC_NOVELTY", novelty } satisfies ClientMessage)); }
+  catch { recoverSocket(socket, "novelty send failed"); return; }
   noveltySyncedSocket = socket;
   noveltySyncedBits = novelty.bits;
 }
@@ -195,7 +199,14 @@ function syncPromptNovelty(socket: WebSocket, view: ClientView): void {
 function startHeartbeat(socket: WebSocket): void {
   window.clearInterval(heartbeatTimer);
   sendClockSample(socket);
-  heartbeatTimer = window.setInterval(() => sendClockSample(socket), HEARTBEAT_MS);
+  heartbeatTimer = window.setInterval(() => {
+    if (socket !== ws) return;
+    if (performance.now() - lastInboundMono > STALE_HEARTBEAT_MS) {
+      recoverSocket(socket, "heartbeat timeout");
+      return;
+    }
+    sendClockSample(socket);
+  }, HEARTBEAT_MS);
 }
 
 function authenticated(socket: WebSocket, message: Extract<ServerMessage, { t: "HELLO_OK" | "STATE" }>): void {
@@ -214,9 +225,13 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
   switch (message.t) {
     case "HELLO_OK": {
       const hadRoom = state.view !== null;
+      const intendedExit = expectedRoomExit;
+      expectedRoomExit = false;
       authenticated(socket, message);
-      set({ uid: message.uid, view: null });
-      if (hadRoom) clearPendingMatching(socket, (entry) => entry.type === "LEAVE_ROOM");
+      set({ uid: message.uid, view: null, ...(hadRoom && !intendedExit ? {
+        notice: "لم تعد الغرفة متاحة أو انتهى مكانك فيها. أنشئ غرفة جديدة أو ادخل برمز جديد.",
+      } : {}) });
+      if (hadRoom) clearPendingMatching(socket, () => true);
       break;
     }
     case "STATE": {
@@ -224,6 +239,7 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
       authenticated(socket, message);
       set({ view: message.view, uid: message.view.self.uid });
       clearAuthoritativePending(socket, message.view, previous);
+      if (![...pending.values()].some((entry) => entry.socket === socket && (entry.type === "LEAVE_ROOM" || entry.type === "CLOSE_ROOM"))) expectedRoomExit = false;
       if (message.view.self.role === "player" && message.view.publicPrompt?.noveltyToken) {
         recordPublicPromptNovelty(message.view.publicPrompt.noveltyToken);
       }
@@ -233,16 +249,26 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
     case "ACK":
       clearPending(message.rid, socket);
       break;
+    case "VOTE_IGNORED":
+      if (message.rid) clearPending(message.rid, socket);
+      feedback(message.reason === "CLOSED"
+        ? "انتهى وقت التصويت قبل وصول صوتك؛ ما تسجّل."
+        : "هذا التصويت كان لتحدّي سابق؛ اختر تصويتك للتحدّي الحالي.");
+      break;
     case "ERROR":
+      if (message.rid && ["LEAVE_ROOM", "CLOSE_ROOM"].includes(pending.get(message.rid)?.type ?? "")) expectedRoomExit = false;
       if (message.rid) clearPending(message.rid, socket);
       errorSeq += 1;
       set({ error: { code: message.code, id: errorSeq } });
       break;
     case "ROOM_CLOSED":
-      clearPendingMatching(socket, (entry) => entry.type === "CLOSE_ROOM");
-      set({ view: null, notice: "الغرفة مقفلة" });
+      expectedRoomExit = false;
+      clearPendingMatching(socket, () => true);
+      set({ view: null, notice: "انتهت الغرفة. تقدر تنشئ غرفة جديدة أو تدخل برمز جديد." });
       break;
     case "KICKED":
+      expectedRoomExit = false;
+      clearPendingMatching(socket, () => true);
       set({ view: null, notice: "مالك الغرفة طلعك من الغرفة" });
       break;
     case "SERVER_RESTARTING": {
@@ -281,6 +307,7 @@ async function bootstrap(generation: number): Promise<boolean> {
 }
 
 async function connectNow(): Promise<void> {
+  window.clearTimeout(reconnectTimer);
   const generation = ++connectGeneration;
   bootstrapAbort?.abort();
   const superseded = ws;
@@ -305,7 +332,7 @@ async function connectNow(): Promise<void> {
   let helloComplete = false;
   const connectTimeout = window.setTimeout(() => {
     if (socket === ws && socket.readyState === WebSocket.CONNECTING) {
-      try { socket.close(4000, "connect timeout"); } catch { /* close race */ }
+      recoverSocket(socket, "connect timeout");
     }
   }, CONNECT_TIMEOUT_MS);
   let helloTimeout: number | undefined;
@@ -316,10 +343,11 @@ async function connectNow(): Promise<void> {
       return;
     }
     window.clearTimeout(connectTimeout);
-    socket.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 } satisfies ClientMessage));
+    try { socket.send(JSON.stringify({ t: "HELLO", protocolVersion: 2 } satisfies ClientMessage)); }
+    catch { recoverSocket(socket, "hello send failed"); return; }
     helloTimeout = window.setTimeout(() => {
       if (!helloComplete && socket === ws) {
-        try { socket.close(4001, "hello timeout"); } catch { /* close race */ }
+        recoverSocket(socket, "hello timeout");
       }
     }, HELLO_TIMEOUT_MS);
   };
@@ -355,11 +383,28 @@ async function connectNow(): Promise<void> {
 
   socket.onerror = () => {
     if (socket !== ws) return;
-    try { socket.close(); } catch { /* close race */ }
+    recoverSocket(socket, "socket error");
   };
 }
 
+function recoverSocket(socket: WebSocket, reason: string): void {
+  if (socket !== ws) return;
+  failPendingForSocket(socket);
+  ws = null;
+  window.clearInterval(heartbeatTimer);
+  if (noveltySyncedSocket === socket) {
+    noveltySyncedSocket = null;
+    noveltySyncedBits = "";
+  }
+  set({ status: "offline" });
+  // Do not wait for onclose: a blackholed socket can keep its closing handshake
+  // pending indefinitely. The old callbacks cannot mutate the next connection.
+  try { socket.close(4002, reason); } catch { /* close race */ }
+  scheduleReconnect();
+}
+
 function connect(): void {
+  if (bootstrapAbort) return;
   const current = ws;
   if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) return;
   void connectNow();
@@ -380,7 +425,8 @@ export function send(message: ClientMessage): boolean {
     feedback("الاتصال مو جاهز للحين. جرّب بعد ما يرجع الاتصال.");
     return false;
   }
-  socket.send(JSON.stringify(message));
+  try { socket.send(JSON.stringify(message)); }
+  catch { recoverSocket(socket, "send failed"); return false; }
   return true;
 }
 
@@ -404,7 +450,9 @@ function sendAction(message: ActionMessage): string | null {
   }, ACTION_TIMEOUT_MS);
   pending.set(rid, { type: message.t, message, socket, timeout });
   syncPendingState();
-  socket.send(JSON.stringify({ ...message, rid }));
+  if (message.t === "LEAVE_ROOM" || message.t === "CLOSE_ROOM") expectedRoomExit = true;
+  try { socket.send(JSON.stringify({ ...message, rid })); }
+  catch { recoverSocket(socket, "send failed"); return null; }
   return rid;
 }
 
@@ -443,14 +491,16 @@ if (typeof window !== "undefined") {
       scheduleReconnect();
       return;
     }
-    try { socket.close(4003, "device offline"); } catch { /* close race */ }
+    recoverSocket(socket, "device offline");
   });
 }
+
+export function getGameSnapshot(): GameState { return state; }
 
 export function useGame(): GameState {
   return useSyncExternalStore(
     (callback) => { listeners.add(callback); return () => listeners.delete(callback); },
-    () => state,
+    getGameSnapshot,
   );
 }
 
@@ -473,7 +523,16 @@ export const actions = {
   markReady: () => sendAction({ t: "MARK_READY" }),
   submitAnswer: (answer: string) => sendAction({ t: "SUBMIT_ANSWER", answer }),
   redealChallenge: () => sendAction({ t: "REDEAL_CHALLENGE" }),
-  submitVote: (targetUid: string) => sendAction({ t: "SUBMIT_VOTE", targetUid }),
+  submitVote: (targetUid: string, voteContext: string | undefined) => {
+    const view = state.view;
+    if (!view || view.room.phase !== "VOTING" || !voteContext || voteContext !== view.voteContext || view.myVoteSubmitted ||
+      !view.voteTargets?.some((target) => target.uid === targetUid) ||
+      (view.room.phaseEndsAt !== undefined && serverClock.now() >= view.room.phaseEndsAt)) {
+      feedback("التصويت هذا مو متاح الحين. انتظر تحديث حالة اللعبة.");
+      return null;
+    }
+    return sendAction({ t: "SUBMIT_VOTE", targetUid, voteContext });
+  },
   nextRound: () => sendAction({ t: "NEXT_ROUND" }),
   kick: (uid: string) => sendAction({ t: "KICK_PLAYER", uid }),
   closeRoom: () => sendAction({ t: "CLOSE_ROOM" }),

@@ -1,4 +1,4 @@
-import type { ServerMessage } from "../../shared/types.js";
+import type { ClientMessage, ServerMessage } from "../../shared/types.js";
 import { Connection } from "../src/net/connection.js";
 import { RoomManager } from "../src/game/roomManager.js";
 import type { WebSocket } from "ws";
@@ -72,4 +72,10 @@ export function joinPlayer(
 
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Fixture equivalent of submitting the authoritative view's ballot context. */
+export function submitVoteWithContext(manager: RoomManager, conn: Connection, message: Extract<ClientMessage, { t: "SUBMIT_VOTE" }>): boolean {
+  const room = conn.roomCode ? manager.roomForTests(conn.roomCode) : undefined;
+  return manager.handle(conn, { ...message, voteContext: message.voteContext ?? room?.round?.voteContext });
 }

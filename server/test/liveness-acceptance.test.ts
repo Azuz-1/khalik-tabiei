@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TIMERS } from "../../shared/constants.js";
@@ -92,7 +93,7 @@ test("a non-owner phone can be offline for the equivalent of 30 seconds of discu
 
     await waitForCondition(() => room.phase === "VOTING");
     assert.equal(
-      manager.handle(reconnected.conn, { t: "SUBMIT_VOTE", targetUid: validTarget(room, sleeper.uid) }),
+      submitVoteWithContext(manager, reconnected.conn, { t: "SUBMIT_VOTE", targetUid: validTarget(room, sleeper.uid) }),
       true,
       "reconnected player can vote in the same global ballot window",
     );
@@ -113,7 +114,7 @@ test("a non-owner phone offline for a full minute is not kicked; missing the vot
     await waitForCondition(() => room.phase === "VOTING");
     for (const actor of [owner, ...joined.slice(1)]) {
       assert.equal(
-        manager.handle(actor.conn, { t: "SUBMIT_VOTE", targetUid: validTarget(room, actor.uid) }),
+        submitVoteWithContext(manager, actor.conn, { t: "SUBMIT_VOTE", targetUid: validTarget(room, actor.uid) }),
         true,
       );
     }
@@ -144,7 +145,7 @@ test("named owner offline through discussion+voting does not pause the game; aft
     await waitForCondition(() => room.phase === "VOTING");
     for (const actor of joined) {
       assert.equal(
-        manager.handle(actor.conn, { t: "SUBMIT_VOTE", targetUid: validTarget(room, actor.uid) }),
+        submitVoteWithContext(manager, actor.conn, { t: "SUBMIT_VOTE", targetUid: validTarget(room, actor.uid) }),
         true,
       );
     }

@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ServerClock } from "../../client/src/net/clock.js";
@@ -188,18 +189,18 @@ test("request IDs are challenge-scoped so a prior vote cannot receive a stale AC
   const targetUid = room.round!.participantUids.find((uid) => uid !== voter.uid)!;
   room.phase = "VOTING";
 
-  assert.equal(manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote1" }), true);
+  assert.equal(submitVoteWithContext(manager, voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote1" }), true);
   assert.equal(room.round!.votes.get(voter.uid), targetUid);
   assert.equal(lastMessage(voter.socket, "ACK")?.rid, "vote1");
 
   // Same stint, same phase, but a new Challenge must be a distinct idempotency context.
   room.round!.challengeIndex = 2;
   room.round!.votes.clear();
-  assert.equal(manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote1" }), false);
+  assert.equal(submitVoteWithContext(manager, voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote1" }), false);
   assert.equal(lastMessage(voter.socket, "ERROR")?.code, "BAD_REQUEST");
   assert.equal(room.round!.votes.has(voter.uid), false, "stale request id is rejected instead of acknowledged as a fresh vote");
 
-  assert.equal(manager.handle(voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote2" }), true);
+  assert.equal(submitVoteWithContext(manager, voter.conn, { t: "SUBMIT_VOTE", targetUid, rid: "vote2" }), true);
   assert.equal(room.round!.votes.get(voter.uid), targetUid, "a fresh request id records the new Challenge vote");
   manager.dispose();
 });
