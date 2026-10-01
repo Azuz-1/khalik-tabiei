@@ -1,0 +1,298 @@
+{
+  "validatedImplementationCommit": "4f1475e32928f351b0d6e6009e6c55de9f9f6d07",
+  "pullRequest": "https://github.com/Azuz-1/khalik-tabiei/pull/58",
+  "ciUrl": "https://github.com/Azuz-1/khalik-tabiei/actions/runs/36713713095",
+  "codeqlUrl": "https://github.com/Azuz-1/khalik-tabiei/actions/runs/36713712911",
+  "workflowRuns": [
+    {
+      "id": 36713712911,
+      "name": "CodeQL",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 462,
+      "jobs_url": "https://api.github.com/repos/Azuz-1/khalik-tabiei/actions/runs/36713712911/jobs",
+      "logs_url": "https://api.github.com/repos/Azuz-1/khalik-tabiei/actions/runs/36713712911/logs",
+      "workflow_id": 347349138
+    },
+    {
+      "id": 36713713095,
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 490,
+      "jobs_url": "https://api.github.com/repos/Azuz-1/khalik-tabiei/actions/runs/36713713095/jobs",
+      "logs_url": "https://api.github.com/repos/Azuz-1/khalik-tabiei/actions/runs/36713713095/logs",
+      "workflow_id": 347349139
+    }
+  ],
+  "jobs": [
+    {
+      "id": 109881380989,
+      "name": "adversarial",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 36713713095,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run concurrent multi-group adversarial WebSocket E2E",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ]
+    },
+    {
+      "id": 109881381259,
+      "name": "validate",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 36713713095,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run npm run typecheck",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run npm test",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Run real WebSocket integration E2E",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Production dependency audit",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Full dependency audit",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Build production container",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Inspect and smoke-test production container",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        }
+      ]
+    },
+    {
+      "id": 109885752872,
+      "name": "browser",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 36713713095,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Install pinned Playwright test runner",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Install pinned Chromium runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Run real browser Host and Player flows",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Upload browser failure evidence",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        }
+      ]
+    }
+  ],
+  "validateEvidence": [
+    "2026-09-30T12:16:29.9450861Z found 0 vulnerabilities",
+    "2026-09-30T12:16:52.5385846Z # tests 401",
+    "2026-09-30T12:16:52.5386730Z # pass 401",
+    "2026-09-30T12:16:52.5387098Z # fail 0",
+    "2026-09-30T12:25:46.3522063Z COMPETITIVE E2E PASSED",
+    "2026-09-30T12:28:42.6384959Z 5P SCORING E2E ALL PASSED ✅",
+    "2026-09-30T12:28:43.0495370Z TRANSPORT ALL PASSED ✅",
+    "2026-09-30T12:28:44.0934041Z DRAIN ALL PASSED ✅",
+    "2026-09-30T12:28:44.5129153Z found 0 vulnerabilities",
+    "2026-09-30T12:28:44.9091485Z found 0 vulnerabilities",
+    "2026-09-30T12:28:50.7319749Z #11 1.373 found 0 vulnerabilities",
+    "2026-09-30T12:28:53.3176424Z #12 3.960 found 0 vulnerabilities"
+  ],
+  "browserEvidence": [
+    "2026-09-30T12:30:00.7253459Z Running 20 tests using 1 worker",
+    "2026-09-30T12:43:38.1820962Z   20 passed (13.7m)"
+  ],
+  "limitations": [
+    "Browser contexts and viewport emulation are not physical phones or human playtests.",
+    "No normal-network latency/recovery budget certification or full-game capacity soak."
+  ]
+}

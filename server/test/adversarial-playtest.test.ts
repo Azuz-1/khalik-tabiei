@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { GamePhase } from "../../shared/types.js";
@@ -63,7 +64,7 @@ function voteToCatch(
   const firstNormal = playerConnections.find((player) => player.uid !== impostorUid)!;
 
   for (const player of playerConnections) {
-    manager.handle(player.conn, {
+    submitVoteWithContext(manager, player.conn, {
       t: "SUBMIT_VOTE",
       targetUid: player.uid === impostorUid ? firstNormal.uid : impostorUid,
     });
@@ -157,7 +158,7 @@ test("player drop and reconnect during COUNTDOWN keeps the exact challenge synch
   for (const player of players) {
     const conn = player.uid === reconnecting.uid ? reconnected.conn : player.conn;
     const target = players.find((candidate) => candidate.uid !== player.uid)!.uid;
-    manager.handle(conn, { t: "SUBMIT_VOTE", targetUid: target });
+    submitVoteWithContext(manager, conn, { t: "SUBMIT_VOTE", targetUid: target });
   }
   assert.equal(room.phase, "RESULT");
   manager.dispose();
@@ -234,7 +235,7 @@ test("Host can remove a missing normal voter and finish VOTING without a redeal"
   const firstNormal = remaining.find((player) => player.uid !== roundBefore.impostorUid)!;
 
   for (const player of remaining) {
-    manager.handle(player.conn, {
+    submitVoteWithContext(manager, player.conn, {
       t: "SUBMIT_VOTE",
       targetUid: player.uid === roundBefore.impostorUid ? firstNormal.uid : roundBefore.impostorUid,
     });

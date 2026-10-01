@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RoomManager } from "../src/game/roomManager.js";
@@ -249,10 +250,10 @@ test("survived challenge advances with same impostor and next balanced challenge
   const bagBefore = room.modeBag.length;
 
   manager.handle(host.conn, { t: "START_VOTING" });
-  manager.handle(players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: players[1]!.uid });
-  manager.handle(players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[2]!.uid });
-  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[3]!.uid });
-  manager.handle(players[3]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
+  submitVoteWithContext(manager, players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: players[1]!.uid });
+  submitVoteWithContext(manager, players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[2]!.uid });
+  submitVoteWithContext(manager, players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[3]!.uid });
+  submitVoteWithContext(manager, players[3]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round?.roundComplete, false);
 
@@ -282,7 +283,7 @@ test("Host sees anonymous vote progress while target totals stay hidden from eve
   assert.equal(hostView.liveVoteTally, undefined);
 
   const firstTarget = players[1]!.uid;
-  manager.handle(players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: firstTarget });
+  submitVoteWithContext(manager, players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: firstTarget });
   hostView = lastMessage(host.socket, "STATE")!.view;
   assert.equal(hostView.votesProgress?.submitted, 1);
   assert.equal(hostView.liveVoteTally, undefined);
@@ -300,12 +301,12 @@ test("Host sees anonymous vote progress while target totals stay hidden from eve
     assert.ok(!json.includes("voteBreakdown"));
   }
 
-  manager.handle(players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
+  submitVoteWithContext(manager, players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
   hostView = lastMessage(host.socket, "STATE")!.view;
   assert.equal(hostView.votesProgress?.submitted, 2);
   assert.equal(hostView.liveVoteTally, undefined);
 
-  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
+  submitVoteWithContext(manager, players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
   assert.equal(room.phase, "RESULT");
   manager.dispose();
 });
@@ -321,12 +322,12 @@ test("voting survives disconnect/reconnect and completes only after every partic
   const { host, players, room } = await toDiscussion(manager);
 
   manager.handle(host.conn, { t: "START_VOTING" });
-  manager.handle(players[0]!.conn, {
+  submitVoteWithContext(manager, players[0]!.conn, {
     t: "SUBMIT_VOTE",
     targetUid: players[1]!.uid,
   });
   manager.disconnect(players[0]!.conn);
-  manager.handle(players[1]!.conn, {
+  submitVoteWithContext(manager, players[1]!.conn, {
     t: "SUBMIT_VOTE",
     targetUid: players[0]!.uid,
   });
@@ -336,7 +337,7 @@ test("voting survives disconnect/reconnect and completes only after every partic
   manager.disconnect(third.conn);
   const thirdReconnect = authenticatedConnection(manager, third.uid);
   assert.equal(lastMessage(thirdReconnect.socket, "STATE")?.view.room.phase, "VOTING");
-  manager.handle(thirdReconnect.conn, {
+  submitVoteWithContext(manager, thirdReconnect.conn, {
     t: "SUBMIT_VOTE",
     targetUid: players[0]!.uid,
   });
@@ -383,10 +384,10 @@ test("disconnect after a survived challenge keeps the result and seat until expl
   const { host, players, room } = await toDiscussion(manager, 4);
   manager.handle(host.conn, { t: "START_VOTING" });
 
-  manager.handle(players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: players[1]!.uid });
-  manager.handle(players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
-  manager.handle(players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[3]!.uid });
-  manager.handle(players[3]!.conn, { t: "SUBMIT_VOTE", targetUid: players[2]!.uid });
+  submitVoteWithContext(manager, players[0]!.conn, { t: "SUBMIT_VOTE", targetUid: players[1]!.uid });
+  submitVoteWithContext(manager, players[1]!.conn, { t: "SUBMIT_VOTE", targetUid: players[0]!.uid });
+  submitVoteWithContext(manager, players[2]!.conn, { t: "SUBMIT_VOTE", targetUid: players[3]!.uid });
+  submitVoteWithContext(manager, players[3]!.conn, { t: "SUBMIT_VOTE", targetUid: players[2]!.uid });
   assert.equal(room.phase, "RESULT");
   assert.equal(room.round?.roundComplete, false);
 

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import express from "express";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
@@ -21,7 +21,7 @@ import {
 import { decodePromptNoveltyFilter } from "./game/promptNovelty.js";
 import { Connection } from "./net/connection.js";
 import { ConnectionCapacity, type CapacityLease } from "./net/capacity.js";
-import { ensureAnonymousSession, readAnonymousSession } from "./auth/session.js";
+import { ensureAnonymousSession, isTrialRequest, readAnonymousSession } from "./auth/session.js";
 import { canonicalOrigin, isAllowedWebSocketOrigin } from "./security/origin.js";
 import { parseClientMessage } from "./security/messages.js";
 import { AbuseGuard, clientIp } from "./security/rateLimit.js";
@@ -39,6 +39,7 @@ const clientDist = clientDistCandidates.find((candidate) => existsSync(candidate
 
 type ConnectionKind = "participant" | "display";
 interface UpgradeContext {
+  trial?: boolean;
   uid: string;
   origin: string;
   ip: string;
@@ -87,6 +88,19 @@ function bearerSecret(value: string | undefined): string | null {
   return match?.[1] ?? null;
 }
 
+/** Replaces the build placeholder with the configured origin (empty when unset). */
+export function withPublicOrigin(html: string, origin: string | null | undefined): string {
+  return html.replaceAll("__PUBLIC_ORIGIN__", origin ?? "");
+}
+
+function loadIndexHtml(origin: string | null | undefined): string | null {
+  try {
+    return withPublicOrigin(readFileSync(join(clientDist, "index.html"), "utf8"), origin);
+  } catch {
+    return null;
+  }
+}
+
 export function createGameServer(options: GameServerOptions = {}) {
   const app = express();
   const manager = new RoomManager({
@@ -111,6 +125,16 @@ export function createGameServer(options: GameServerOptions = {}) {
   let drainTimer: NodeJS.Timeout | undefined;
 
   const displayRoomKey = (code: string, createdAt: number) => `${code}:${createdAt}`;
+  // Revocation belongs to a room incarnation. Closed/expired rooms can never
+  // authenticate their old capability, so retaining their epochs only leaks
+  // memory across successive parties. Prune both before writes and on heartbeat.
+  const pruneDisplayEpochs = () => {
+    for (const key of displayEpochs.keys()) {
+      const [code, createdAt] = key.split(":");
+      const room = manager.roomByCode(code!);
+      if (!room || room.closed || room.createdAt !== Number(createdAt)) displayEpochs.delete(key);
+    }
+  };
   const displayEpoch = (code: string, createdAt: number) => displayEpochs.get(displayRoomKey(code, createdAt)) ?? 0;
   const displayInUse = (code: string, createdAt: number): boolean => {
     const key = displayRoomKey(code, createdAt);
@@ -121,6 +145,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     return false;
   };
   const revokeDisplay = (code: string, createdAt: number) => {
+    pruneDisplayEpochs();
     const key = displayRoomKey(code, createdAt);
     displayEpochs.set(key, (displayEpochs.get(key) ?? 0) + 1);
     const active = activeDisplays.get(key);
@@ -134,7 +159,7 @@ export function createGameServer(options: GameServerOptions = {}) {
 
   const applyPromptNovelty = (conn: Connection, novelty: Parameters<typeof decodePromptNoveltyFilter>[0]) => {
     if (!conn.uid || !conn.roomCode) return;
-    const room = manager.roomForTests(conn.roomCode);
+    const room = manager.roomByCode(conn.roomCode);
     if (!room || room.closed || !room.players.has(conn.uid)) return;
     const decoded = decodePromptNoveltyFilter(novelty);
     if (!decoded) return;
@@ -219,7 +244,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     }
 
     const binding = pairing.binding;
-    const room = manager.roomForTests(binding.roomCode);
+    const room = manager.roomByCode(binding.roomCode);
     const currentEpoch = room ? displayEpoch(room.code, room.createdAt) : -1;
     if (
       !room
@@ -266,7 +291,7 @@ export function createGameServer(options: GameServerOptions = {}) {
         return;
       }
       const code = normalizeCode(req.params.code);
-      const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
+      const room = code.length === ROOM_CODE_LENGTH ? manager.roomByCode(code) : undefined;
       if (!room || room.closed || room.hostUid !== session.uid) {
         res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
         return;
@@ -301,7 +326,7 @@ export function createGameServer(options: GameServerOptions = {}) {
       res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
       return;
     }
-    const room = manager.roomForTests(code);
+    const room = manager.roomByCode(code);
     if (!room || room.closed || room.hostUid !== session.uid) {
       // Do not reveal whether a valid room code belongs to someone else.
       res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
@@ -322,7 +347,7 @@ export function createGameServer(options: GameServerOptions = {}) {
       return;
     }
     const code = normalizeCode(req.params.code);
-    const room = code.length === ROOM_CODE_LENGTH ? manager.roomForTests(code) : undefined;
+    const room = code.length === ROOM_CODE_LENGTH ? manager.roomByCode(code) : undefined;
     if (!room || room.closed || room.hostUid !== session.uid) {
       res.status(404).json({ ok: false, code: "ROOM_NOT_FOUND" });
       return;
@@ -338,7 +363,7 @@ export function createGameServer(options: GameServerOptions = {}) {
       res.status(401).json({ ok: false, code: "UNAUTHORIZED" });
       return;
     }
-    const result = clientTelemetry.ingest(session.uid, req.body);
+    const result = clientTelemetry.ingest(session.uid, req.body, { trial: isTrialRequest(req) });
     if (result.ok) {
       res.status(204).end();
       return;
@@ -373,13 +398,18 @@ export function createGameServer(options: GameServerOptions = {}) {
     res.status(status).json({ ok: false, code: result.code });
   });
 
-  app.use(express.static(clientDist));
+  // index.html is served through the fallback so link previews (WhatsApp,
+  // iMessage) get an absolute og:image URL; crawlers ignore relative ones.
+  app.get("/index.html", (_req, res) => res.redirect(301, "/"));
+  app.use(express.static(clientDist, { index: false }));
+  // Read once at startup: request handlers never touch the file system.
+  const indexHtml = loadIndexHtml(config.publicOrigin);
   app.get("*", (req, res) => {
     const ip = clientIp(req, config.clientIpMode);
     if (!abuse.allowHttpFallback(ip)) return void res.status(429).type("text/plain").send("Too Many Requests");
-    res.sendFile(join(clientDist, "index.html"), (error) => {
-      if (error && !res.headersSent) res.status(503).send("Client build unavailable.");
-    });
+    if (indexHtml === null) return void res.status(503).send("Client build unavailable.");
+    res.setHeader("Cache-Control", "no-cache");
+    res.type("html").send(indexHtml);
   });
 
   server.on("upgrade", (req, socket, head) => {
@@ -429,6 +459,7 @@ export function createGameServer(options: GameServerOptions = {}) {
           ip,
           lease,
           kind,
+          trial: isTrialRequest(req),
           ...(displayCode ? { displayCode } : {}),
         });
         wss.emit("connection", ws, req);
@@ -443,6 +474,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     const context = contexts.get(ws);
     if (!context) return ws.close(1008, "missing connection context");
     const conn = new Connection(ws, context.origin, context.ip, config.maxBufferedBytes);
+    conn.trial = context.trial === true;
     connections.set(ws, conn);
     conn.startAuthenticationTimeout(config.authTimeoutMs);
     let displayTimer: NodeJS.Timeout | undefined;
@@ -450,7 +482,7 @@ export function createGameServer(options: GameServerOptions = {}) {
 
     const pushDisplayState = () => {
       if (context.kind !== "display" || !context.displayCode || !conn.uid) return;
-      const room = manager.roomForTests(context.displayCode);
+      const room = manager.roomByCode(context.displayCode);
       const currentEpoch = room ? displayEpoch(room.code, room.createdAt) : -1;
       if (
         !room
@@ -491,6 +523,17 @@ export function createGameServer(options: GameServerOptions = {}) {
         return;
       }
 
+      // A valid frame is still work before HELLO. Meter it against the signed
+      // upgrade identity (or the IP for sessionless display admission) so the
+      // authentication timeout cannot become an unbounded parsing/write window.
+      if (conn.uid === null && !abuse.allowMessage(
+        context.kind === "participant" ? context.uid : `ip:${conn.ip}`,
+        msg.t,
+      )) {
+        violate("RATE_LIMITED", "rid" in msg ? msg.rid : undefined);
+        return;
+      }
+
       if (msg.t === "HELLO") {
         if (draining) {
           conn.send({ t: "ERROR", code: "SERVER_RESTARTING", ...(msg.rid ? { rid: msg.rid } : {}) });
@@ -503,7 +546,7 @@ export function createGameServer(options: GameServerOptions = {}) {
           return;
         }
         if (context.kind === "display") {
-          const room = context.displayCode ? manager.roomForTests(context.displayCode) : undefined;
+          const room = context.displayCode ? manager.roomByCode(context.displayCode) : undefined;
           const epoch = room ? displayEpoch(room.code, room.createdAt) : -1;
           if (
             !room
@@ -616,6 +659,7 @@ export function createGameServer(options: GameServerOptions = {}) {
   });
 
   const heartbeat = setInterval(() => {
+    pruneDisplayEpochs();
     for (const ws of wss.clients) {
       const conn = connections.get(ws);
       if (!conn || !conn.alive) {
@@ -675,6 +719,7 @@ export function createGameServer(options: GameServerOptions = {}) {
     displayPairings,
     dispose,
     capacity,
+    displayEpochCountForTests: () => displayEpochs.size,
     beginDrain,
     finishDrain,
     isReady: () => !draining,

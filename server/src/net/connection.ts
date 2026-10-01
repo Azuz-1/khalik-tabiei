@@ -11,6 +11,8 @@ export class Connection {
   readonly ip: string;
   uid: string | null = null;
   roomCode: string | null = null;
+  /** Owner trial session: rooms it creates are analytics environment "test". */
+  trial = false;
   alive = true;
   private disconnected = false;
   private policyClosing = false;

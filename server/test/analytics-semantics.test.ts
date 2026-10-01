@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { AnalyticsEvent } from "../../shared/types.js";
@@ -46,9 +47,9 @@ function resolveCurrentChallenge(
   const normals = players.filter((player) => player.uid !== impostor.uid);
   for (const normal of normals) {
     const target = catchImpostor ? impostor.uid : normals.find((candidate) => candidate.uid !== normal.uid)?.uid ?? impostor.uid;
-    assert.equal(manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: target }), true);
+    assert.equal(submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: target }), true);
   }
-  assert.equal(manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid }), true);
+  assert.equal(submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid }), true);
   assert.equal(room.phase, "RESULT");
 }
 

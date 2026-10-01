@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { AnalyticsEvent } from "../../shared/types.js";
@@ -48,8 +49,8 @@ test("deep gameplay analytics correlates anonymous room/match lifecycle and vote
 
   const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
   const normals = players.filter((player) => player.uid !== impostor.uid);
-  for (const normal of normals) assert.equal(manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid }), true);
-  assert.equal(manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid }), true);
+  for (const normal of normals) assert.equal(submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid }), true);
+  assert.equal(submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid }), true);
   assert.equal(room.phase, "RESULT");
 
   const created = recorded.events.find((entry) => entry.event === "room_created")!;

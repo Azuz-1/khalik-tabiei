@@ -57,6 +57,9 @@ export class ServerClock {
     if (!this.anchor && Number.isFinite(serverMs)) this.anchor = { serverMs, monoMs };
   }
 
+  /** True once a server time anchor exists; before that now() is only the device clock. */
+  isSynchronized(): boolean { return this.anchor !== null; }
+
   now(monoMs = this.monoNow()): number {
     return this.anchor ? this.anchor.serverMs + monoMs - this.anchor.monoMs : Date.now();
   }

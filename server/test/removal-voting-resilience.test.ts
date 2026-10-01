@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as engine from "../src/game/engine.js";
@@ -57,15 +58,15 @@ function castThreeVotesWithMissingNormal(
   // The impostor's already-cast ballot targets D. After D leaves, this ballot
   // is intentionally wasted but remains committed. The two remaining normals
   // vote for the impostor so the recalculated cast-vote majority is exercised.
-  manager.handle(impostor.conn, {
+  submitVoteWithContext(manager, impostor.conn, {
     t: "SUBMIT_VOTE",
     targetUid: missing.uid,
   });
-  manager.handle(remainingNormals[0].conn, {
+  submitVoteWithContext(manager, remainingNormals[0].conn, {
     t: "SUBMIT_VOTE",
     targetUid: impostor.uid,
   });
-  manager.handle(remainingNormals[1].conn, {
+  submitVoteWithContext(manager, remainingNormals[1].conn, {
     t: "SUBMIT_VOTE",
     targetUid: impostor.uid,
   });
@@ -154,8 +155,8 @@ async function assertRemovedTargetBallotDoesNotStrengthenRemainingVote(
     const impostorVoter = normals[0]!;
     const wastedBallotVoter = normals[1]!;
 
-    manager.handle(impostorVoter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-    manager.handle(wastedBallotVoter.conn, { t: "SUBMIT_VOTE", targetUid: departingTarget.uid });
+    submitVoteWithContext(manager, impostorVoter.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(manager, wastedBallotVoter.conn, { t: "SUBMIT_VOTE", targetUid: departingTarget.uid });
 
     if (remove === "kick") manager.handle(host.conn, { t: "KICK_PLAYER", uid: departingTarget.uid });
     else manager.handle(departingTarget.conn, { t: "LEAVE_ROOM" });

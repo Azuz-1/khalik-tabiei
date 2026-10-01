@@ -76,6 +76,14 @@ export function validateClientMessage(
     case "REMATCH":
       return actionNoFields(value) ? (value as ClientMessage) : null;
 
+    case "RETURN_TO_LOBBY":
+      // Bound to the match the owner saw, so a delayed command cannot end a newer one.
+      return exactKeys(value, ["t", "matchGeneration"], ["rid"]) && validRid(value) &&
+        typeof value.matchGeneration === "number" && Number.isSafeInteger(value.matchGeneration) &&
+        value.matchGeneration >= 0 && value.matchGeneration <= 1_000_000
+        ? (value as ClientMessage)
+        : null;
+
     case "PING":
       if (exactKeys(value, ["t"])) return value as ClientMessage;
       return exactKeys(value, ["t", "sampleId", "clientMonoMs"]) &&
@@ -124,7 +132,9 @@ export function validateClientMessage(
         : null;
 
     case "SUBMIT_VOTE":
-      return exactKeys(value, ["t", "targetUid"], ["rid"]) && validRid(value) && typeof value.targetUid === "string" && UID_RE.test(value.targetUid)
+      // A missing context reaches RoomManager for an actionable upgrade error.
+      return exactKeys(value, ["t", "targetUid"], ["rid", "voteContext"]) && validRid(value) && typeof value.targetUid === "string" && UID_RE.test(value.targetUid) &&
+        (value.voteContext === undefined || (typeof value.voteContext === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value.voteContext)))
         ? (value as ClientMessage)
         : null;
 

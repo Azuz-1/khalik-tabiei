@@ -19,7 +19,11 @@ export { analyticsPlayerId };
 
 export type AnalyticsValue = string | number | boolean;
 export type AnalyticsProps = Record<string, AnalyticsValue | undefined>;
-export type AnalyticsTracker = (event: AnalyticsEvent, props?: AnalyticsProps) => void;
+export interface AnalyticsTrackOptions {
+  /** Owner trial rooms/sessions are labelled "test" so launch metrics exclude them. */
+  trial?: boolean;
+}
+export type AnalyticsTracker = (event: AnalyticsEvent, props?: AnalyticsProps, options?: AnalyticsTrackOptions) => void;
 export type AnalyticsEnvironment = "production" | "staging" | "development" | "test";
 
 export interface AnalyticsRecord {
@@ -199,7 +203,7 @@ const ALLOWED_KEYS: Record<AnalyticsEvent, readonly string[]> = {
     "orientationChanges",
     "routeBucket",
   ],
-  client_error: ["clientSessionId", "kind", "routeBucket", "online"],
+  client_error: ["clientSessionId", "kind", "routeBucket", "online", "errorClass", "surface", "phase", "bundleId", "sourceAsset", "line", "column"],
 };
 
 const queue: AnalyticsRecord[] = [];
@@ -305,13 +309,13 @@ async function flush(): Promise<void> {
   }
 }
 
-export const track: AnalyticsTracker = (event, props = {}) => {
+export const track: AnalyticsTracker = (event, props = {}, options = {}) => {
   if (!ENABLED) return;
   try {
     const record: AnalyticsRecord = {
       eventId: randomUUID(),
       schemaVersion: ANALYTICS_SCHEMA_VERSION,
-      environment: analyticsEnvironment(),
+      environment: options.trial ? "test" : analyticsEnvironment(),
       event,
       occurredAt: new Date().toISOString(),
       props: sanitizeAnalyticsProps(event, props),

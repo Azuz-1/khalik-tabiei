@@ -22,7 +22,7 @@ export function Player({ view }: { view: ClientView }) {
     case "HOLD": return <PlayerHold view={view} />;
     case "PROMPT_REVEAL": return <PlayerPromptReveal view={view} />;
     case "DISCUSSION": return <PlayerDiscussion view={view} />;
-    case "VOTING": return <PlayerVote view={view} />;
+    case "VOTING": return <PlayerVote key={view.voteContext} view={view} />;
     case "RESULT": return <PlayerResult view={view} />;
     case "GAME_OVER": return <PlayerGameOver view={view} />;
     default: return <PlayerWatchScreen />;
@@ -293,7 +293,12 @@ function PlayerDiscussion({ view }: { view: ClientView }) {
 
 /* ---- voting --------------------------------------------------------------- */
 
+/** Last-seconds nudge for an unconfirmed ballot; does not change voting rules. */
+const VOTE_NUDGE_MS = 5_000;
+
 function PlayerVote({ view }: { view: ClientView }) {
+  const { status, pendingActions } = useGame();
+  const submitting = pendingActions.includes("SUBMIT_VOTE");
   const [picked, setPicked] = useState<string | null>(null);
   const targets = view.voteTargets ?? [];
   const progress = view.votesProgress ?? { submitted: 0, total: 0 };
@@ -303,6 +308,19 @@ function PlayerVote({ view }: { view: ClientView }) {
   useEffect(() => {
     if (picked && !targets.some((target) => target.uid === picked)) setPicked(null);
   }, [picked, targets]);
+
+  // One short buzz as the last seconds start, while this ballot is still not
+  // confirmed. A picked-but-unconfirmed choice is not a vote: in owner trials
+  // 16% of ballots were missed at the deadline. Unsupported devices ignore it.
+  const phaseEndsAt = view.room.phaseEndsAt;
+  const voted = view.myVoteSubmitted === true;
+  useEffect(() => {
+    if (phaseEndsAt === undefined || voted || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    const delay = phaseEndsAt - VOTE_NUDGE_MS - estimatedServerNow();
+    if (delay < 0) return;
+    const timer = window.setTimeout(() => { try { navigator.vibrate(120); } catch { /* unsupported */ } }, delay);
+    return () => window.clearTimeout(timer);
+  }, [phaseEndsAt, voted]);
 
   if (view.voteTargets === undefined && view.myVoteSubmitted === undefined) return <PlayerWatchScreen />;
 
@@ -328,7 +346,13 @@ function PlayerVote({ view }: { view: ClientView }) {
       <main className="player-vote-main">
         <div className="vote-head">
           <h1 className="player-vote-title">مين تحس إنه المتخفي؟</h1>
-          <PhaseCountdown endsAt={view.room.phaseEndsAt} totalMs={TIMERS.VOTING} />
+          <PhaseCountdown
+            endsAt={view.room.phaseEndsAt}
+            totalMs={TIMERS.VOTING}
+            warningAtSeconds={VOTE_NUDGE_MS / 1_000}
+            warningText={picked ? <>باقي ثواني — أكّد تصويتك على «<bdi>{pickedName}</bdi>»</> : "باقي ثواني — اختر لاعب، ثم أكّد تصويتك"}
+          />
+          <p className="vote-hint">اختر لاعب، ثم اضغط «أكّد التصويت».</p>
         </div>
         <div
           className={`vote-list stage-vote-grid${picked ? " has-pick" : ""}`}
@@ -345,6 +369,7 @@ function PlayerVote({ view }: { view: ClientView }) {
                 role="radio"
                 aria-checked={selected}
                 className={`vote-opt stage-vote-option${selected ? " picked" : ""}`}
+                disabled={status !== "online" || submitting}
                 onClick={() => setPicked(selected ? null : target.uid)}
               >
                 <span className="stage-vote-avatar">
@@ -362,8 +387,8 @@ function PlayerVote({ view }: { view: ClientView }) {
           {pickedName ? <>صوتك لـ <strong dir="auto">{pickedName}</strong></> : "اختر لاعب، وبعدها أكّد."}
         </div>
         <div className="stage-vote-actions">
-          <button className="btn btn-primary" disabled={!picked} onClick={() => picked && actions.submitVote(picked)}>{pickedName ? `أكّد التصويت على ${pickedName}` : "تأكيد التصويت"}</button>
-          {picked ? <button type="button" className="btn btn-quiet btn-sm stage-vote-undo" onClick={() => setPicked(null)}>تراجع</button> : null}
+          <button className="btn btn-primary" disabled={!picked || status !== "online" || submitting} onClick={() => picked && actions.submitVote(picked, view.voteContext)}>{submitting ? "نسجّل صوتك…" : pickedName ? `أكّد التصويت على ${pickedName}` : "أكّد التصويت"}</button>
+          {picked ? <button type="button" className="btn btn-quiet btn-sm stage-vote-undo" disabled={submitting} onClick={() => setPicked(null)}>غيّر اختيارك</button> : null}
         </div>
         <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
       </div>

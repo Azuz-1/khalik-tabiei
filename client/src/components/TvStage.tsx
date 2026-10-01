@@ -114,8 +114,8 @@ function TvLobby({ view, eyebrow }: { view: ClientView; eyebrow?: string }) {
         <div className="tv-join-row">
           <Qr url={view.room.joinUrl} size={360} />
           <div className="tv-code-block">
-            <span className="code-label">كود الغرفة</span>
-            <span className="code-value" aria-label={`كود الغرفة ${view.room.code.split("").join(" ")}`}>
+            <span className="code-label">رمز الغرفة</span>
+            <span className="code-value" aria-label={`رمز الغرفة ${view.room.code.split("").join(" ")}`}>
               {view.room.code.split("").map((char, index) => <span className="code-char" key={index}>{char}</span>)}
             </span>
             <span className="helper">امسح الرمز عشان تدخل كلاعب</span>

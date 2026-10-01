@@ -66,6 +66,7 @@ export type ErrorCode =
   | "KICKED"
   | "RATE_LIMITED"
   | "BAD_REQUEST"
+  | "CLIENT_UPDATE_REQUIRED"
   | "UNAUTHORIZED"
   | "DISPLAY_IN_USE"
   | "SERVER_RESTARTING"
@@ -162,6 +163,12 @@ export interface ClientView {
     code: string;
     phase: GamePhase;
     currentRound: number;
+    /**
+     * Server-issued match identity: 0 before the first match, then +1 each time a
+     * match starts in this room. Owner commands that end a match carry it so a
+     * delayed command from an earlier match cannot end a newer one.
+     */
+    matchGeneration: number;
     totalRounds: number;
     targetChallenges: number;
     completedChallenges: number;
@@ -208,6 +215,8 @@ export interface ClientView {
   answersProgress?: { submitted: number; total: number };
   reveal?: RevealedAnswer[];
   myVoteSubmitted?: boolean;
+  /** Opaque challenge context, emitted only to an eligible voting participant. */
+  voteContext?: string;
   /** Live voting reveals turnout progress only, never a quorum or target totals. */
   votesProgress?: { submitted: number; total: number };
   /** Deprecated live aggregate tally. New product UI intentionally withholds target totals until stint end. */
@@ -243,11 +252,13 @@ export type ClientMessage =
   | ({ t: "REDEAL_CHALLENGE" } & RequestMeta)
   /** @deprecated Voting starts automatically after the authoritative discussion deadline. */
   | ({ t: "START_VOTING" } & RequestMeta)
-  | ({ t: "SUBMIT_VOTE"; targetUid: string } & RequestMeta)
+  | ({ t: "SUBMIT_VOTE"; targetUid: string; voteContext?: string } & RequestMeta)
   | ({ t: "NEXT_ROUND" } & RequestMeta)
   | ({ t: "KICK_PLAYER"; uid: string } & RequestMeta)
   | ({ t: "CLOSE_ROOM" } & RequestMeta)
   | ({ t: "REMATCH" } & RequestMeta)
+  /** Owner ends the current match mid-game; everyone stays seated in the same room. Bound to the match the owner saw, not to a phase. */
+  | ({ t: "RETURN_TO_LOBBY"; matchGeneration: number } & RequestMeta)
   /** Best-effort UX hint only; never trusted for gameplay authority or analytics. */
   | { t: "SYNC_NOVELTY"; novelty: PromptNoveltyFilter }
   | { t: "PING"; sampleId?: string; clientMonoMs?: number };
@@ -256,6 +267,7 @@ export type ServerMessage =
   | { t: "HELLO_OK"; uid: string; protocolVersion?: 2; serverMs?: number }
   | { t: "STATE"; view: ClientView }
   | { t: "ACK"; rid: RequestId }
+  | { t: "VOTE_IGNORED"; reason: "CLOSED" | "STALE_CHALLENGE"; rid?: RequestId }
   | { t: "ERROR"; code: ErrorCode; message?: string; rid?: RequestId }
   | { t: "ROOM_CLOSED"; reason?: string }
   | { t: "KICKED" }

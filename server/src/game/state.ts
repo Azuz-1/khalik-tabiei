@@ -55,6 +55,8 @@ export interface RoundState {
   impostorQuestion: string;
   answers: Map<string, string>;
   votes: Map<string, string>;
+  /** Opaque per-challenge submission context. Stable for reconnect, rotated on redeal. */
+  voteContext?: string;
   /** Server-only missing ballots that became abstentions at the global voting deadline. */
   abstainedUids?: Set<string>;
   resolutionSealed?: boolean;

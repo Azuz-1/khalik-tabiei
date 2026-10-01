@@ -86,7 +86,7 @@ class Client {
   async action(message, requestId = rid(this.label)) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) throw new Error(`${this.label}: socket is not open`);
     const start = this.messages.length;
-    this.ws.send(JSON.stringify({ ...message, rid: requestId }));
+    this.ws.send(JSON.stringify({ ...message, ...(message.t === "SUBMIT_VOTE" ? { voteContext: message.voteContext ?? this.view?.voteContext } : {}), rid: requestId }));
     return this.waitForMessage(
       (candidate) => (candidate.t === "ACK" || candidate.t === "ERROR") && candidate.rid === requestId,
       start,
@@ -317,10 +317,9 @@ async function runBadCop(group) {
     attacker.action({ t: "SUBMIT_VOTE", targetUid: attackerTarget.uid }, rid(`${group.label}-valid-attacker-vote`)),
     `${group.label}: attacker can still submit one legitimate ballot`,
   );
-  await expectError(
+  await expectAck(
     attacker.action({ t: "SUBMIT_VOTE", targetUid: attackerTarget.uid }, rid(`${group.label}-duplicate-vote`)),
-    "VOTE_ALREADY_SUBMITTED",
-    `${group.label}: duplicate ballot is rejected`,
+    `${group.label}: same ballot retry is acknowledged without another vote`,
   );
 
   for (const client of participants) {

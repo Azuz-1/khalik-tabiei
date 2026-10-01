@@ -90,7 +90,7 @@ function RulesTabs() {
       <div id="home-panel-how" role="tabpanel" aria-labelledby="home-tab-how" className="home-tab-panel" hidden={tab !== "how"} tabIndex={0}>
         <ol className="rule-steps">
           <li>كل واحد يشوف المطلوب سرًا، إلا المتخفي يعرف دوره بس ما يعرف المطلوب.</li>
-          <li>وقت العد تنفذون الحركة كلّكم بنفس اللحظة.</li>
+          <li>انتظروا إشارة الحركة، ثم سوّوها كلكم بنفس اللحظة.</li>
           <li>بعدها تناقشون: مين تصرفه مو طبيعي؟ ثم كل واحد يصوّت بجواله.</li>
           <li>الأغلبية تمسك المتخفي. إذا ما انمسك يكمل دوره حسب عدد اللاعبين: تحدّي واحد مع 3 لاعبين، تحدّيين مع 4، و3 تحدّيات مع 5 أو أكثر.</li>
         </ol>
@@ -195,7 +195,7 @@ export function Home() {
           <button className="btn btn-secondary" disabled={offline} onClick={() => { setLocalErr(null); setStep("code"); }}>
             ادخل غرفة
           </button>
-          <p className="helper home-actions-note">صاحب الغرفة لاعب مثل الباقين</p>
+          <p className="helper home-actions-note">صاحب الغرفة يلعب من جواله، والتلفزيون اختياري.</p>
         </div>
 
         <RulesTabs />
@@ -221,12 +221,12 @@ export function Home() {
         <button className="link-btn back-btn" onClick={() => setStep("home")}><Icon name="back" /> رجوع</button>
         <div className="join-body">
           <div className="join-head">
-            <h2 className="title">اكتب كود الغرفة</h2>
-            <p className="subtitle">الكود 5 حروف وأرقام، تلقاه على جوال مالك الغرفة أو التلفزيون.</p>
+            <h2 className="title">اكتب رمز الغرفة</h2>
+            <p className="subtitle">الرمز 5 حروف وأرقام، تلقاه على جوال مالك الغرفة أو التلفزيون.</p>
           </div>
           <input
             className="input code"
-            aria-label="كود الغرفة"
+            aria-label="رمز الغرفة"
             value={code}
             inputMode="text"
             autoCapitalize="characters"

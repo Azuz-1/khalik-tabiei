@@ -90,6 +90,7 @@ export function buildDisplayView(room: RoomState, joinUrl: string, secret: strin
       code: source.room.code,
       phase: source.room.phase,
       currentRound: source.room.currentRound,
+      matchGeneration: source.room.matchGeneration,
       totalRounds: source.room.totalRounds,
       targetChallenges: source.room.targetChallenges,
       completedChallenges: source.room.completedChallenges,

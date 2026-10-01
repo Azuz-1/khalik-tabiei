@@ -77,6 +77,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       code: room.code,
       phase: room.phase,
       currentRound: room.currentRound,
+      matchGeneration: room.matchGeneration,
       totalRounds: room.totalRounds,
       targetChallenges: room.targetChallenges,
       completedChallenges: room.completedChallenges,
@@ -162,6 +163,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
     // Deliberately do not serialize live target totals or a live quorum. During
     // voting every recipient sees only submitted/total plus the phase deadline.
     if (role === "player" && self?.connected && round.participantUids.includes(uid)) {
+      view.voteContext = round.voteContext;
       view.voteTargets = participants.filter((player) => player.uid !== uid).map((player) => ({ uid: player.uid, name: player.name }));
       view.myVoteSubmitted = round.votes.has(uid) || Boolean(round.resolutionSealed);
     }

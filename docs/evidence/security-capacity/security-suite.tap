@@ -1,0 +1,392 @@
+TAP version 13
+# SESSION_SECRET is missing/weak; using an ephemeral development secret.
+# Subtest: display epoch pruning reclaims closed rooms without resetting live room revocation
+ok 1 - display epoch pruning reclaims closed rooms without resetting live room revocation
+  ---
+  duration_ms: 74.621602
+  type: 'test'
+  ...
+# SESSION_SECRET is missing/weak; using an ephemeral development secret.
+# Subtest: TV pairing creation is sessionless, room-free, no-store, and pending status requires the TV secret
+ok 2 - TV pairing creation is sessionless, room-free, no-store, and pending status requires the TV secret
+  ---
+  duration_ms: 60.946665
+  type: 'test'
+  ...
+# Subtest: only the authoritative owner can claim and the returned capability verifies for that exact room
+ok 3 - only the authoritative owner can claim and the returned capability verifies for that exact room
+  ---
+  duration_ms: 88.870864
+  type: 'test'
+  ...
+# Subtest: two simultaneous houses pair independently and one TV cannot cross-link or rebind
+ok 4 - two simultaneous houses pair independently and one TV cannot cross-link or rebind
+  ---
+  duration_ms: 35.950708
+  type: 'test'
+  ...
+# Subtest: ownership, room incarnation, and display epoch changes invalidate stale pairings
+ok 5 - ownership, room incarnation, and display epoch changes invalidate stale pairings
+  ---
+  duration_ms: 31.952598
+  type: 'test'
+  ...
+# Subtest: an already active Display makes a new host pairing claim fail before binding
+ok 6 - an already active Display makes a new host pairing claim fail before binding
+  ---
+  duration_ms: 25.725897
+  type: 'test'
+  ...
+# Subtest: two pending TVs may receive the same room epoch, but only one distinct Display can become active
+ok 7 - two pending TVs may receive the same room epoch, but only one distinct Display can become active
+  ---
+  duration_ms: 49.272043
+  type: 'test'
+  ...
+# Subtest: expired and nonexistent pairing codes share the same owner-facing failure
+ok 8 - expired and nonexistent pairing codes share the same owner-facing failure
+  ---
+  duration_ms: 15.545496
+  type: 'test'
+  ...
+# Subtest: claim brute-force limit actually triggers per authenticated owner identity
+ok 9 - claim brute-force limit actually triggers per authenticated owner identity
+  ---
+  duration_ms: 29.318596
+  type: 'test'
+  ...
+# Subtest: pairing creation is disabled during drain and claim accepts JSON only
+ok 10 - pairing creation is disabled during drain and claim accepts JSON only
+  ---
+  duration_ms: 16.942062
+  type: 'test'
+  ...
+# Subtest: display capability is signed, room-bound, owner-bound, and epoch-revocable
+ok 11 - display capability is signed, room-bound, owner-bound, and epoch-revocable
+  ---
+  duration_ms: 1.848735
+  type: 'test'
+  ...
+# Subtest: display projection is public-only and never serializes real participant UIDs
+ok 12 - display projection is public-only and never serializes real participant UIDs
+  ---
+  duration_ms: 3.252861
+  type: 'test'
+  ...
+# Subtest: display lobby carries the server-authoritative impostor stint cap
+ok 13 - display lobby carries the server-authoritative impostor stint cap
+  ---
+  duration_ms: 0.270957
+  type: 'test'
+  ...
+# Subtest: same participant receives different display aliases in different room incarnations
+ok 14 - same participant receives different display aliases in different room incarnations
+  ---
+  duration_ms: 1.197391
+  type: 'test'
+  ...
+# Subtest: full result and scoreboard identifiers are also remapped before serialization
+ok 15 - full result and scoreboard identifiers are also remapped before serialization
+  ---
+  duration_ms: 0.931016
+  type: 'test'
+  ...
+# Subtest: protocol accepts bounded request/clock metadata and rejects malformed variants
+ok 16 - protocol accepts bounded request/clock metadata and rejects malformed variants
+  ---
+  duration_ms: 3.347984
+  type: 'test'
+  ...
+# Subtest: filtered monotonic server clock ignores wall-clock skew and favors low-RTT samples
+ok 17 - filtered monotonic server clock ignores wall-clock skew and favors low-RTT samples
+  ---
+  duration_ms: 0.924214
+  type: 'test'
+  ...
+# Subtest: connection capacity supports a shared-NAT party and releases each lease exactly once
+ok 18 - connection capacity supports a shared-NAT party and releases each lease exactly once
+  ---
+  duration_ms: 0.458117
+  type: 'test'
+  ...
+# Subtest: room-creation controls are identity-aware without breaking many identities on one NAT
+ok 19 - room-creation controls are identity-aware without breaking many identities on one NAT
+  ---
+  duration_ms: 0.830882
+  type: 'test'
+  ...
+# Subtest: expired empty Lobby is reclaimed synchronously before room-capacity rejection
+ok 20 - expired empty Lobby is reclaimed synchronously before room-capacity rejection
+  ---
+  duration_ms: 3.286779
+  type: 'test'
+  ...
+# Subtest: heartbeats reconnects and settings spam do not extend meaningful-use timestamp
+ok 21 - heartbeats reconnects and settings spam do not extend meaningful-use timestamp
+  ---
+  duration_ms: 1.316618
+  type: 'test'
+  ...
+# Subtest: request IDs dedupe only within authenticated action and match context
+ok 22 - request IDs dedupe only within authenticated action and match context
+  ---
+  duration_ms: 20.52156
+  type: 'test'
+  ...
+# Subtest: request IDs are challenge-scoped so a prior vote cannot receive a stale ACK
+ok 23 - request IDs are challenge-scoped so a prior vote cannot receive a stale ACK
+  ---
+  duration_ms: 4.204847
+  type: 'test'
+  ...
+# Subtest: kicked identity, Lobby lock, reserved reconnect, and Host unblock have distinct semantics
+ok 24 - kicked identity, Lobby lock, reserved reconnect, and Host unblock have distinct semantics
+  ---
+  duration_ms: 5.001007
+  type: 'test'
+  ...
+# Subtest: survived challenge result reveals no impostor identity, tally, turnout aggregate, voter mapping, or scoring
+ok 25 - survived challenge result reveals no impostor identity, tally, turnout aggregate, voter mapping, or scoring
+  ---
+  duration_ms: 4.26813
+  type: 'test'
+  ...
+# Subtest: policy close makes later incoming frames inert immediately
+ok 26 - policy close makes later incoming frames inert immediately
+  ---
+  duration_ms: 1.289928
+  type: 'test'
+  ...
+# SESSION_SECRET is missing/weak; using an ephemeral development secret.
+# Subtest: valid pre-HELLO flood is bounded and policy-closed without mutating rooms
+ok 27 - valid pre-HELLO flood is bounded and policy-closed without mutating rooms
+  ---
+  duration_ms: 80.13937
+  type: 'test'
+  ...
+# Subtest: novelty token is absent from every pre-reveal projection and promptId remains server-only
+ok 28 - novelty token is absent from every pre-reveal projection and promptId remains server-only
+  ---
+  duration_ms: 3.514538
+  type: 'test'
+  ...
+# Subtest: public reveal exposes stable novelty token only to participating player views
+ok 29 - public reveal exposes stable novelty token only to participating player views
+  ---
+  duration_ms: 1.580732
+  type: 'test'
+  ...
+# Subtest: reconnecting participant can record novelty only after the prompt is public
+ok 30 - reconnecting participant can record novelty only after the prompt is public
+  ---
+  duration_ms: 0.43833
+  type: 'test'
+  ...
+# Subtest: one uid belongs to one room and room creation is globally capped
+ok 31 - one uid belongs to one room and room creation is globally capped
+  ---
+  duration_ms: 17.95607
+  type: 'test'
+  ...
+# Subtest: room capacity and normalized duplicate names remain enforced
+ok 32 - room capacity and normalized duplicate names remain enforced
+  ---
+  duration_ms: 7.356224
+  type: 'test'
+  ...
+# Subtest: host can select one/two/three modes; non-host and zero-mode changes are rejected
+ok 33 - host can select one/two/three modes; non-host and zero-mode changes are rejected
+  ---
+  duration_ms: 2.966474
+  type: 'test'
+  ...
+# Subtest: legacy category selection is rejected by backend, not merely hidden in UI
+ok 34 - legacy category selection is rejected by backend, not merely hidden in UI
+  ---
+  duration_ms: 1.517632
+  type: 'test'
+  ...
+# Subtest: selected modes lock after game starts
+ok 35 - selected modes lock after game starts
+  ---
+  duration_ms: 4.292221
+  type: 'test'
+  ...
+# Subtest: impostor receives no prompt in network state; normal receives current prompt
+ok 36 - impostor receives no prompt in network state; normal receives current prompt
+  ---
+  duration_ms: 1.728073
+  type: 'test'
+  ...
+# Subtest: reconnect during countdown restores normal prompt but never leaks it to impostor
+ok 37 - reconnect during countdown restores normal prompt but never leaks it to impostor
+  ---
+  duration_ms: 4.988314
+  type: 'test'
+  ...
+# Subtest: all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> timed DISCUSSION
+ok 38 - all ready runs COUNTDOWN -> ACTION -> HOLD -> PROMPT_REVEAL -> timed DISCUSSION
+  ---
+  duration_ms: 142.304641
+  type: 'test'
+  ...
+# Subtest: survived challenge advances with same impostor and next balanced challenge mode
+ok 39 - survived challenge advances with same impostor and next balanced challenge mode
+  ---
+  duration_ms: 37.679502
+  type: 'test'
+  ...
+# Subtest: Host sees anonymous vote progress while target totals stay hidden from every wire
+ok 40 - Host sees anonymous vote progress while target totals stay hidden from every wire
+  ---
+  duration_ms: 36.299694
+  type: 'test'
+  ...
+# Subtest: voting survives disconnect/reconnect and completes only after every participant votes
+ok 41 - voting survives disconnect/reconnect and completes only after every participant votes
+  ---
+  duration_ms: 33.849855
+  type: 'test'
+  ...
+# Subtest: player disconnect remains preserved with no expiry/redeal timer
+ok 42 - player disconnect remains preserved with no expiry/redeal timer
+  ---
+  duration_ms: 14.934444
+  type: 'test'
+  ...
+# Subtest: disconnect after a survived challenge keeps the result and seat until explicit Host action
+ok 43 - disconnect after a survived challenge keeps the result and seat until explicit Host action
+  ---
+  duration_ms: 47.722691
+  type: 'test'
+  ...
+# SESSION_SECRET is missing/weak; using an ephemeral development secret.
+# Subtest: valid anonymous session is stable and invalid sessions are rejected
+ok 44 - valid anonymous session is stable and invalid sessions are rejected
+  ---
+  duration_ms: 2.658929
+  type: 'test'
+  ...
+# Subtest: production session secret fails closed
+ok 45 - production session secret fails closed
+  ---
+  duration_ms: 1.042159
+  type: 'test'
+  ...
+# Subtest: origin allowlist uses exact scheme, host, and port
+ok 46 - origin allowlist uses exact scheme, host, and port
+  ---
+  duration_ms: 0.183654
+  type: 'test'
+  ...
+# Subtest: strict runtime validation accepts every valid ClientMessage shape
+ok 47 - strict runtime validation accepts every valid ClientMessage shape
+  ---
+  duration_ms: 0.714478
+  type: 'test'
+  ...
+# Subtest: malformed and prototype-ish client payloads are rejected without mutation
+ok 48 - malformed and prototype-ish client payloads are rejected without mutation
+  ---
+  duration_ms: 0.70386
+  type: 'test'
+  ...
+# Subtest: rate limiters are bounded, expire, and enforce action limits
+ok 49 - rate limiters are bounded, expire, and enforce action limits
+  ---
+  duration_ms: 0.936499
+  type: 'test'
+  ...
+# Subtest: Render client IP ignores spoofed XFF and trusts the proxy-controlled header
+ok 50 - Render client IP ignores spoofed XFF and trusts the proxy-controlled header
+  ---
+  duration_ms: 1.179402
+  type: 'test'
+  ...
+# Subtest: a Connection authenticates once, times out, and protects backpressure
+ok 51 - a Connection authenticates once, times out, and protects backpressure
+  ---
+  duration_ms: 15.537666
+  type: 'test'
+  ...
+# Subtest: unauthenticated actions are rejected
+ok 52 - unauthenticated actions are rejected
+  ---
+  duration_ms: 0.763646
+  type: 'test'
+  ...
+# Subtest: session tokens have the required cryptographic wire format
+ok 53 - session tokens have the required cryptographic wire format
+  ---
+  duration_ms: 0.462334
+  type: 'test'
+  ...
+# Subtest: host and impostor receive no prompt or promptId before prompt reveal
+ok 54 - host and impostor receive no prompt or promptId before prompt reveal
+  ---
+  duration_ms: 3.301366
+  type: 'test'
+  ...
+# Subtest: normal keeps private prompt during secret phases for reconnect recovery
+ok 55 - normal keeps private prompt during secret phases for reconnect recovery
+  ---
+  duration_ms: 1.002555
+  type: 'test'
+  ...
+# Subtest: prompt becomes public to host and impostor only after HOLD
+ok 56 - prompt becomes public to host and impostor only after HOLD
+  ---
+  duration_ms: 1.145199
+  type: 'test'
+  ...
+# Subtest: spectator/non-participant never receives a private prompt
+ok 57 - spectator/non-participant never receives a private prompt
+  ---
+  duration_ms: 0.318999
+  type: 'test'
+  ...
+# Subtest: Host sees anonymous vote progress while live target totals stay hidden
+ok 58 - Host sees anonymous vote progress while live target totals stay hidden
+  ---
+  duration_ms: 0.815807
+  type: 'test'
+  ...
+# Subtest: votes remain private through RESULT and no voter-to-target mapping is serialized
+ok 59 - votes remain private through RESULT and no voter-to-target mapping is serialized
+  ---
+  duration_ms: 8.550247
+  type: 'test'
+  ...
+# Subtest: survived challenge 1/2 result hides identity and tally but keeps already-public prompt public
+ok 60 - survived challenge 1/2 result hides identity and tally but keeps already-public prompt public
+  ---
+  duration_ms: 0.964658
+  type: 'test'
+  ...
+# Subtest: stint-end result exposes anonymous aggregate tally including zero-vote players
+ok 61 - stint-end result exposes anonymous aggregate tally including zero-vote players
+  ---
+  duration_ms: 0.630206
+  type: 'test'
+  ...
+# Subtest: active-stint client views expose no score, scoreboard, ranking, points, or winner payload
+ok 62 - active-stint client views expose no score, scoreboard, ranking, points, or winner payload
+  ---
+  duration_ms: 0.40614
+  type: 'test'
+  ...
+# Subtest: game over exposes challenge summary and final scoreboard without vote mapping
+ok 63 - game over exposes challenge summary and final scoreboard without vote mapping
+  ---
+  duration_ms: 1.308062
+  type: 'test'
+  ...
+1..63
+# tests 63
+# suites 0
+# pass 63
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3245.216573

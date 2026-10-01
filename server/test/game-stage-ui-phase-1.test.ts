@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TIMERS } from "../../shared/constants.js";
@@ -113,8 +114,8 @@ test("only the host can advance RESULT and a repeated Next cannot skip a Challen
     manager.handle(host.conn, { t: "START_VOTING" });
     const impostor = players.find((player) => player.uid === room.round!.impostorUid)!;
     const normals = players.filter((player) => player.uid !== impostor.uid);
-    for (const normal of normals) manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
-    manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
+    for (const normal of normals) submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[0]!.uid });
 
     assert.equal(room.phase, "RESULT");
     assert.equal(room.phaseEndsAt, undefined);

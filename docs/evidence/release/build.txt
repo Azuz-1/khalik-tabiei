@@ -1,0 +1,57 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> khalik-tabiei@1.0.0 build
+> npm run build --workspace client && npm run build --workspace server
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @khalik/client@1.0.0 build
+> vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 129 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                         0.55 kB │ gzip:  0.35 kB
+dist/assets/tajawal-arabic-900-normal-MgmkhdPX.woff2    8.70 kB
+dist/assets/tajawal-arabic-400-normal-CyCXRvzh.woff2    8.93 kB
+dist/assets/tajawal-arabic-500-normal-BZ8ojJNu.woff2    8.94 kB
+dist/assets/tajawal-arabic-700-normal-D2-eand5.woff2    9.02 kB
+dist/assets/tajawal-arabic-800-normal-TQp-UTiE.woff2    9.45 kB
+dist/assets/tajawal-latin-500-normal-CoYeBiSI.woff2     9.90 kB
+dist/assets/tajawal-latin-700-normal-BypgxfGb.woff2    10.00 kB
+dist/assets/tajawal-latin-900-normal-DURQZvFY.woff2    10.22 kB
+dist/assets/tajawal-latin-400-normal-BVNSOH3d.woff2    10.26 kB
+dist/assets/tajawal-latin-800-normal-CmI34b-g.woff2    10.58 kB
+dist/assets/tajawal-arabic-900-normal-CHO_pm7-.woff    11.84 kB
+dist/assets/tajawal-arabic-500-normal-CbVEaYEW.woff    11.88 kB
+dist/assets/tajawal-arabic-400-normal-DCQxawbB.woff    12.01 kB
+dist/assets/tajawal-arabic-700-normal-9L7Zusdl.woff    12.16 kB
+dist/assets/tajawal-arabic-800-normal-Bp_4IW2m.woff    12.59 kB
+dist/assets/tajawal-latin-500-normal-DU9v6xgj.woff     13.02 kB
+dist/assets/tajawal-latin-700-normal-CV3bxpHe.woff     13.16 kB
+dist/assets/tajawal-latin-900-normal-BsVXXeFR.woff     13.27 kB
+dist/assets/tajawal-latin-400-normal-BdYcZznU.woff     13.46 kB
+dist/assets/tajawal-latin-800-normal-Dm5jVIIh.woff     13.71 kB
+dist/assets/App-D8_O92PB.css                            0.60 kB │ gzip:  0.32 kB
+dist/assets/tv-pairing-CPGCtvmF.css                     3.44 kB │ gzip:  1.25 kB
+dist/assets/index-CuVOb-Dy.css                         80.79 kB │ gzip: 15.67 kB
+dist/assets/AnalyticsGameObserver-DIGviHBr.js           0.76 kB │ gzip:  0.47 kB
+dist/assets/EyesMark-D2YgaP0B.js                        1.37 kB │ gzip:  0.59 kB
+dist/assets/clock-CF_L90rc.js                           1.39 kB │ gzip:  0.63 kB
+dist/assets/useModalFocus-BS025sLE.js                   1.74 kB │ gzip:  0.83 kB
+dist/assets/Display-CfjpTH2B.js                         4.33 kB │ gzip:  2.10 kB
+dist/assets/GameChrome-DrG3GIQo.js                      4.62 kB │ gzip:  1.92 kB
+dist/assets/Privacy-Bu_KpATI.js                         4.90 kB │ gzip:  2.00 kB
+dist/assets/TvPairing-CWxmcw7Z.js                       5.27 kB │ gzip:  2.17 kB
+dist/assets/Meters-Dc_fgWDd.js                          6.11 kB │ gzip:  2.17 kB
+dist/assets/socket-_hQryIJm.js                         11.57 kB │ gzip:  4.75 kB
+dist/assets/TvStage-BTb7A3nw.js                        54.23 kB │ gzip: 18.81 kB
+dist/assets/App-DYsMJNE1.js                            69.68 kB │ gzip: 19.40 kB
+dist/assets/index-lMWbF-d0.js                         154.12 kB │ gzip: 50.85 kB
+✓ built in 997ms
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> @khalik/server@1.0.0 build
+> tsc -p tsconfig.build.json

@@ -63,6 +63,14 @@ function cookieValue(header: string | undefined, name: string): string | null {
   return null;
 }
 
+/** Owner trial marker set by visiting any page with ?trial=1 (see client/src/trialFlag.ts). */
+export const TRIAL_COOKIE = "kt_trial";
+
+/** Trial sessions are ordinary players whose analytics are labelled "test". */
+export function isTrialRequest(req: Pick<IncomingMessage, "headers">): boolean {
+  return cookieValue(req.headers.cookie, TRIAL_COOKIE) === "1";
+}
+
 export function readAnonymousSession(
   req: Pick<IncomingMessage, "headers">,
   secret: string,

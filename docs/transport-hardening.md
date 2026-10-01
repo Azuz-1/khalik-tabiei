@@ -50,6 +50,6 @@ Lobby admission lock blocks fresh identities while existing reserved player seat
 
 This is an identity control, not a physical-person ban. A fresh anonymous identity is distinct. The implementation intentionally does not use blanket IP bans because parties commonly share one NAT/Wi-Fi connection.
 
-## Live vote-board privacy
+## Current voting privacy
 
-The shared Host/TV board intentionally receives live aggregate vote counts during VOTING. It never receives voter-to-target mappings, but the timing of aggregate changes can allow observers to infer when a vote arrived. Therefore the live board is aggregate-only, not fully anonymous against timing inference.
+The current competitive rules publish only submitted/total progress during VOTING. No recipient gets live target totals or voter-to-target mappings. Intermediate survived results hide impostor identity and tally; final stint results reveal identity and an aggregate tally. Earlier live-board descriptions are superseded by the deployed `70fc5c47` projection and regression tests. Opaque candidate vote contexts are sent only to eligible voting participants and convey no target choice.

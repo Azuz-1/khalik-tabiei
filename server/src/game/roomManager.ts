@@ -90,6 +90,8 @@ export class RoomManager {
   private readonly timers = new Map<string, Map<string, NodeJS.Timeout>>();
   private readonly requestsByUid = new Map<string, Map<string, CachedRequest>>();
   private readonly analyticsByRoom = new WeakMap<RoomState, RoomAnalyticsState>();
+  /** Room sessions created by an owner trial device; their events are labelled "test". */
+  private readonly trialRoomSessions = new Set<string>();
   private draining = false;
   private readonly deps: Deps;
   private readonly gcTimer: NodeJS.Timeout;
@@ -291,7 +293,7 @@ export class RoomManager {
     switch (message.t) {
       case "HELLO": throw new GameError("BAD_REQUEST", "connection already authenticated");
       case "PING": return;
-      case "CREATE_ROOM": return this.createRoom(uid, message.name);
+      case "CREATE_ROOM": return this.createRoom(uid, message.name, conn.trial);
       case "JOIN_ROOM": return this.joinRoom(uid, message.code, message.name);
       case "LEAVE_ROOM": return this.leaveRoom(uid);
       case "SET_SETTINGS": return this.withRoom(uid, (room) => {
@@ -318,10 +320,11 @@ export class RoomManager {
         this.beginVoting(room, uid);
         this.markMeaningful(room);
       });
-      case "SUBMIT_VOTE": return this.submitVote(uid, message.targetUid);
+      case "SUBMIT_VOTE": return this.submitVote(conn, message);
       case "NEXT_ROUND": return this.nextRound(uid);
       case "KICK_PLAYER": return this.kick(uid, message.uid);
       case "CLOSE_ROOM": return this.closeRoom(uid);
+      case "RETURN_TO_LOBBY": return this.returnToLobby(conn, message.matchGeneration);
       case "REMATCH": return this.withRoom(uid, (room) => {
         if (room.hostUid !== uid) throw new GameError("NOT_HOST");
         if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
@@ -344,7 +347,7 @@ export class RoomManager {
     }
   }
 
-  private createRoom(uid: string, rawName?: string): void {
+  private createRoom(uid: string, rawName?: string, trial = false): void {
     if (this.uidToRoomCode.has(uid)) throw new GameError("ALREADY_IN_ROOM");
     this.reclaimExpiredRooms();
     if (this.rooms.size >= this.deps.maxRooms) throw new GameError("RATE_LIMITED");
@@ -375,6 +378,7 @@ export class RoomManager {
     this.uidToRoomCode.set(uid, code);
     this.attachAll(uid, code);
     const analytics = this.analyticsState(room);
+    if (trial) this.trialRoomSessions.add(analytics.roomSessionId);
     this.emitAnalytics("room_created", { roomSessionId: analytics.roomSessionId });
     if (rawName !== undefined) {
       this.emitAnalytics("room_participant_joined", {
@@ -396,7 +400,6 @@ export class RoomManager {
     if (room.phase === "CLOSED") throw new GameError("ROOM_CLOSED");
 
     if (indexedCode === code) {
-      if (uid === room.hostUid) throw new GameError("ALREADY_IN_ROOM");
       const existing = room.players.get(uid);
       if (!existing || existing.pendingRemoval) throw new GameError("ALREADY_IN_ROOM");
       existing.disconnectGeneration += 1;
@@ -642,9 +645,36 @@ export class RoomManager {
     this.broadcast(room);
   }
 
-  private submitVote(uid: string, targetUid: string): void {
+  private submitVote(conn: Connection, message: Extract<ClientMessage, { t: "SUBMIT_VOTE" }>): void {
+    const uid = conn.uid!;
     this.withRoom(uid, (room) => {
-      voting.submitVote(room, uid, targetUid, this.deps);
+      const round = room.round;
+      const player = room.players.get(uid);
+      const ignore = (reason: "CLOSED" | "STALE_CHALLENGE") => {
+        conn.send({ t: "VOTE_IGNORED", reason, ...this.ridField(message) });
+        this.sendState(conn);
+      };
+      // A ballot still in flight when the owner ended the match belongs to no
+      // challenge any more. It is a benign race for a seated member, not an error.
+      if (!round && player?.connected && !player.pendingRemoval && message.voteContext) return ignore("STALE_CHALLENGE");
+      // Never classify a non-member or an ineligible identity as a benign race.
+      if (!player || !player.connected || player.pendingRemoval || !round?.participantUids.includes(uid)) throw new GameError("NOT_PLAYER");
+      if (!message.voteContext) {
+        if (room.phase !== "VOTING" && room.phase !== "RESULT" && room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
+        throw new GameError("CLIENT_UPDATE_REQUIRED");
+      }
+      if (message.voteContext !== round.voteContext) return ignore("STALE_CHALLENGE");
+      if (room.phase === "VOTING" && !room.pause && room.phaseEndsAt !== undefined && this.deps.now() >= room.phaseEndsAt) {
+        this.timeoutVoting(room, round);
+      }
+      const existing = round.votes.get(uid);
+      if (existing === message.targetUid) {
+        this.sendState(conn);
+        return;
+      }
+      if (existing !== undefined) throw new GameError("VOTE_ALREADY_SUBMITTED");
+      if (round.resolutionSealed || room.phase === "RESULT" || room.phase === "GAME_OVER") return ignore("CLOSED");
+      voting.submitVote(room, uid, message.targetUid, this.deps);
       this.markMeaningful(room);
       this.resolveVotingIfReady(room);
       this.broadcast(room);
@@ -1066,6 +1096,34 @@ export class RoomManager {
     }
   }
 
+  /**
+   * Ends the current match without closing the room: every seat, the room code
+   * and the settings survive, so the owner can adjust settings and start again
+   * without everyone rejoining. Scores and challenge state of the ended match
+   * are discarded exactly as other lobby aborts do.
+   */
+  private returnToLobby(conn: Connection, matchGeneration: number): void {
+    const uid = conn.uid!;
+    this.withRoom(uid, (room) => {
+      if (room.hostUid !== uid) throw new GameError("NOT_HOST");
+      // The command was issued against an earlier match (a delayed delivery from
+      // another tab). It is a benign race, not an error: acknowledge it, refresh
+      // the sender and leave the current match alone.
+      if (matchGeneration !== room.matchGeneration) {
+        this.sendState(conn);
+        return;
+      }
+      if (room.phase === "LOBBY" || room.phase === "CLOSED") throw new GameError("INVALID_PHASE");
+      this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
+      if (room.phase !== "GAME_OVER") this.emitGameAbandoned(room, "ended_to_lobby");
+      engine.abortToLobby(room, this.deps);
+      room.readyRecoveryDeadline = undefined;
+      this.prunePendingPlayers(room);
+      this.markMeaningful(room);
+      this.broadcast(room);
+    });
+  }
+
   private closeRoom(uid: string): void {
     const room = this.roomOf(uid);
     if (!room) return;
@@ -1107,6 +1165,7 @@ export class RoomManager {
       if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
     }
     this.clearTimers(room.code);
+    this.forgetTrialRoom(room);
     this.rooms.delete(room.code);
   }
 
@@ -1233,10 +1292,17 @@ export class RoomManager {
 
   private emitAnalytics(event: AnalyticsEvent, props: AnalyticsProps = {}): void {
     try {
-      this.deps.analytics(event, props);
+      const trial = typeof props.roomSessionId === "string" && this.trialRoomSessions.has(props.roomSessionId);
+      if (trial) this.deps.analytics(event, props, { trial: true });
+      else this.deps.analytics(event, props);
     } catch {
       // Analytics is never allowed to block or roll back gameplay.
     }
+  }
+
+  private forgetTrialRoom(room: RoomState): void {
+    const sessionId = this.analyticsByRoom.get(room)?.roomSessionId;
+    if (sessionId) this.trialRoomSessions.delete(sessionId);
   }
 
   private attachAll(uid: string, code: string): void {
@@ -1324,6 +1390,7 @@ export class RoomManager {
         }
         this.clearTimers(room.code);
         for (const uid of memberUids) if (this.uidToRoomCode.get(uid) === room.code) this.uidToRoomCode.delete(uid);
+        this.forgetTrialRoom(room);
         this.rooms.delete(room.code);
       }
     }
@@ -1338,6 +1405,9 @@ export class RoomManager {
 
   private requestContext(uid: string, message: ClientMessage): string {
     const room = this.roomOf(uid);
+    // A vote remains the same action across VOTING -> RESULT. Its challenge
+    // context still prevents old request IDs being reused for a new ballot.
+    if (room && message.t === "SUBMIT_VOTE") return `${room.code}:g${room.matchGeneration}:r${room.round?.index ?? room.currentRound}:c${room.round?.challengeIndex ?? 0}:${room.round?.voteContext ?? "legacy"}`;
     if (room) return `${room.code}:g${room.matchGeneration}:r${room.currentRound}:c${room.round?.challengeIndex ?? 0}:${room.phase}`;
     return message.t === "JOIN_ROOM" ? `join:${normalizeCode(message.code)}` : "outside-room";
   }
@@ -1384,13 +1454,16 @@ export class RoomManager {
     clearInterval(this.gcTimer);
     for (const code of this.timers.keys()) this.clearTimers(code);
     this.rooms.clear();
+    this.trialRoomSessions.clear();
     this.uidToRoomCode.clear();
     this.connsByUid.clear();
     this.requestsByUid.clear();
   }
 
   get roomCount(): number { return this.rooms.size; }
-  roomForTests(code: string): RoomState | undefined { return this.rooms.get(code); }
+  /** Server-internal lookup for transport/display wiring; never exposed over HTTP. */
+  roomByCode(code: string): RoomState | undefined { return this.rooms.get(code); }
+  roomForTests(code: string): RoomState | undefined { return this.roomByCode(code); }
   roomCodeForUidForTests(uid: string): string | undefined { return this.uidToRoomCode.get(uid); }
   connectionCountForUidForTests(uid: string): number { return this.connsByUid.get(uid)?.size ?? 0; }
   runGcForTests(): void { this.gcIdleRooms(); }

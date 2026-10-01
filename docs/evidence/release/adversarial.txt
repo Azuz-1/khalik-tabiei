@@ -1,0 +1,208 @@
+Executing integration-multigroup-adversarial.mjs (production security)
+Concurrent multi-group real-WebSocket adversarial campaign
+  ✓ GOOD3-P1: session bootstrap succeeds
+  ✓ GOOD3-P2: session bootstrap succeeds
+  ✓ GOOD3-P3: session bootstrap succeeds
+  ✓ BAD6-P1: session bootstrap succeeds
+  ✓ BAD6-P2: session bootstrap succeeds
+  ✓ BAD6-P3: session bootstrap succeeds
+  ✓ BAD6-P4: session bootstrap succeeds
+  ✓ BAD6-P5: session bootstrap succeeds
+  ✓ BAD6-P6: session bootstrap succeeds
+  ✓ FAIL10-P1: session bootstrap succeeds
+  ✓ FAIL10-P2: session bootstrap succeeds
+  ✓ FAIL10-P3: session bootstrap succeeds
+  ✓ FAIL10-P4: session bootstrap succeeds
+  ✓ FAIL10-P5: session bootstrap succeeds
+  ✓ FAIL10-P6: session bootstrap succeeds
+  ✓ FAIL10-P7: session bootstrap succeeds
+  ✓ FAIL10-P8: session bootstrap succeeds
+  ✓ FAIL10-P9: session bootstrap succeeds
+  ✓ FAIL10-P10: session bootstrap succeeds
+  ✓ GOOD3-P1: authenticates on the real WebSocket transport
+  ✓ GOOD3-P2: authenticates on the real WebSocket transport
+  ✓ GOOD3-P3: authenticates on the real WebSocket transport
+  ✓ BAD6-P1: authenticates on the real WebSocket transport
+  ✓ BAD6-P2: authenticates on the real WebSocket transport
+  ✓ BAD6-P3: authenticates on the real WebSocket transport
+  ✓ BAD6-P4: authenticates on the real WebSocket transport
+  ✓ BAD6-P5: authenticates on the real WebSocket transport
+  ✓ BAD6-P6: authenticates on the real WebSocket transport
+  ✓ FAIL10-P1: authenticates on the real WebSocket transport
+  ✓ FAIL10-P2: authenticates on the real WebSocket transport
+  ✓ FAIL10-P3: authenticates on the real WebSocket transport
+  ✓ FAIL10-P4: authenticates on the real WebSocket transport
+  ✓ FAIL10-P5: authenticates on the real WebSocket transport
+  ✓ FAIL10-P6: authenticates on the real WebSocket transport
+  ✓ FAIL10-P7: authenticates on the real WebSocket transport
+  ✓ FAIL10-P8: authenticates on the real WebSocket transport
+  ✓ FAIL10-P9: authenticates on the real WebSocket transport
+  ✓ FAIL10-P10: authenticates on the real WebSocket transport
+  ✓ GOOD3: named owner creates room
+  ✓ GOOD3: member 2 joins
+  ✓ GOOD3: member 3 joins
+  ✓ BAD6: named owner creates room
+  ✓ FAIL10: named owner creates room
+  ✓ GOOD3: owner sets target and modes
+  ✓ GOOD3: every simulated phone has a distinct identity
+  ✓ BAD6: member 2 joins
+  ✓ BAD6: member 3 joins
+  ✓ BAD6: member 4 joins
+  ✓ BAD6: member 5 joins
+  ✓ BAD6: member 6 joins
+  ✓ FAIL10: member 2 joins
+  ✓ FAIL10: member 3 joins
+  ✓ FAIL10: member 4 joins
+  ✓ FAIL10: member 5 joins
+  ✓ FAIL10: member 6 joins
+  ✓ FAIL10: member 7 joins
+  ✓ FAIL10: member 8 joins
+  ✓ BAD6: owner sets target and modes
+  ✓ BAD6: every simulated phone has a distinct identity
+  ✓ FAIL10: member 9 joins
+  ✓ FAIL10: member 10 joins
+  ✓ FAIL10: owner sets target and modes
+  ✓ FAIL10: every simulated phone has a distinct identity
+  ✓ concurrent groups receive distinct room codes
+  ✓ GOOD3-P1: never receives another group's STATE
+  ✓ GOOD3-P2: never receives another group's STATE
+  ✓ GOOD3-P3: never receives another group's STATE
+  ✓ BAD6-P1: never receives another group's STATE
+  ✓ BAD6-P2: never receives another group's STATE
+  ✓ BAD6-P3: never receives another group's STATE
+  ✓ BAD6-P4: never receives another group's STATE
+  ✓ BAD6-P5: never receives another group's STATE
+  ✓ BAD6-P6: never receives another group's STATE
+  ✓ FAIL10-P1: never receives another group's STATE
+  ✓ FAIL10-P2: never receives another group's STATE
+  ✓ FAIL10-P3: never receives another group's STATE
+  ✓ FAIL10-P4: never receives another group's STATE
+  ✓ FAIL10-P5: never receives another group's STATE
+  ✓ FAIL10-P6: never receives another group's STATE
+  ✓ FAIL10-P7: never receives another group's STATE
+  ✓ FAIL10-P8: never receives another group's STATE
+  ✓ FAIL10-P9: never receives another group's STATE
+  ✓ FAIL10-P10: never receives another group's STATE
+
+[good cop / full match / rematch]
+
+[bad cop / adversarial actions]
+
+[failure / reconnect / removal]
+  ✓ GOOD3: game starts
+  ✓ GOOD3: exactly one impostor is privately assigned
+  ✓ BAD6: non-owner cannot lock admission (NOT_HOST)
+  ✓ FAIL10: game starts
+  ✓ FAIL10: exactly one impostor is privately assigned
+  ✓ GOOD3-P1: ready accepted
+  ✓ GOOD3-P2: ready accepted
+  ✓ GOOD3-P3: ready accepted
+  ✓ BAD6: conflicting request-id replay is rejected (BAD_REQUEST)
+  ✓ FAIL10-P1: ready accepted
+  ✓ FAIL10-P2: ready accepted
+  ✓ FAIL10-P3: ready accepted
+  ✓ FAIL10-P4: ready accepted
+  ✓ FAIL10-P5: ready accepted
+  ✓ BAD6: non-owner cannot start the match (NOT_HOST)
+  ✓ FAIL10-P6: ready accepted
+  ✓ FAIL10-P7: ready accepted
+  ✓ FAIL10-P8: ready accepted
+  ✓ FAIL10-P9: ready accepted
+  ✓ FAIL10-P10: ready accepted
+  ✓ BAD6: game starts
+  ✓ BAD6: exactly one impostor is privately assigned
+  ✓ FAIL10-P2: authenticates on the real WebSocket transport
+  ✓ FAIL10-P2: reconnect preserves signed identity
+  ✓ FAIL10: countdown reconnect returns to the same seat identity
+  ✓ BAD6: voting before the ballot opens is rejected (INVALID_PHASE)
+  ✓ BAD6-P1: ready accepted
+  ✓ BAD6-P2: ready accepted
+  ✓ BAD6-P3: ready accepted
+  ✓ BAD6-P4: ready accepted
+  ✓ BAD6-P5: ready accepted
+  ✓ BAD6-P6: ready accepted
+  ✓ BAD6: production server rejects client-forced voting (INVALID_PHASE)
+  ✓ FAIL10-P1: authenticates on the real WebSocket transport
+  ✓ FAIL10: owner reconnect keeps identity
+  ✓ FAIL10: short owner outage does not transfer authority
+  ✓ GOOD3: authoritative discussion timer opens a fresh ballot
+  ✓ FAIL10: authoritative discussion timer opens a fresh ballot
+  ✓ GOOD3-P1: valid ballot accepted
+  ✓ GOOD3-P2: valid ballot accepted
+  ✓ FAIL10-P1: pre-removal ballot commits
+  ✓ GOOD3-P3: valid ballot accepted
+  ✓ GOOD3: cooperative majority catches the impostor
+  ✓ GOOD3: challenge counter reaches 1
+  ✓ BAD6: authoritative discussion timer opens a fresh ballot
+  ✓ FAIL10-P2: pre-removal ballot commits
+  ✓ GOOD3: owner advances after result
+  ✓ BAD6: self-vote is rejected (INVALID_VOTE)
+  ✓ FAIL10: owner can remove an offline normal during voting
+  ✓ GOOD3-P1: ready accepted
+  ✓ GOOD3-P2: ready accepted
+  ✓ GOOD3-P3: ready accepted
+  ✓ BAD6: attacker can still submit one legitimate ballot
+  ✓ FAIL10-P4: post-removal ballot commits
+  ✓ BAD6: same ballot retry is acknowledged without another vote
+  ✓ FAIL10-P5: post-removal ballot commits
+  ✓ BAD6-P1: split ballot accepted
+  ✓ FAIL10-P6: post-removal ballot commits
+  ✓ BAD6-P3: split ballot accepted
+  ✓ FAIL10-P7: post-removal ballot commits
+  ✓ BAD6-P4: split ballot accepted
+  ✓ FAIL10-P8: post-removal ballot commits
+  ✓ BAD6-P5: split ballot accepted
+  ✓ FAIL10-P9: post-removal ballot commits
+  ✓ BAD6-P6: split ballot accepted
+  ✓ BAD6: strategic split lets the impostor survive without corrupting state
+  ✓ BAD6: intermediate result keeps impostor identity hidden
+  ✓ BAD6: intermediate result keeps target totals hidden
+  ✓ FAIL10-P10: post-removal ballot commits
+  ✓ FAIL10: match still resolves correctly after disconnect/reconnect/removal
+  ✓ FAIL10: kicked seat is removed exactly once
+  ✓ BAD6: room remains controllable after adversarial attempts
+  ✓ FAIL10: recovered room closes cleanly
+  ✓ GOOD3: authoritative discussion timer opens a fresh ballot
+  ✓ GOOD3-P1: valid ballot accepted
+  ✓ GOOD3-P2: valid ballot accepted
+  ✓ GOOD3-P3: valid ballot accepted
+  ✓ GOOD3: cooperative majority catches the impostor
+  ✓ GOOD3: challenge counter reaches 2
+  ✓ GOOD3: owner advances after result
+  ✓ GOOD3-P1: ready accepted
+  ✓ GOOD3-P2: ready accepted
+  ✓ GOOD3-P3: ready accepted
+  ✓ GOOD3: authoritative discussion timer opens a fresh ballot
+  ✓ GOOD3-P1: valid ballot accepted
+  ✓ GOOD3-P2: valid ballot accepted
+  ✓ GOOD3-P3: valid ballot accepted
+  ✓ GOOD3: cooperative majority catches the impostor
+  ✓ GOOD3: challenge counter reaches 3
+  ✓ GOOD3: owner advances after result
+  ✓ GOOD3: game ends on the configured challenge target
+  ✓ GOOD3: rematch accepted
+  ✓ GOOD3: rematch clears completed challenge state
+  ✓ GOOD3: rematch can start a fresh match
+  ✓ GOOD3: owner can close an active rematch cleanly
+  ✓ concurrent groups receive distinct room codes
+  ✓ GOOD3-P1: never receives another group's STATE
+  ✓ GOOD3-P2: never receives another group's STATE
+  ✓ GOOD3-P3: never receives another group's STATE
+  ✓ BAD6-P1: never receives another group's STATE
+  ✓ BAD6-P2: never receives another group's STATE
+  ✓ BAD6-P3: never receives another group's STATE
+  ✓ BAD6-P4: never receives another group's STATE
+  ✓ BAD6-P5: never receives another group's STATE
+  ✓ BAD6-P6: never receives another group's STATE
+  ✓ FAIL10-P1: never receives another group's STATE
+  ✓ FAIL10-P2: never receives another group's STATE
+  ✓ FAIL10-P3: never receives another group's STATE
+  ✓ FAIL10-P4: never receives another group's STATE
+  ✓ FAIL10-P5: never receives another group's STATE
+  ✓ FAIL10-P6: never receives another group's STATE
+  ✓ FAIL10-P7: never receives another group's STATE
+  ✓ FAIL10-P8: never receives another group's STATE
+  ✓ FAIL10-P9: never receives another group's STATE
+  ✓ FAIL10-P10: never receives another group's STATE
+
+MULTI-GROUP ADVERSARIAL E2E PASSED ✅

@@ -15,7 +15,7 @@ export interface ConfirmActionRequest {
   title: string;
   description: string;
   confirmLabel: string;
-  actionType: "KICK_PLAYER" | "CLOSE_ROOM" | "LEAVE_ROOM" | "NEXT_ROUND";
+  actionType: "KICK_PLAYER" | "CLOSE_ROOM" | "LEAVE_ROOM" | "NEXT_ROUND" | "RETURN_TO_LOBBY";
   targetUid?: string;
   run: () => string | null;
 }
@@ -36,7 +36,9 @@ export function Host({ view, confirmAction }: { view: ClientView; confirmAction:
   }
 }
 
-function requestClose(confirmAction: ConfirmAction, description = "بتنقفل الغرفة على الكل وتنتهي اللعبة الحالية.") {
+const CLOSE_ROOM_DESCRIPTION = "بتتقفل الغرفة على الكل. عشان تلعبون بعدها، لازم تدخلون غرفة جديدة.";
+
+function requestClose(confirmAction: ConfirmAction, description = CLOSE_ROOM_DESCRIPTION) {
   confirmAction({
     title: "إغلاق الغرفة؟",
     description,
@@ -103,19 +105,19 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
             <EyesMark size={40} glance={false} />
             <div>
               <h1 className="invite-title" id="owner-invite-title">خلّ الكل يدخل</h1>
-              <p className="invite-lede">يمسحون الرمز، أو يكتبون الكود في اللعبة.</p>
+              <p className="invite-lede">يمسحون الباركود، أو يكتبون رمز الغرفة في اللعبة.</p>
             </div>
           </div>
           <div className="invite-body">
             <Qr url={view.room.joinUrl} size={480} />
             <div className="invite-code">
-              <span className="code-label">كود الغرفة</span>
-              <span className="code-value" aria-label={`كود الغرفة ${view.room.code.split("").join(" ")}`}>
+              <span className="code-label">رمز الغرفة</span>
+              <span className="code-value" aria-label={`رمز الغرفة ${view.room.code.split("").join(" ")}`}>
                 {view.room.code.split("").map((char, index) => <span className="code-char" key={index}>{char}</span>)}
               </span>
               <div className="invite-actions">
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copy(view.room.code, "code")}>
-                  <Icon name={copied === "code" ? "check" : "copy"} /> {copied === "code" ? "تم النسخ ✓" : "نسخ الكود"}
+                  <Icon name={copied === "code" ? "check" : "copy"} /> {copied === "code" ? "تم النسخ ✓" : "نسخ الرمز"}
                 </button>
                 <button
                   type="button"
@@ -223,7 +225,7 @@ function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: 
     confirmAction({
       title: "الرجوع لشاشة الانتظار؟",
       description: view.nextRoundWarning,
-      confirmLabel: "ارجع لشاشة الانتظار",
+      confirmLabel: "ارجع للانتظار",
       actionType: "NEXT_ROUND",
       run: actions.nextRound,
     });
@@ -255,7 +257,7 @@ function HostGameOver({ view, confirmAction }: { view: ClientView; confirmAction
       <div className="owner-dock">
         <div className="owner-dock-row">
           <button className="btn btn-primary" onClick={() => actions.rematch()}>العبوا مرة ثانية</button>
-          <button className="btn btn-secondary" onClick={() => requestClose(confirmAction, "بتقفل الغرفة الحالية وترجع الكل للرئيسية.")}>إغلاق الغرفة</button>
+          <button className="btn btn-secondary" onClick={() => requestClose(confirmAction, `${CLOSE_ROOM_DESCRIPTION} تبون تكملون بنفس الغرفة؟ اختر «العبوا مرة ثانية».`)}>إغلاق الغرفة</button>
         </div>
       </div>
     </div>

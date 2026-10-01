@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { RoomManager } from "../src/game/roomManager.js";
@@ -59,7 +60,7 @@ test("good cop: cooperative players can all vote and settle immediately without 
     const normalUid = room.round!.participantUids.find((uid) => uid !== impostorUid)!;
     for (const actor of actors) {
       const targetUid = actor.uid === impostorUid ? normalUid : impostorUid;
-      assert.equal(manager.handle(actor.conn, { t: "SUBMIT_VOTE", targetUid }), true);
+      assert.equal(submitVoteWithContext(manager, actor.conn, { t: "SUBMIT_VOTE", targetUid }), true);
     }
     assert.equal(room.phase, "RESULT", "all submitted ballots should settle immediately");
     assert.equal(room.round!.groupFound, true);
@@ -71,7 +72,7 @@ test("good cop: cooperative players can all vote and settle immediately without 
   }
 });
 
-test("bad cop: non-owner admin actions, self-vote, duplicate vote and disconnected voting are rejected without corrupting state", async () => {
+test("bad cop: invalid admin/self/disconnected actions fail and duplicate ballots do not mutate state", async () => {
   const { manager, owner, players, room } = await openVote();
   try {
     const attacker = players[0]!;
@@ -85,19 +86,18 @@ test("bad cop: non-owner admin actions, self-vote, duplicate vote and disconnect
     assert.equal(lastMessage(attacker.socket, "ERROR")?.code, "NOT_HOST");
     assert.equal(room.players.has(victim.uid), true);
 
-    assert.equal(manager.handle(attacker.conn, { t: "SUBMIT_VOTE", targetUid: attacker.uid }), false);
+    assert.equal(submitVoteWithContext(manager, attacker.conn, { t: "SUBMIT_VOTE", targetUid: attacker.uid }), false);
     assert.equal(lastMessage(attacker.socket, "ERROR")?.code, "INVALID_VOTE");
     assert.equal(room.round!.votes.has(attacker.uid), false, "self-vote rejection must leave the ballot unused");
 
     const validTarget = room.round!.participantUids.find((uid) => uid !== attacker.uid)!;
-    assert.equal(manager.handle(attacker.conn, { t: "SUBMIT_VOTE", targetUid: validTarget }), true);
-    assert.equal(manager.handle(attacker.conn, { t: "SUBMIT_VOTE", targetUid: validTarget }), false);
-    assert.equal(lastMessage(attacker.socket, "ERROR")?.code, "VOTE_ALREADY_SUBMITTED");
+    assert.equal(submitVoteWithContext(manager, attacker.conn, { t: "SUBMIT_VOTE", targetUid: validTarget }), true);
+    assert.equal(submitVoteWithContext(manager, attacker.conn, { t: "SUBMIT_VOTE", targetUid: validTarget }), true);
     assert.equal(room.round!.votes.get(attacker.uid), validTarget, "duplicate attempt must not replace the committed ballot");
 
     manager.disconnect(victim.conn);
     const targetForDisconnected = room.round!.participantUids.find((uid) => uid !== victim.uid)!;
-    assert.equal(manager.handle(victim.conn, { t: "SUBMIT_VOTE", targetUid: targetForDisconnected }), false);
+    assert.equal(submitVoteWithContext(manager, victim.conn, { t: "SUBMIT_VOTE", targetUid: targetForDisconnected }), false);
     assert.equal(lastMessage(victim.socket, "ERROR")?.code, "NOT_PLAYER");
     assert.equal(room.players.has(victim.uid), true, "transport loss still keeps the bad-cop seat in the room");
 
@@ -118,7 +118,7 @@ test("bad cop cannot vote before voting opens or replay an old request id for a 
     assert.equal(manager.handle(owner.conn, { t: "START_GAME" }), true);
     const attacker = players[0]!;
     const targetUid = players[1]!.uid;
-    assert.equal(manager.handle(attacker.conn, { t: "SUBMIT_VOTE", targetUid }), false);
+    assert.equal(submitVoteWithContext(manager, attacker.conn, { t: "SUBMIT_VOTE", targetUid }), false);
     assert.equal(lastMessage(attacker.socket, "ERROR")?.code, "INVALID_PHASE");
     assert.equal(room.round!.votes.size, 0);
 

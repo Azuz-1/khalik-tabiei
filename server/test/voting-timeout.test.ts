@@ -1,3 +1,4 @@
+import { submitVoteWithContext } from "./helpers.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RoomManager } from "../src/game/roomManager.js";
@@ -42,9 +43,9 @@ test("a disconnected non-voter becomes an abstention only at the one global voti
     manager.disconnect(disconnected.conn);
 
     for (const normal of normals.slice(1)) {
-      manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+      submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     }
-    manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+    submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
     assert.equal(room.phase, "VOTING", "disconnect must not create a private grace timer or resolve early");
     await wait(50);
@@ -69,9 +70,9 @@ test("a disconnected player may reconnect and cast before the same global deadli
     manager.disconnect(disconnected.conn);
 
     for (const normal of normals.slice(1)) {
-      manager.handle(normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+      submitVoteWithContext(manager, normal.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     }
-    manager.handle(impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
+    submitVoteWithContext(manager, impostor.conn, { t: "SUBMIT_VOTE", targetUid: normals[1]!.uid });
 
     await wait(15);
     const reconnected = authenticatedConnection(manager, disconnected.uid);
@@ -79,7 +80,7 @@ test("a disconnected player may reconnect and cast before the same global deadli
     assert.equal(room.round!.abstainedUids?.has(disconnected.uid), false);
     assert.equal(room.round!.resolutionSealed, undefined);
 
-    manager.handle(reconnected.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
+    submitVoteWithContext(manager, reconnected.conn, { t: "SUBMIT_VOTE", targetUid: impostor.uid });
     assert.equal(room.phase, "RESULT", "all four submitted ballots resolve immediately without waiting for timeout");
     assert.equal(room.round!.sealedVotes?.size, 4);
     assert.equal(room.round!.resultRequiredVotes, 3);

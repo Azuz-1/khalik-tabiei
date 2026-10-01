@@ -19,6 +19,7 @@ import { EyesMark } from "./ui/EyesMark.js";
 import { Icon } from "./ui/Icon.js";
 import { inertOutside } from "./ui/inert.js";
 import { useModalFocus } from "./ui/useModalFocus.js";
+import { setClientErrorContext } from "./telemetry.js";
 
 interface RecoveryConfirmActionRequest {
   title: string;
@@ -87,6 +88,10 @@ export function App() {
   const canManageRoom = isOwner || legacyHost;
 
   useEffect(() => {
+    setClientErrorContext(!view ? "home" : canManageRoom ? "host" : view.self.role === "player" ? "player" : "spectator", view?.room.phase ?? "none");
+  }, [canManageRoom, view]);
+
+  useEffect(() => {
     if (!canManageRoom) setShowHostPlayers(false);
   }, [canManageRoom]);
 
@@ -97,6 +102,10 @@ export function App() {
       return;
     }
     if (confirmRequest.targetUid && !view.players.some((player) => player.uid === confirmRequest.targetUid)) {
+      setConfirmRequest(null);
+      return;
+    }
+    if (confirmRequest.actionType === "RETURN_TO_LOBBY" && confirmRequest.pending && view.room.phase === "LOBBY") {
       setConfirmRequest(null);
       return;
     }
@@ -250,11 +259,11 @@ export function App() {
             <RoomExitButton
               label="إنهاء اللعبة"
               onClick={() => openConfirm({
-                title: "إنهاء اللعبة؟",
-                description: "بتنقفل الغرفة على الكل وتنتهي اللعبة الحالية.",
-                confirmLabel: "إنهاء اللعبة",
-                actionType: "CLOSE_ROOM",
-                run: actions.closeRoom,
+                title: "إنهاء اللعبة الحالية؟",
+                description: "بترجعون للانتظار بنفس الغرفة ونفس اللاعبين. نقاط هاللعبة ما تنحسب، وتقدر تغيّر الإعدادات وتبدأ من جديد.",
+                confirmLabel: "إنهاء اللعبة والرجوع للانتظار",
+                actionType: "RETURN_TO_LOBBY",
+                run: actions.returnToLobby,
               })}
             />
           ) : null}
