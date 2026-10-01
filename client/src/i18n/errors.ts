@@ -1,7 +1,7 @@
 import type { ErrorCode } from "../../../shared/types.js";
 
 export const ERROR_AR: Record<ErrorCode, string> = {
-  ROOM_NOT_FOUND: "ما لقينا غرفة بهالكود",
+  ROOM_NOT_FOUND: "ما لقينا غرفة بهالرمز",
   ROOM_FULL: "الغرفة ممتلئة الحين",
   ROOM_CLOSED: "الغرفة مقفلة",
   ROOM_NOT_IN_LOBBY: "اللعبة بدأت، ما تقدر تدخل الحين",

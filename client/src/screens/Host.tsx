@@ -105,19 +105,19 @@ function HostLobby({ view, confirmAction }: { view: ClientView; confirmAction: C
             <EyesMark size={40} glance={false} />
             <div>
               <h1 className="invite-title" id="owner-invite-title">خلّ الكل يدخل</h1>
-              <p className="invite-lede">يمسحون الرمز، أو يكتبون الكود في اللعبة.</p>
+              <p className="invite-lede">يمسحون الباركود، أو يكتبون رمز الغرفة في اللعبة.</p>
             </div>
           </div>
           <div className="invite-body">
             <Qr url={view.room.joinUrl} size={480} />
             <div className="invite-code">
-              <span className="code-label">كود الغرفة</span>
-              <span className="code-value" aria-label={`كود الغرفة ${view.room.code.split("").join(" ")}`}>
+              <span className="code-label">رمز الغرفة</span>
+              <span className="code-value" aria-label={`رمز الغرفة ${view.room.code.split("").join(" ")}`}>
                 {view.room.code.split("").map((char, index) => <span className="code-char" key={index}>{char}</span>)}
               </span>
               <div className="invite-actions">
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copy(view.room.code, "code")}>
-                  <Icon name={copied === "code" ? "check" : "copy"} /> {copied === "code" ? "تم النسخ ✓" : "نسخ الكود"}
+                  <Icon name={copied === "code" ? "check" : "copy"} /> {copied === "code" ? "تم النسخ ✓" : "نسخ الرمز"}
                 </button>
                 <button
                   type="button"
@@ -225,7 +225,7 @@ function HostResult({ view, confirmAction }: { view: ClientView; confirmAction: 
     confirmAction({
       title: "الرجوع لشاشة الانتظار؟",
       description: view.nextRoundWarning,
-      confirmLabel: "ارجع لشاشة الانتظار",
+      confirmLabel: "ارجع للانتظار",
       actionType: "NEXT_ROUND",
       run: actions.nextRound,
     });

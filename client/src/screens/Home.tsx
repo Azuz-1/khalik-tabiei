@@ -221,12 +221,12 @@ export function Home() {
         <button className="link-btn back-btn" onClick={() => setStep("home")}><Icon name="back" /> رجوع</button>
         <div className="join-body">
           <div className="join-head">
-            <h2 className="title">اكتب كود الغرفة</h2>
-            <p className="subtitle">الكود 5 حروف وأرقام، تلقاه على جوال مالك الغرفة أو التلفزيون.</p>
+            <h2 className="title">اكتب رمز الغرفة</h2>
+            <p className="subtitle">الرمز 5 حروف وأرقام، تلقاه على جوال مالك الغرفة أو التلفزيون.</p>
           </div>
           <input
             className="input code"
-            aria-label="كود الغرفة"
+            aria-label="رمز الغرفة"
             value={code}
             inputMode="text"
             autoCapitalize="characters"
