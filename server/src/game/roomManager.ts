@@ -324,7 +324,7 @@ export class RoomManager {
       case "NEXT_ROUND": return this.nextRound(uid);
       case "KICK_PLAYER": return this.kick(uid, message.uid);
       case "CLOSE_ROOM": return this.closeRoom(uid);
-      case "RETURN_TO_LOBBY": return this.returnToLobby(uid);
+      case "RETURN_TO_LOBBY": return this.returnToLobby(conn, message.matchGeneration);
       case "REMATCH": return this.withRoom(uid, (room) => {
         if (room.hostUid !== uid) throw new GameError("NOT_HOST");
         if (room.phase !== "GAME_OVER") throw new GameError("INVALID_PHASE");
@@ -1102,9 +1102,17 @@ export class RoomManager {
    * without everyone rejoining. Scores and challenge state of the ended match
    * are discarded exactly as other lobby aborts do.
    */
-  private returnToLobby(uid: string): void {
+  private returnToLobby(conn: Connection, matchGeneration: number): void {
+    const uid = conn.uid!;
     this.withRoom(uid, (room) => {
       if (room.hostUid !== uid) throw new GameError("NOT_HOST");
+      // The command was issued against an earlier match (a delayed delivery from
+      // another tab). It is a benign race, not an error: acknowledge it, refresh
+      // the sender and leave the current match alone.
+      if (matchGeneration !== room.matchGeneration) {
+        this.sendState(conn);
+        return;
+      }
       if (room.phase === "LOBBY" || room.phase === "CLOSED") throw new GameError("INVALID_PHASE");
       this.cancelTimer(room.code, IMITATION_STAGE_TIMER);
       if (room.phase !== "GAME_OVER") this.emitGameAbandoned(room, "ended_to_lobby");

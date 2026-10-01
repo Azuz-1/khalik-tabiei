@@ -163,6 +163,12 @@ export interface ClientView {
     code: string;
     phase: GamePhase;
     currentRound: number;
+    /**
+     * Server-issued match identity: 0 before the first match, then +1 each time a
+     * match starts in this room. Owner commands that end a match carry it so a
+     * delayed command from an earlier match cannot end a newer one.
+     */
+    matchGeneration: number;
     totalRounds: number;
     targetChallenges: number;
     completedChallenges: number;
@@ -251,8 +257,8 @@ export type ClientMessage =
   | ({ t: "KICK_PLAYER"; uid: string } & RequestMeta)
   | ({ t: "CLOSE_ROOM" } & RequestMeta)
   | ({ t: "REMATCH" } & RequestMeta)
-  /** Owner ends the current match mid-game; everyone stays seated in the same room. */
-  | ({ t: "RETURN_TO_LOBBY" } & RequestMeta)
+  /** Owner ends the current match mid-game; everyone stays seated in the same room. Bound to the match the owner saw, not to a phase. */
+  | ({ t: "RETURN_TO_LOBBY"; matchGeneration: number } & RequestMeta)
   /** Best-effort UX hint only; never trusted for gameplay authority or analytics. */
   | { t: "SYNC_NOVELTY"; novelty: PromptNoveltyFilter }
   | { t: "PING"; sampleId?: string; clientMonoMs?: number };

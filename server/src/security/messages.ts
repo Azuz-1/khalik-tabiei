@@ -74,8 +74,15 @@ export function validateClientMessage(
     case "NEXT_ROUND":
     case "CLOSE_ROOM":
     case "REMATCH":
-    case "RETURN_TO_LOBBY":
       return actionNoFields(value) ? (value as ClientMessage) : null;
+
+    case "RETURN_TO_LOBBY":
+      // Bound to the match the owner saw, so a delayed command cannot end a newer one.
+      return exactKeys(value, ["t", "matchGeneration"], ["rid"]) && validRid(value) &&
+        typeof value.matchGeneration === "number" && Number.isSafeInteger(value.matchGeneration) &&
+        value.matchGeneration >= 0 && value.matchGeneration <= 1_000_000
+        ? (value as ClientMessage)
+        : null;
 
     case "PING":
       if (exactKeys(value, ["t"])) return value as ClientMessage;

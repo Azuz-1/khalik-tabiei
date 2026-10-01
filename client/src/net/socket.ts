@@ -579,5 +579,9 @@ export const actions = {
   kick: (uid: string) => sendAction({ t: "KICK_PLAYER", uid }),
   closeRoom: () => sendAction({ t: "CLOSE_ROOM" }),
   rematch: () => sendAction({ t: "REMATCH" }),
-  returnToLobby: () => sendAction({ t: "RETURN_TO_LOBBY" }),
+  returnToLobby: () => {
+    const view = state.view;
+    if (!view) return null;
+    return sendAction({ t: "RETURN_TO_LOBBY", matchGeneration: view.room.matchGeneration });
+  },
 };

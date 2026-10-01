@@ -77,6 +77,7 @@ export function buildView(room: RoomState, uid: string, joinUrl: string): Client
       code: room.code,
       phase: room.phase,
       currentRound: room.currentRound,
+      matchGeneration: room.matchGeneration,
       totalRounds: room.totalRounds,
       targetChallenges: room.targetChallenges,
       completedChallenges: room.completedChallenges,
