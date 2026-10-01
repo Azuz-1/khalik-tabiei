@@ -23,7 +23,7 @@ export const ERROR_AR: Record<ErrorCode, string> = {
   KICKED: "المضيف طلعك من الغرفة. إذا تبي ترجع، لازم يسمح لك أول",
   RATE_LIMITED: "شوي شوي، جرّب بعد لحظة",
   BAD_REQUEST: "ما ضبطت، جرّب مرة ثانية",
-  CLIENT_UPDATE_REQUIRED: "حدّث الصفحة عشان تكمل التصويت. اللعبة محفوظة في غرفتك.",
+  CLIENT_UPDATE_REQUIRED: "حدّث الصفحة عشان تقدر تصوّت. بنحاول نرجعك لنفس الغرفة.",
   UNAUTHORIZED: "حدّث الصفحة وجرّب مرة ثانية",
   DISPLAY_IN_USE: "فيه شاشة عرض ثانية مربوطة بالغرفة الحين",
   SERVER_RESTARTING: "قاعدين نحدّث الخدمة الحين؛ انتظر شوي قبل تبدأ لعبة جديدة",

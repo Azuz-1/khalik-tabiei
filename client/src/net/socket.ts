@@ -264,7 +264,7 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
       expectedRoomExit = false;
       authenticated(socket, message);
       set({ uid: message.uid, view: null, ...(hadRoom && !intendedExit ? {
-        notice: "لم تعد الغرفة متاحة أو انتهى مكانك فيها. أنشئ غرفة جديدة أو ادخل برمز جديد.",
+        notice: "الغرفة مو متاحة، أو مكانك فيها انتهى. سوّ غرفة جديدة أو ادخل برمز غرفة جديد.",
       } : {}) });
       if (hadRoom) clearPendingMatching(socket, () => true);
       break;
@@ -287,8 +287,8 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
     case "VOTE_IGNORED":
       if (message.rid) clearPending(message.rid, socket);
       feedback(message.reason === "CLOSED"
-        ? "انتهى وقت التصويت قبل وصول صوتك؛ ما تسجّل."
-        : "هذا التصويت كان لتحدّي سابق؛ اختر تصويتك للتحدّي الحالي.");
+        ? "خلص وقت التصويت قبل ما يوصل صوتك، وما تسجّل."
+        : "صوتك كان لتحدّي سابق وما تسجّل. إذا التصويت مفتوح الحين، اختر لاعب وأكّد تصويتك.");
       break;
     case "ERROR":
       if (message.rid && ["LEAVE_ROOM", "CLOSE_ROOM"].includes(pending.get(message.rid)?.type ?? "")) expectedRoomExit = false;
@@ -299,7 +299,7 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
     case "ROOM_CLOSED":
       expectedRoomExit = false;
       clearPendingMatching(socket, () => true);
-      set({ view: null, notice: "انتهت الغرفة. تقدر تنشئ غرفة جديدة أو تدخل برمز جديد." });
+      set({ view: null, notice: "الغرفة تقفلت. تقدر تسوّي غرفة جديدة أو تدخل برمز غرفة جديد." });
       break;
     case "KICKED":
       expectedRoomExit = false;
@@ -570,7 +570,7 @@ export const actions = {
       // Only pre-empt the deadline with a server-anchored clock. An unsynchronized
       // device clock can be far off; the server's own deadline stays authoritative.
       (view.room.phaseEndsAt !== undefined && serverClock.isSynchronized() && serverClock.now() >= view.room.phaseEndsAt)) {
-      feedback("التصويت هذا مو متاح الحين. انتظر تحديث حالة اللعبة.");
+      feedback("ما تقدر تصوّت الحين. انتظر لين تتحدّث اللعبة.");
       return null;
     }
     return sendAction({ t: "SUBMIT_VOTE", targetUid, voteContext });

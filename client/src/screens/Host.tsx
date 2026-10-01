@@ -36,7 +36,7 @@ export function Host({ view, confirmAction }: { view: ClientView; confirmAction:
   }
 }
 
-const CLOSE_ROOM_DESCRIPTION = "بتنقفل الغرفة على الكل، وأي أحد يبي يلعب بعدها لازم يدخل من جديد برمز غرفة جديدة.";
+const CLOSE_ROOM_DESCRIPTION = "بتتقفل الغرفة على الكل. عشان تلعبون بعدها، لازم تدخلون غرفة جديدة.";
 
 function requestClose(confirmAction: ConfirmAction, description = CLOSE_ROOM_DESCRIPTION) {
   confirmAction({
@@ -257,7 +257,7 @@ function HostGameOver({ view, confirmAction }: { view: ClientView; confirmAction
       <div className="owner-dock">
         <div className="owner-dock-row">
           <button className="btn btn-primary" onClick={() => actions.rematch()}>العبوا مرة ثانية</button>
-          <button className="btn btn-secondary" onClick={() => requestClose(confirmAction, `${CLOSE_ROOM_DESCRIPTION} إذا تبون تلعبون مرة ثانية بنفس الغرفة، اختر «العبوا مرة ثانية» بدل الإغلاق.`)}>إغلاق الغرفة</button>
+          <button className="btn btn-secondary" onClick={() => requestClose(confirmAction, `${CLOSE_ROOM_DESCRIPTION} تبون تكملون بنفس الغرفة؟ اختر «العبوا مرة ثانية».`)}>إغلاق الغرفة</button>
         </div>
       </div>
     </div>

@@ -57,7 +57,7 @@ test("owner ends a running game and everyone returns to the same room's lobby", 
 
     // Confirming returns every phone to the lobby of the same room.
     const second = await openEndGame(owner.page);
-    await second.getByRole("button", { name: "إنهاء والرجوع للانتظار", exact: true }).click();
+    await second.getByRole("button", { name: "إنهاء اللعبة والرجوع للانتظار", exact: true }).click();
     await expect(second).toBeHidden({ timeout: PHASE_TIMEOUT });
     await expect(owner.page.locator(".code-value")).toHaveText(owner.code);
     await expect(owner.page.getByRole("button", { name: "ابدأ اللعبة", exact: true })).toBeVisible();

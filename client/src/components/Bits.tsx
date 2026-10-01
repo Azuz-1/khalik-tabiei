@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { GameOverInfo, PublicPlayer, RoundResult, ScoreEntry, VoteTallyEntry } from "../../../shared/types.js";
 import { voteCountText } from "../i18n/counts.js";
 import { roundDeltaText, scoreReasonText } from "../i18n/score.js";
@@ -18,7 +19,7 @@ export function PhaseCountdown({
   totalMs?: number;
   variant?: "pill" | "ring";
   warningAtSeconds?: number;
-  warningText?: string;
+  warningText?: ReactNode;
   urgent?: boolean;
 }) {
   return (

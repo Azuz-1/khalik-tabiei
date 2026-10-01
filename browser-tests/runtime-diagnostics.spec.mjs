@@ -52,7 +52,7 @@ test("a failed participant chunk import shows startup recovery and can be retrie
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "صار خطأ في عرض اللعبة" })).toBeVisible();
   await expect.poll(() => telemetry.some((item) => item.event === "client_error" && item.props.kind === "bootstrap"), { timeout: 10_000 }).toBe(true);
-  await expect(page.getByText("سكّر الصفحة وافتح رابط اللعبة من جديد")).toBeVisible();
+  await expect(page.getByText("سكّر هالتبويب وافتح رابط اللعبة في تبويب جديد")).toBeVisible();
   await page.unroute(chunkPattern);
   await page.getByRole("button", { name: "تحديث الصفحة" }).click();
   await expect(page.getByRole("heading", { name: "خلك طبيعي" })).toBeVisible();

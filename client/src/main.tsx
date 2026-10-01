@@ -55,11 +55,11 @@ function RuntimeRecovery() {
   return (
     <main className="screen stack center" role="alert">
       <h1 className="title">صار خطأ في عرض اللعبة</h1>
-      <p className="subtitle">حدّث الصفحة ونحاول نرجعك للغرفة إذا مكانك محفوظ.</p>
+      <p className="subtitle">حدّث الصفحة. بنحاول نرجعك للغرفة إذا مكانك باقي محفوظ.</p>
       <button type="button" className="btn btn-primary" onClick={() => location.reload()}>تحديث الصفحة</button>
       {/* Safari can keep a failed download for the life of the tab, so a reload
           alone may not recover; a fresh tab does. */}
-      <p className="subtitle">إذا رجع نفس الخطأ بعد التحديث، سكّر الصفحة وافتح رابط اللعبة من جديد.</p>
+      <p className="subtitle">إذا رجع الخطأ بعد التحديث، سكّر هالتبويب وافتح رابط اللعبة في تبويب جديد.</p>
     </main>
   );
 }

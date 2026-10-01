@@ -152,3 +152,14 @@ test("user-facing source locks the explainability and Arabic copy improvements",
   assert.equal(app.includes("عنوان IP"), false, "technical IP wording returned to room-management UI");
   assert.equal(app.includes("الهوية المجهولة الموقّعة"), false, "implementation-level identity wording returned");
 });
+
+test("vote copy separates picking from confirming and wraps the picked name in bdi", () => {
+  const player = readFileSync(new URL("../../client/src/screens/Player.tsx", import.meta.url), "utf8");
+  assert.ok(player.includes("باقي ثواني — اختر لاعب، ثم أكّد تصويتك"));
+  assert.match(player, /أكّد تصويتك على «<bdi>\{pickedName\}<\/bdi>»/);
+  assert.ok(player.includes("اختر لاعب، ثم اضغط «أكّد التصويت»."), "the hint above the list says picking is not voting");
+  assert.ok(player.includes("غيّر اختيارك") && !player.includes(">تراجع<"));
+  const home = readFileSync(new URL("../../client/src/screens/Home.tsx", import.meta.url), "utf8");
+  assert.ok(home.includes("صاحب الغرفة يلعب من جواله، والتلفزيون اختياري."));
+  assert.ok(!home.includes("وقت العد"));
+});

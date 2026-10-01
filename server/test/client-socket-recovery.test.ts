@@ -94,7 +94,7 @@ test("lost membership reconnect clears stale room, explains recovery and never r
     const snapshot = browser.socketModule.getGameSnapshot();
     assert.equal(snapshot.status, "online");
     assert.equal(snapshot.view, null);
-    assert.match(snapshot.notice, /لم تعد الغرفة متاحة أو انتهى مكانك فيها/);
+    assert.match(snapshot.notice, /الغرفة مو متاحة، أو مكانك فيها انتهى/);
     assert.equal(second.sent.some((message) => message.t === "JOIN_ROOM" || message.t === "SUBMIT_VOTE"), false);
     assert.equal(browser.socketModule.actions.submitVote("target", "old-context"), null);
     assert.ok(browser.socketModule.actions.createRoom("مالك"));
@@ -120,7 +120,7 @@ test("intentional leave stays quiet across interrupted transport and closure per
     second.receive({ t: "STATE", view: { self: { uid: "u", role: "player" }, room: { code: "FGHJK", phase: "LOBBY" }, players: [] } });
     second.receive({ t: "ROOM_CLOSED" });
     assert.equal(browser.socketModule.getGameSnapshot().view, null);
-    assert.match(browser.socketModule.getGameSnapshot().notice, /تنشئ غرفة جديدة أو تدخل برمز جديد/);
+    assert.match(browser.socketModule.getGameSnapshot().notice, /تسوّي غرفة جديدة أو تدخل برمز غرفة جديد/);
     browser.socketModule.clearNotice();
     const joinRid = browser.socketModule.actions.joinRoom("FGHJK", "لاعب");
     second.receive({ t: "ERROR", code: "ROOM_NOT_FOUND", rid: joinRid });

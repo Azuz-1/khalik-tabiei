@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { estimatedServerNow } from "../net/clock.js";
 
 function remainingMs(endsAt: number | undefined): number | null {
@@ -43,7 +43,7 @@ export function StageTimer({
   totalMs?: number;
   variant?: "pill" | "ring";
   warningAtSeconds?: number;
-  warningText?: string;
+  warningText?: ReactNode;
   /** Short cue beats (hold) stay calm; only decision windows escalate. */
   urgent?: boolean;
 }) {

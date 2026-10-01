@@ -350,8 +350,9 @@ function PlayerVote({ view }: { view: ClientView }) {
             endsAt={view.room.phaseEndsAt}
             totalMs={TIMERS.VOTING}
             warningAtSeconds={VOTE_NUDGE_MS / 1_000}
-            warningText={picked ? "باقي ثواني — اضغط «أكّد» عشان ينحسب صوتك" : "باقي ثواني — اختر لاعب وأكّد صوتك"}
+            warningText={picked ? <>باقي ثواني — أكّد تصويتك على «<bdi>{pickedName}</bdi>»</> : "باقي ثواني — اختر لاعب، ثم أكّد تصويتك"}
           />
+          <p className="vote-hint">اختر لاعب، ثم اضغط «أكّد التصويت».</p>
         </div>
         <div
           className={`vote-list stage-vote-grid${picked ? " has-pick" : ""}`}
@@ -386,8 +387,8 @@ function PlayerVote({ view }: { view: ClientView }) {
           {pickedName ? <>صوتك لـ <strong dir="auto">{pickedName}</strong></> : "اختر لاعب، وبعدها أكّد."}
         </div>
         <div className="stage-vote-actions">
-          <button className="btn btn-primary" disabled={!picked || status !== "online" || submitting} onClick={() => picked && actions.submitVote(picked, view.voteContext)}>{submitting ? "جارٍ تسجيل صوتك…" : pickedName ? `أكّد التصويت على ${pickedName}` : "تأكيد التصويت"}</button>
-          {picked ? <button type="button" className="btn btn-quiet btn-sm stage-vote-undo" disabled={submitting} onClick={() => setPicked(null)}>تراجع</button> : null}
+          <button className="btn btn-primary" disabled={!picked || status !== "online" || submitting} onClick={() => picked && actions.submitVote(picked, view.voteContext)}>{submitting ? "نسجّل صوتك…" : pickedName ? `أكّد التصويت على ${pickedName}` : "أكّد التصويت"}</button>
+          {picked ? <button type="button" className="btn btn-quiet btn-sm stage-vote-undo" disabled={submitting} onClick={() => setPicked(null)}>غيّر اختيارك</button> : null}
         </div>
         <p className="helper">أثناء التصويت يظهر فقط كم شخص صوّت. ما يظهر مين صوّت لمين، وما تقدر تغيّر صوتك بعد التأكيد.</p>
       </div>

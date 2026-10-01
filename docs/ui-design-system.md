@@ -88,7 +88,7 @@ tokens so older selectors resolve to the system.
 Privacy curtain («هذي الشاشة لك بس» → «اعرض دوري», identical for every role)
 → prompt / impostor reveal → «جاهز» → countdown → action → «طالعوا بعض» → prompt
 reveal → discussion (question first, prompt as context) → vote (tap to select,
-then confirm in the dock, «تراجع» to clear) → voted → result → next.
+then confirm in the dock, «غيّر اختيارك» to clear) → voted → result → next.
 
 The curtain is presentation only; server projection remains the security
 boundary. Its state lives in the private screen component (`ui/privacyCurtain.ts`),

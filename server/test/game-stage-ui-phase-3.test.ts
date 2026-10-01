@@ -22,7 +22,7 @@ test("voting is compact, confirms explicitly, and becomes a waiting state after 
     "stage-vote-grid",
     "stage-vote-option",
     "stage-vote-dock",
-    "تأكيد التصويت",
+    "أكّد التصويت",
     "تم تسجيل صوتك",
     "بانتظار الباقين…",
     "actions.submitVote(picked, view.voteContext)",
