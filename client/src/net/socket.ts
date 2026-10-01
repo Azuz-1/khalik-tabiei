@@ -180,16 +180,19 @@ function clearAuthoritativePending(socket: WebSocket, view: ClientView, previous
   clearPendingMatching(socket, (entry) => actionCompleted(entry, view, previous));
 }
 
-function sendClockSample(socket: WebSocket): void {
-  if (socket !== ws || socket.readyState !== WebSocket.OPEN || state.status !== "online") return;
+function sendClockSample(socket: WebSocket): string | null {
+  if (socket !== ws || socket.readyState !== WebSocket.OPEN || state.status !== "online") return null;
   sampleSeq += 1;
   const sampleId = `s-${sampleSeq}`;
   const clientMonoMs = serverClock.beginSample(sampleId);
   try { socket.send(JSON.stringify({ t: "PING", sampleId, clientMonoMs } satisfies ClientMessage)); }
-  catch { recoverSocket(socket, "heartbeat send failed"); }
+  catch { recoverSocket(socket, "heartbeat send failed"); return null; }
+  return sampleId;
 }
 
 let livenessProbeTimer: number | undefined;
+/** The PING sampleId whose matching PONG proves the resumed path is alive. */
+let livenessProbeSampleId: string | null = null;
 
 /**
  * A socket can look OPEN after the phone slept or switched networks while its
@@ -203,11 +206,18 @@ function probeLiveness(): void {
     return;
   }
   if (state.status !== "online") return;
-  const probeStartedAt = performance.now();
-  sendClockSample(socket);
   window.clearTimeout(livenessProbeTimer);
+  const probeSampleId = sendClockSample(socket);
+  if (probeSampleId === null) { livenessProbeSampleId = null; return; }
+  // Only this probe's own PONG proves the path is alive. A buffered ACK/STATE
+  // that was already in flight says nothing about the socket now; those still
+  // refresh lastInboundMono for the slower heartbeat fallback.
+  livenessProbeSampleId = probeSampleId;
   livenessProbeTimer = window.setTimeout(() => {
-    if (socket === ws && lastInboundMono < probeStartedAt) recoverSocket(socket, "liveness probe timeout");
+    if (socket === ws && livenessProbeSampleId === probeSampleId) {
+      livenessProbeSampleId = null;
+      recoverSocket(socket, "liveness probe timeout");
+    }
   }, LIVENESS_PROBE_MS);
 }
 
@@ -302,6 +312,9 @@ function dispatch(socket: WebSocket, message: ServerMessage): void {
       break;
     }
     case "PONG":
+      if (message.sampleId && message.sampleId === livenessProbeSampleId) {
+        livenessProbeSampleId = null; // the pending timeout becomes a no-op
+      }
       if (message.sampleId && message.serverMs !== undefined) {
         serverClock.acceptSample(message.sampleId, message.serverMs, performance.now());
       }

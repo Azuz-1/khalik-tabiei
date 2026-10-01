@@ -45,6 +45,24 @@ test("a live socket that answers the probe is kept", async () => {
   } finally { browser.restore(); }
 });
 
+for (const unrelated of [
+  { t: "ACK", rid: "buffered-before-probe" },
+  { t: "PONG", sampleId: "s-not-the-probe", serverMs: 2_000 },
+] as const) {
+  test(`unrelated ${unrelated.t} after the probe starts does not suppress recovery at 3 s`, async () => {
+    const { browser, socket } = await onlineHarness();
+    try {
+      browser.setMono(1_000);
+      browser.events.get("online")!();
+      browser.setMono(1_500);
+      socket.receive(unrelated);
+      browser.setMono(4_100);
+      browser.fire(3_000, false);
+      assert.equal(socket.closes.at(-1), "liveness probe timeout", "only the probe's own PONG completes the probe");
+    } finally { browser.restore(); }
+  });
+}
+
 test("online with no socket starts a connection instead of probing", async () => {
   const browser = await browserHarness();
   try {
