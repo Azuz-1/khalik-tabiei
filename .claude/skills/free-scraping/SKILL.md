@@ -89,7 +89,7 @@ Static audit results (no hidden Unicode, no secret instructions, no binaries):
 | Skill | Covers | Free? | Notes |
 |---|---|---|---|
 | `mvanhorn/last30days-skill` | X, YouTube, TikTok, Instagram, Reddit, HN, Polymarket… (no Google Maps) | Partly | Reddit, HN, Polymarket and GitHub need no key. YouTube via yt-dlp. X via cookies or the Grok CLI. TikTok and Instagram need a ScrapeCreators key (~10k free calls, unverified). Browser-cookie reads are OFF unless `FROM_BROWSER` is set, and are then limited to `.x.com` and `.truthsocial.com` auth cookies. Its "LAW" lines only control output formatting (they force a stats footer). |
-| `apify/agent-skills` (`apify-ultimate-scraper`) | All five, including Google Maps | $5 of free credit per month, then paid | Needs `APIFY_TOKEN`. The cleanest single skill covering every target. |
+| `apify/agent-skills` (`apify-ultimate-scraper`) | All five, including Google Maps | USD 5 of free credit per month, then paid | Needs `APIFY_TOKEN`. The cleanest single skill covering every target. |
 | `Panniantong/Agent-Reach` | X, YouTube, Instagram, Reddit, LinkedIn… (no TikTok or Maps) | Yes | A router over open-source CLIs. Its agent-facing `install.md` has explicit safety rules (no sudo, no workspace writes). Cookie reads are limited to x/twitter, xiaohongshu, bilibili and xueqiu. It sends URLs to Jina Reader and Exa. Installs from an unpinned `main.zip`. |
 | `ScrapeCreators/social-media-research-skills` | TikTok, Instagram, YouTube, X… (no Maps) | Paid API key | Vendor skill. |
 | `thirdwatch-dev/scraping-skills` | Social, plus Maps via the lead-data skill | Routes to paid Apify actors | Vendor skill. |
@@ -161,6 +161,16 @@ Avoid these, which are dead: snscrape, kevinzg/facebook-scraper, d60/twikit. Med
   yt-dlp --skip-download --flat-playlist --print "%(id)s | %(title)s | %(view_count)s" "ytsearch20:موسم الرياض"
   ```
 
+- **Recent videos only** ("last N months"): yt-dlp 2026.08 removed `ytsearchdate`. Use YouTube's own filter URL instead, then fetch real dates per video:
+
+  ```bash
+  # sp=EgIIBQ%253D%253D = "this year" (EgIIBA = this month, EgIIAw = this week)
+  yt-dlp --flat-playlist --playlist-items 1:40 --dump-json "https://www.youtube.com/results?search_query=QUERY_URLENCODED&sp=EgIIBQ%253D%253D"
+  # flat entries have no upload_date -> per video (8 in parallel is about 500 videos in 3 minutes):
+  yt-dlp --skip-download --ignore-no-formats-error --no-warnings --extractor-args "youtube:player_client=mweb" --print "%(.{id,title,channel,upload_date,view_count,like_count,comment_count,duration,description})j" URL
+  ```
+
+  Run 10–20 query variants (Arabic and English, place names, "فعاليات/عروض/مطاعم/صيف"), dedupe by id, filter on upload_date and on a place-name regex over the title and description, and drop news and namesakes (e.g. "Abha" also matches football clubs, people's names and news).
 - Comments:
 
   ```bash
