@@ -178,6 +178,15 @@ Avoid these, which are dead: snscrape, kevinzg/facebook-scraper, d60/twikit. Med
   ```
 
   This writes `out/<id>.info.json` with `comments[]`.
+- **Transcripts (auto-captions)**, tested from a cloud IP on 2026-10-04:
+  - Only `player_client=web_embedded` lists caption tracks. mweb, tv, ios and android_vr show none.
+  - Command: `yt-dlp --skip-download --ignore-no-formats-error --write-auto-subs --sub-langs ar --sub-format vtt --extractor-args "youtube:player_client=web_embedded" -o "out/%(id)s" URL`
+  - Then strip the VTT timing lines and tags, and dedupe repeated lines.
+  - From a cloud IP, the first video worked, then every request returned HTTP 429. `youtube-transcript-api` reports IpBlocked too.
+  - Audio and video formats are unavailable from the cloud on every client, so a Whisper fallback is impossible there.
+  - On a home or mobile connection, transcripts and Whisper normally work.
+  - Auto-captions of music-heavy vlogs are poor quality.
+  - Comments are reliable from the cloud, but on vlogs they are mostly fan chatter, so they are low-signal for "where to go" research.
 - If you get "Sign in to confirm you're not a bot", add `--cookies-from-browser chrome`, using a burner profile.
 - The official YouTube Data API v3 gives 10,000 units a day free and is the compliant route.
 
