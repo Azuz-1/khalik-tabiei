@@ -178,6 +178,7 @@ Avoid these, which are dead: snscrape, kevinzg/facebook-scraper, d60/twikit. Med
   ```
 
   This writes `out/<id>.info.json` with `comments[]`.
+- **Venue names need their own searches.** Broad queries ("فعاليات أبها") missed SEVEN Abha almost entirely: one title mention out of 502 videos. A named search ("سفن أبها", "SEVEN Abha", "سيفن أبها") found about 10 dedicated videos. Once a venue name appears in titles or descriptions, re-search it by name in Arabic and English spellings.
 - **Transcripts (auto-captions)**, tested from a cloud IP on 2026-10-04:
   - Only `player_client=web_embedded` lists caption tracks. mweb, tv, ios and android_vr show none.
   - Command: `yt-dlp --skip-download --ignore-no-formats-error --write-auto-subs --sub-langs ar --sub-format vtt --extractor-args "youtube:player_client=web_embedded" -o "out/%(id)s" URL`
